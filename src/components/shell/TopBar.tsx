@@ -1,9 +1,9 @@
 "use client";
 
-import { Bell } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
 import { usePathname } from "next/navigation";
 import { MobileNavToggle } from "./MobileNavToggle";
+import { NotificationBell } from "./NotificationBell";
 
 type RouteMeta = { title: string; subtitle: string };
 
@@ -41,23 +41,7 @@ export function TopBar() {
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-3">
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="relative grid h-9 w-9 place-items-center rounded-md border border-subtle text-[color:var(--text-secondary)] transition-[transform,background-color,color,border-color] duration-280 ease-out-quart hover:-translate-y-px hover:bg-[color:var(--surface-hover)] hover:text-cloud-white active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
-        >
-          <Bell className="h-4 w-4" strokeWidth={1.75} />
-          <span
-            aria-hidden
-            className="absolute right-1.5 top-1.5 h-2 w-2 animate-mint-pulse rounded-full"
-            style={{
-              background: "var(--color-ua)",
-              boxShadow:
-                "0 0 8px color-mix(in oklab, var(--color-ua) 70%, transparent)",
-            }}
-          />
-        </button>
-
+        <NotificationBell />
         <UserButton appearance={{ elements: { avatarBox: "h-9 w-9" } }} />
       </div>
     </header>
