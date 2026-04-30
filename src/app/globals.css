@@ -320,6 +320,29 @@ body {
   transform: scale(0.985);
 }
 
+/* ─────────────────────────────────────────
+   Clerk widget overrides — Clerk's default cardBox has a fixed width
+   (~375px) that overflows our AuthShell's glass card and shifts the
+   form off-centre. The dev-mode "Secured by · Development mode" banner
+   also clashes with the brand glass aesthetic. These rules target
+   Clerk's stable public class names only (cl-cardBox, cl-footer,
+   cl-footerAction) — not the volatile cl-internal-* hashes.
+───────────────────────────────────────── */
+.cl-rootBox,
+.cl-cardBox,
+.cl-card {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 auto;
+}
+
+/* Hide Clerk's dev-mode banner. The footer's first child is the
+   actionable "Sign in / Sign up" link; any subsequent children are
+   the secured-by + dev-mode notice. */
+.cl-footer > div:not(.cl-footerAction):not(.cl-footerPages) {
+  display: none !important;
+}
+
 /* Reduced motion: kill non-essential animations. */
 @media (prefers-reduced-motion: reduce) {
   .animate-mint-pulse,
