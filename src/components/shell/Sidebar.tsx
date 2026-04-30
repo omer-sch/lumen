@@ -46,7 +46,7 @@ export function Sidebar() {
         aria-hidden
         onClick={() => dispatchSidebar(false)}
         className={cn(
-          "fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-opacity md:hidden",
+          "fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-opacity duration-280 ease-out-quart md:hidden",
           mobileOpen
             ? "pointer-events-auto opacity-100"
             : "pointer-events-none opacity-0",
@@ -56,9 +56,9 @@ export function Sidebar() {
       <aside
         aria-label="Primary navigation"
         className={cn(
-          "h-screen w-64 shrink-0 flex-col",
+          "min-h-[100dvh] w-64 shrink-0 flex-col",
           "md:relative md:flex",
-          "fixed inset-y-0 left-0 z-40 flex transition-transform md:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex transition-transform duration-450 ease-out-quart md:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
         style={{
@@ -105,11 +105,12 @@ export function Sidebar() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "group relative flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-all duration-200",
+                  "group relative flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-[transform,background-color,color,box-shadow] duration-280 ease-out-quart will-change-transform",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
+                  "active:scale-[0.985]",
                   active
                     ? "text-ua"
-                    : "text-[color:var(--text-secondary)] hover:bg-[color:var(--surface-hover)] hover:text-cloud-white",
+                    : "text-[color:var(--text-secondary)] hover:translate-x-0.5 hover:bg-[color:var(--surface-hover)] hover:text-cloud-white",
                 )}
                 style={
                   active
@@ -124,7 +125,7 @@ export function Sidebar() {
                 <span
                   aria-hidden
                   className={cn(
-                    "absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full transition-all",
+                    "absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full transition-[opacity,height] duration-450 ease-out-quart",
                     active ? "" : "opacity-0",
                   )}
                   style={
@@ -138,7 +139,10 @@ export function Sidebar() {
                   }
                 />
                 <Icon
-                  className={cn("h-[18px] w-[18px] transition-colors", active && "text-ua")}
+                  className={cn(
+                    "h-[18px] w-[18px] transition-[color,filter,transform] duration-280 ease-out-quart group-hover:scale-105",
+                    active && "text-ua",
+                  )}
                   strokeWidth={1.75}
                   style={
                     active

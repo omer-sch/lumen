@@ -36,7 +36,7 @@ export function FeedView() {
         </p>
       </header>
 
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:gap-6">
         {MOCK_FEED.map((item, idx) => (
           <FeedCard key={item.id} item={item} enterIndex={idx + 1} />
         ))}

@@ -64,6 +64,13 @@ const config: Config = {
       transitionTimingFunction: {
         enter: "cubic-bezier(0.16, 1, 0.3, 1)",
         spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+        "out-quart": "cubic-bezier(0.16, 1, 0.3, 1)",
+      },
+      transitionDuration: {
+        180: "180ms",
+        280: "280ms",
+        450: "450ms",
+        520: "520ms",
       },
       ringColor: {
         DEFAULT: "#FFDD0C",

@@ -31,7 +31,7 @@ export function MobileNavToggle() {
       aria-label={open ? "Close menu" : "Open menu"}
       aria-expanded={open}
       onClick={() => dispatchSidebar(!open)}
-      className="grid h-9 w-9 place-items-center rounded-md border border-subtle text-[color:var(--text-secondary)] transition-colors hover:bg-[color:var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow focus-visible:ring-offset-2 focus-visible:ring-offset-navy md:hidden"
+      className="grid h-9 w-9 place-items-center rounded-md border border-subtle text-[color:var(--text-secondary)] transition-[transform,background-color,color,border-color] duration-280 ease-out-quart hover:bg-[color:var(--surface-hover)] hover:text-cloud-white active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy md:hidden"
     >
       {open ? <X className="h-4 w-4" strokeWidth={2} /> : <Menu className="h-4 w-4" strokeWidth={2} />}
     </button>

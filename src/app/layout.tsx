@@ -38,7 +38,7 @@ const clerkElements = {
   headerSubtitle: "hidden",
   // Social buttons row
   socialButtonsBlockButton:
-    "bg-card border border-subtle text-cloud-white hover:bg-elevated transition-colors h-11 rounded-md font-body text-sm",
+    "bg-card border border-subtle text-cloud-white hover:bg-elevated hover:-translate-y-px active:scale-[0.99] transition-[transform,background-color,border-color] duration-280 ease-out-quart h-11 rounded-md font-body text-sm",
   socialButtonsBlockButtonText: "text-cloud-white font-medium",
   socialButtonsProviderIcon: "w-4 h-4",
   // Divider "or"
@@ -50,7 +50,7 @@ const clerkElements = {
     "text-[color:var(--text-secondary)] text-xs font-semibold uppercase tracking-wider",
   formFieldLabelRow: "mb-1",
   formFieldInput:
-    "bg-card border border-subtle text-cloud-white placeholder:text-[color:var(--text-muted)] rounded-md h-11 px-3 focus:border-yellow focus:ring-2 focus:ring-yellow/30 outline-none transition-colors",
+    "bg-card border border-subtle text-cloud-white placeholder:text-[color:var(--text-muted)] rounded-md h-11 px-3 focus:border-ua focus:ring-2 focus:ring-ua/40 outline-none transition-[border-color,box-shadow] duration-280 ease-out-quart",
   formFieldInputShowPasswordButton:
     "text-[color:var(--text-muted)] hover:text-cloud-white",
   formFieldHintText: "text-[color:var(--text-muted)] text-xs",
@@ -62,7 +62,7 @@ const clerkElements = {
     "bg-card border border-subtle text-cloud-white rounded-md focus:border-yellow",
   // Primary CTA — yellow with navy text per brand
   formButtonPrimary:
-    "bg-yellow text-navy hover:bg-yellow font-body font-semibold rounded-md h-11 normal-case shadow-yellow transition-transform active:scale-[0.99]",
+    "bg-yellow text-navy hover:bg-yellow hover:-translate-y-px font-body font-semibold rounded-md h-11 normal-case shadow-yellow transition-[transform,box-shadow] duration-280 ease-out-quart active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
   // Secondary buttons (e.g. resend code)
   formButtonReset:
     "bg-transparent border border-subtle text-cloud-white hover:bg-[color:var(--surface-hover)]",
@@ -97,8 +97,8 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider
-      signInForceRedirectUrl="/dashboard"
-      signUpForceRedirectUrl="/dashboard"
+      signInForceRedirectUrl="/welcome"
+      signUpForceRedirectUrl="/welcome"
       afterSignOutUrl="/sign-in"
       appearance={{
         baseTheme: dark,

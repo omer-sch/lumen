@@ -12,8 +12,13 @@ export function DashboardView() {
   // Yellow is intentional — promote one KPI as the hero. Everything else mint.
   const highlightId = "roas";
 
+  // Reorder so the hero KPI leads the bento. Asymmetric grid: hero spans 6
+  // of 12 cols on lg+, the three companions split the rest 2/2/2.
+  const heroKpi = data.kpis.find((k) => k.id === highlightId);
+  const otherKpis = data.kpis.filter((k) => k.id !== highlightId);
+
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 md:gap-10">
       {/* Hero */}
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
@@ -64,24 +69,40 @@ export function DashboardView() {
         </GlassCard>
       </header>
 
-      {/* KPIs — staggered entry, indices 1..4 */}
-      <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {data.kpis.map((kpi, i) => (
-          <KpiCard
-            key={kpi.id}
-            label={kpi.label}
-            value={kpi.value}
-            delta={kpi.delta}
-            direction={kpi.direction}
-            hint={kpi.hint}
-            highlight={kpi.id === highlightId}
-            enterIndex={i + 1}
-          />
+      {/* KPIs — asymmetric bento. Hero (ROAS) spans wide, three compact tiles
+          fill the rest. On md the layout is 2x2; on mobile it stacks. */}
+      <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-12 lg:gap-6">
+        {heroKpi && (
+          <div className="lg:col-span-6 lg:row-span-2">
+            <KpiCard
+              label={heroKpi.label}
+              value={heroKpi.value}
+              delta={heroKpi.delta}
+              direction={heroKpi.direction}
+              hint={heroKpi.hint}
+              highlight
+              size="hero"
+              enterIndex={1}
+            />
+          </div>
+        )}
+        {otherKpis.map((kpi, i) => (
+          <div key={kpi.id} className="lg:col-span-2">
+            <KpiCard
+              label={kpi.label}
+              value={kpi.value}
+              delta={kpi.delta}
+              direction={kpi.direction}
+              hint={kpi.hint}
+              size="compact"
+              enterIndex={i + 2}
+            />
+          </div>
         ))}
       </section>
 
-      {/* Trend + mix — indices 5 and 6 */}
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      {/* Trend + mix — already asymmetric (2:1). */}
+      <section className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-6">
         <div className="lg:col-span-2">
           <TrendChart trend={data.trend} enterIndex={5} />
         </div>

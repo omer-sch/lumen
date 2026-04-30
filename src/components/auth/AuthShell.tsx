@@ -9,11 +9,11 @@ type AuthShellProps = {
 
 export function AuthShell({ title, subtitle, children }: AuthShellProps) {
   return (
-    <main className="relative min-h-screen w-full overflow-hidden bg-navy text-cloud-white">
+    <main className="relative min-h-[100dvh] w-full overflow-hidden bg-navy text-cloud-white">
       {/* Brand glow blobs — yellow upper-left, mint lower-right */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-40 -left-40 h-[600px] w-[600px] rounded-full blur-3xl"
+        className="pointer-events-none absolute -left-40 -top-40 h-[600px] w-[600px] rounded-full blur-3xl"
         style={{ background: "var(--color-yellow)", opacity: 0.16 }}
       />
       <div
@@ -36,7 +36,7 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
         <GlassBulb size={180} accent="warm" />
       </div>
 
-      {/* Faint sand grain */}
+      {/* Faint sand grain — fixed pseudo-layer is GPU-cheap */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-[0.03] mix-blend-overlay"
@@ -46,7 +46,7 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
         }}
       />
 
-      <div className="relative mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-8 px-6 py-12">
+      <div className="relative mx-auto flex min-h-[100dvh] max-w-md flex-col items-center justify-center gap-8 px-6 py-12">
         <div className="flex flex-col items-center gap-3 text-center">
           <span
             aria-hidden
@@ -71,17 +71,30 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
           </p>
         </div>
 
-        {/* Glass card wrapping the Clerk widget */}
+        {/* Double-Bezel auth shell — outer machined-hardware tray cradling
+            the glass core. Brand calls for the auth surface to feel like
+            a physical artifact, not a form panel. */}
         <div
-          className="shimmer-overlay relative w-full overflow-hidden rounded-xl p-6 backdrop-blur-glass"
+          className="relative w-full animate-card-enter rounded-xl p-1.5"
           style={{
             background:
-              "linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%), var(--surface-glass)",
-            border: "1px solid var(--border-glass)",
-            boxShadow: "var(--shadow-elevated), var(--shadow-mint)",
+              "linear-gradient(140deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 50%, rgba(0,0,0,0.10) 100%)",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.08), 0 1px 0 rgba(0,0,0,0.40)",
+            border: "1px solid var(--border-subtle)",
           }}
         >
-          {children}
+          <div
+            className="shimmer-overlay relative w-full overflow-hidden rounded-lg p-6 backdrop-blur-glass"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%), var(--surface-glass)",
+              border: "1px solid var(--border-glass)",
+              boxShadow: "var(--shadow-elevated), var(--shadow-mint)",
+            }}
+          >
+            {children}
+          </div>
         </div>
 
         <p className="text-xs text-[color:var(--text-muted)]">

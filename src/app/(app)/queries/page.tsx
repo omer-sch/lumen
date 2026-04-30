@@ -59,9 +59,10 @@ export default function QueriesPage() {
         </p>
       </div>
 
-      {/* Featured Ask input */}
-      <div className="flex flex-col items-center gap-2">
-        <GlassCard glow="ua" feature shimmer className="w-full p-3">
+      {/* Featured Ask input — Double-Bezel hero container so the search bar
+          reads as machined hardware, not a flat form field. */}
+      <div className="flex w-full flex-col items-center gap-2">
+        <GlassCard glow="ua" feature shimmer bezel className="w-full p-3">
           <form
             aria-label="Ask Lumen"
             className="flex items-center gap-2"
@@ -79,7 +80,7 @@ export default function QueriesPage() {
               placeholder="Ask about a metric, channel, campaign, or trend…"
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
-              className="flex-1 rounded-md px-3 py-2 font-body text-sm outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-[color:var(--text-muted)] disabled:cursor-not-allowed"
+              className="flex-1 rounded-md px-3 py-2 font-body text-sm outline-none transition-[border-color,box-shadow] duration-280 ease-out-quart placeholder:text-[color:var(--text-muted)] disabled:cursor-not-allowed"
               style={{
                 background: "var(--surface-input)",
                 border: `1px solid ${
@@ -93,10 +94,13 @@ export default function QueriesPage() {
               type="submit"
               disabled
               aria-disabled="true"
-              className="inline-flex items-center gap-1.5 rounded-md bg-yellow px-4 py-2 font-body text-sm font-semibold text-navy shadow-yellow transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+              className="group/btn inline-flex items-center gap-1.5 rounded-md bg-yellow px-4 py-2 font-body text-sm font-semibold text-navy shadow-yellow transition-[transform,opacity,box-shadow] duration-280 ease-out-quart hover:-translate-y-px active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
             >
               Ask
-              <ArrowUpRight className="h-4 w-4" strokeWidth={2.25} />
+              <ArrowUpRight
+                className="h-4 w-4 transition-transform duration-280 ease-out-quart group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-px"
+                strokeWidth={2.25}
+              />
             </button>
           </form>
         </GlassCard>
@@ -108,7 +112,8 @@ export default function QueriesPage() {
         </p>
       </div>
 
-      {/* Example cards — first is yellow hero, rest are mint, all stagger in */}
+      {/* Example cards — first is yellow hero, rest are mint, all stagger in.
+          Asymmetric bento: yellow hero spans both columns on sm. */}
       <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
         {EXAMPLES.map((ex, i) => (
           <GlassCard
@@ -117,12 +122,16 @@ export default function QueriesPage() {
             shimmer={ex.shimmer}
             enterIndex={i + 1}
             aria-disabled="true"
-            className="cursor-not-allowed p-5"
+            className={
+              i === 0
+                ? "cursor-not-allowed p-5 sm:col-span-2 sm:p-6"
+                : "cursor-not-allowed p-5"
+            }
           >
             <div className="flex items-start gap-3">
               <span
                 aria-hidden
-                className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md"
+                className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md transition-transform duration-280 ease-out-quart group-hover:translate-x-0.5"
                 style={{
                   background:
                     ex.glow === "yellow"
@@ -151,7 +160,13 @@ export default function QueriesPage() {
                 </svg>
               </span>
               <div className="min-w-0">
-                <p className="font-body text-sm leading-relaxed text-cloud-white">
+                <p
+                  className={
+                    i === 0
+                      ? "font-display text-md font-bold leading-snug text-cloud-white sm:text-lg"
+                      : "font-body text-sm leading-relaxed text-cloud-white"
+                  }
+                >
                   {ex.q}
                 </p>
                 <p

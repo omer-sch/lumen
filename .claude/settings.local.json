@@ -57,7 +57,20 @@
       "mcp__ruflo__browser_screenshot",
       "mcp__ruflo__browser_eval",
       "Bash(xargs -r kill -9)",
-      "Bash(PORT=3002 LUMEN_PREVIEW=1 npm run *)"
+      "Bash(PORT=3002 LUMEN_PREVIEW=1 npm run *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(npx eslint *)",
+      "Bash(lsof -nP -iTCP:3000 -sTCP:LISTEN)",
+      "Bash(ps -p 32506 -o command=)",
+      "Bash(LUMEN_PREVIEW=1 PORT=3001 npm run dev)",
+      "Bash(echo \"started pid=$!\")",
+      "Read(//private/tmp/**)",
+      "Bash(ps *)",
+      "Bash(kill 32506)",
+      "Bash(kill -9 32506)",
+      "Bash(lsof -nP -iTCP:3001 -sTCP:LISTEN)",
+      "Bash(kill 12586)",
+      "Bash(git add *)"
     ]
   },
   "enableAllProjectMcpServers": true,

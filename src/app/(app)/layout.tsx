@@ -4,7 +4,7 @@ import { TopBar } from "@/components/shell/TopBar";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="relative flex min-h-screen overflow-hidden bg-navy">
+    <div className="relative flex min-h-[100dvh] overflow-hidden bg-navy">
       {/* Ambient brand glow — yellow top-right, mint bottom-left.
           Sets the lively, not-flat tone the brand calls for without dominating. */}
       <div
@@ -30,7 +30,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <Sidebar />
       <div className="relative flex min-w-0 flex-1 flex-col">
         <TopBar />
-        <main className="flex-1 px-8 py-8">{children}</main>
+        <main className="flex-1 px-4 py-6 sm:px-6 md:px-8 md:py-8">
+          {children}
+        </main>
       </div>
     </div>
   );

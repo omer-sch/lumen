@@ -15,12 +15,7 @@ type Pillar = {
 };
 
 const PILLARS: Pillar[] = [
-  {
-    icon: Database,
-    title: "Connected sources",
-    body: "Meta, TikTok, Google, AppsFlyer, AppTweak, Search Console, Apple Console — all flowing into Lumen via Rivery.",
-    glow: "ua",
-  },
+  // Hero pillar leads the bento. Brand pattern: feature card carries yellow.
   {
     icon: Brain,
     title: "Learned context",
@@ -28,6 +23,12 @@ const PILLARS: Pillar[] = [
     glow: "yellow",
     feature: true,
     shimmer: true,
+  },
+  {
+    icon: Database,
+    title: "Connected sources",
+    body: "Meta, TikTok, Google, AppsFlyer, AppTweak, Search Console, Apple Console — all flowing into Lumen via Rivery.",
+    glow: "ua",
   },
   {
     icon: BookOpen,
@@ -45,12 +46,18 @@ type Stat = {
 };
 
 const STATS: Stat[] = [
+  // Hero stat leads the bento (Patterns learned — yellow).
+  { icon: TrendingUp, label: "Patterns learned", value: 138, accent: true },
   { icon: Layers, label: "Sources connected", value: 7 },
   { icon: Target, label: "KPI targets tracked", value: 24 },
-  { icon: TrendingUp, label: "Patterns learned", value: 138, accent: true },
 ];
 
 export default function KnowledgePage() {
+  const [heroPillar, ...sidePillars] = PILLARS;
+  const [heroStat, ...sideStats] = STATS;
+  const HeroIcon = heroPillar.icon;
+  const HeroStatIcon = heroStat.icon;
+
   return (
     <div className="flex flex-col gap-12">
       {/* Hero — compact inline header. The yellow + glass-bulb SectionBreak
@@ -70,21 +77,35 @@ export default function KnowledgePage() {
         </p>
       </header>
 
-      {/* Pillars */}
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {PILLARS.map((p, i) => {
+      {/* Pillars — asymmetric bento. Hero spans 7 cols + the two side
+          pillars stack in the remaining 5. */}
+      <section className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
+        <GlassCard
+          glow={heroPillar.glow}
+          feature={heroPillar.feature}
+          shimmer={heroPillar.shimmer}
+          enterIndex={1}
+          className="flex flex-col gap-5 p-6 sm:p-7 lg:col-span-7 lg:row-span-2"
+        >
+          <GlassIcon icon={HeroIcon} accentVar="--color-yellow" size="lg" />
+          <h3 className="font-display text-xl font-extrabold leading-snug tracking-tight text-cloud-white sm:text-2xl">
+            {heroPillar.title}
+          </h3>
+          <p className="max-w-lg font-body text-base leading-relaxed text-[color:var(--text-secondary)]">
+            {heroPillar.body}
+          </p>
+        </GlassCard>
+
+        {sidePillars.map((p, i) => {
           const Icon = p.icon;
-          const accentVar = p.glow === "yellow" ? "--color-yellow" : "--color-ua";
           return (
             <GlassCard
               key={p.title}
               glow={p.glow}
-              feature={p.feature}
-              shimmer={p.shimmer}
-              enterIndex={i + 1}
-              className="flex flex-col gap-4 p-6"
+              enterIndex={i + 2}
+              className="flex flex-col gap-4 p-6 lg:col-span-5"
             >
-              <GlassIcon icon={Icon} accentVar={accentVar} size="md" />
+              <GlassIcon icon={Icon} accentVar="--color-ua" size="md" />
               <h3 className="font-display text-md font-bold leading-snug text-cloud-white">
                 {p.title}
               </h3>
@@ -96,37 +117,58 @@ export default function KnowledgePage() {
         })}
       </section>
 
-      {/* Currently learned strip */}
+      {/* Currently learned strip — asymmetric bento (hero stat + two compact). */}
       <section className="flex flex-col gap-5">
         <h3 className="font-display text-2xl font-bold leading-snug tracking-tight text-cloud-white">
           Currently learned
         </h3>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {STATS.map((s, i) => {
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5">
+          <GlassCard
+            glow="yellow"
+            feature
+            shimmer
+            enterIndex={4}
+            className="flex items-center gap-5 p-6 lg:col-span-6"
+          >
+            <GlassIcon icon={HeroStatIcon} accentVar="--color-yellow" size="md" />
+            <div className="min-w-0">
+              <p className="font-body text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
+                {heroStat.label}
+              </p>
+              <p
+                className="mt-1 font-display text-3xl font-extrabold leading-none tracking-tight tabular-nums sm:text-4xl"
+                style={{
+                  color: "var(--color-yellow)",
+                  textShadow: "var(--shadow-yellow)",
+                }}
+              >
+                <CountUpNumber value={heroStat.value} duration={1400} />
+              </p>
+              <p className="mt-2 font-body text-xs text-[color:var(--text-muted)]">
+                Patterns Lumen distilled from your accounts so far.
+              </p>
+            </div>
+          </GlassCard>
+          {sideStats.map((s, i) => {
             const Icon = s.icon;
-            const accentVar = s.accent ? "--color-yellow" : "--color-ua";
             return (
               <GlassCard
                 key={s.label}
-                glow={s.accent ? "yellow" : "ua"}
-                feature={s.accent}
-                enterIndex={i + 4}
-                className="flex items-center gap-4 p-5"
+                glow="ua"
+                enterIndex={i + 5}
+                className="flex items-center gap-4 p-5 lg:col-span-3"
               >
-                <GlassIcon icon={Icon} accentVar={accentVar} size="sm" />
+                <GlassIcon icon={Icon} accentVar="--color-ua" size="sm" />
                 <div className="min-w-0">
                   <p className="font-body text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
                     {s.label}
                   </p>
                   <p
-                    className="font-display text-2xl font-extrabold leading-none tracking-tight"
+                    className="font-display text-2xl font-extrabold leading-none tracking-tight tabular-nums"
                     style={{
-                      color: s.accent
-                        ? "var(--color-yellow)"
-                        : "var(--color-ua)",
-                      textShadow: s.accent
-                        ? "0 0 18px color-mix(in oklab, var(--color-yellow) 35%, transparent)"
-                        : "0 0 14px color-mix(in oklab, var(--color-ua) 28%, transparent)",
+                      color: "var(--color-ua)",
+                      textShadow:
+                        "0 0 14px color-mix(in oklab, var(--color-ua) 28%, transparent)",
                     }}
                   >
                     <CountUpNumber value={s.value} />

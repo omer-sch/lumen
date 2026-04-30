@@ -60,8 +60,8 @@ export function FeedCard({ item, enterIndex }: FeedCardProps) {
       enterIndex={enterIndex}
       className={
         isHighlight
-          ? "flex flex-col gap-5 p-6 lg:col-span-2 lg:p-7"
-          : "flex flex-col gap-4 p-5"
+          ? "flex h-full flex-col gap-5 p-6 sm:col-span-2 lg:p-7"
+          : "flex h-full flex-col gap-4 p-5"
       }
     >
       <div className="flex items-center gap-3">

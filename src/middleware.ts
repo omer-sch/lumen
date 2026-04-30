@@ -7,6 +7,7 @@ const PREVIEW = process.env.LUMEN_PREVIEW === "1";
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
+  "/welcome(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

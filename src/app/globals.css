@@ -127,16 +127,23 @@
   --shadow-mint:        0 0 20px rgba(84, 240, 163, 0.20), 0 0 40px rgba(84, 240, 163, 0.08);
   --shadow-mint-strong: 0 0 12px rgba(84, 240, 163, 0.35), 0 0 32px rgba(84, 240, 163, 0.15);
 
+  /* ── Easing curves ── */
+  --ease-out-quart: cubic-bezier(0.16, 1, 0.3, 1);   /* primary brand easing — every interactive transition */
+  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
+
   /* ── Transitions ── */
-  --transition-fast:   150ms ease;
-  --transition-base:   250ms ease;
-  --transition-slow:   400ms ease;
-  --transition-enter:  350ms cubic-bezier(0.16, 1, 0.3, 1);
-  --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-fast:   180ms var(--ease-out-quart);
+  --transition-base:   280ms var(--ease-out-quart);
+  --transition-slow:   500ms var(--ease-out-quart);
+  --transition-enter:  450ms var(--ease-out-quart);
+  --transition-spring: 520ms var(--ease-spring);
 
   /* ── Blur (glassmorphism) ── */
   --blur-glass: blur(16px) saturate(160%);
   --blur-light: blur(8px) saturate(130%);
+
+  /* ── Focus ring (mint, brand-correct) ── */
+  --ring-mint: 0 0 0 2px var(--surface-base), 0 0 0 4px var(--color-ua), 0 0 18px color-mix(in oklab, var(--color-ua) 35%, transparent);
 }
 
 /* ── Base Styles ── */
@@ -266,12 +273,60 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.16); }
 
+/* ─────────────────────────────────────────
+   Skeleton — layout-shaped loading shimmer.
+───────────────────────────────────────── */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-track);
+  border-radius: var(--radius-md);
+  isolation: isolate;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 45%,
+    rgba(84, 240, 163, 0.10) 50%,
+    rgba(255, 255, 255, 0.06) 55%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* ─────────────────────────────────────────
+   Focus ring — keyboard accessibility, on-brand.
+   Used on any interactive element that doesn't carry its own ring.
+───────────────────────────────────────── */
+.focus-mint:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-mint);
+}
+
+/* ─────────────────────────────────────────
+   Spring tactile — apply to clickable surfaces.
+   Adds an active:scale press without breaking transforms.
+───────────────────────────────────────── */
+.tactile {
+  transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+  will-change: transform;
+}
+.tactile:active {
+  transform: scale(0.985);
+}
+
 /* Reduced motion: kill non-essential animations. */
 @media (prefers-reduced-motion: reduce) {
   .animate-mint-pulse,
   .animate-pulse-dot,
   .animate-bulb-float,
   .animate-card-enter,
+  .skeleton::after,
   .shimmer-overlay::after {
     animation: none !important;
   }

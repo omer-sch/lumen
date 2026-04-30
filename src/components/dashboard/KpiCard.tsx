@@ -10,6 +10,13 @@ type KpiCardProps = {
   hint?: string;
   highlight?: boolean;
   direction?: KpiDirection;
+  /**
+   * Bento sizing variant.
+   *  - "hero" — wide, taller, larger value typography (the page's single yellow KPI)
+   *  - "compact" — standard KPI tile
+   * Defaults to "compact".
+   */
+  size?: "hero" | "compact";
   /** Stagger position in the KPI grid (1-based). */
   enterIndex?: number;
 };
@@ -54,10 +61,12 @@ export function KpiCard({
   hint,
   highlight,
   direction = "higher-better",
+  size = "compact",
   enterIndex,
 }: KpiCardProps) {
   const positive = direction === "higher-better" ? delta >= 0 : delta <= 0;
   const { numeric, prefix, suffix, decimals } = parseKpiValue(value);
+  const isHero = size === "hero";
 
   return (
     <GlassCard
@@ -65,19 +74,28 @@ export function KpiCard({
       feature={highlight}
       shimmer={highlight}
       enterIndex={enterIndex}
-      className="flex flex-col gap-4 p-5"
+      className={
+        isHero
+          ? "flex h-full flex-col justify-between gap-6 p-6 sm:p-7"
+          : "flex h-full flex-col gap-4 p-5"
+      }
     >
       <div className="flex items-center justify-between">
         <span className="font-body text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
           {label}
         </span>
+        {isHero && hint && (
+          <span className="hidden font-body text-xs text-[color:var(--text-muted)] sm:inline">
+            {hint}
+          </span>
+        )}
       </div>
 
-      <div className="flex items-baseline gap-3">
+      <div className="flex flex-wrap items-baseline gap-3">
         <span
-          className="font-display font-extrabold leading-none tracking-tight"
+          className="font-display font-extrabold leading-none tracking-tight tabular-nums"
           style={{
-            fontSize: "var(--text-3xl)",
+            fontSize: isHero ? "var(--text-4xl)" : "var(--text-3xl)",
             color: highlight ? "var(--color-yellow)" : "var(--text-primary)",
             textShadow: highlight ? "var(--shadow-yellow)" : undefined,
           }}
@@ -87,10 +105,11 @@ export function KpiCard({
             decimals={decimals}
             prefix={prefix}
             suffix={suffix}
+            duration={isHero ? 1400 : 1100}
           />
         </span>
         <span
-          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-body text-xs font-semibold"
+          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-body text-xs font-semibold tabular-nums transition-transform duration-280 ease-out-quart group-hover:-translate-y-px"
           style={{
             background: positive
               ? "var(--tint-success-soft)"
@@ -107,8 +126,13 @@ export function KpiCard({
         </span>
       </div>
 
-      {hint && (
+      {hint && !isHero && (
         <p className="font-body text-xs text-[color:var(--text-muted)]">{hint}</p>
+      )}
+      {isHero && (
+        <p className="font-body text-sm leading-relaxed text-[color:var(--text-secondary)] sm:hidden">
+          {hint}
+        </p>
       )}
     </GlassCard>
   );
