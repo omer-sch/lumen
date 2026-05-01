@@ -40,45 +40,18 @@ const fmt = {
 } as const;
 
 export function AIModeView() {
-  // Roll once per AI Mode entry — same minute means same tiles, navigating
-  // back into AI Mode rolls a fresh selection.
+  // Roll once per Lumen Dashboard entry — same minute means same tiles,
+  // navigating away and back rolls a fresh selection.
   const tiles = useMemo(() => rollAITiles(), []);
 
   return (
-    <section className="flex flex-col gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-2">
-          <span
-            className="inline-flex items-center gap-2 self-start rounded-full px-3 py-1 font-body text-xs font-semibold uppercase tracking-wider"
-            style={{
-              background: "var(--tint-yellow-soft)",
-              color: "var(--color-yellow)",
-              border:
-                "1px solid color-mix(in oklab, var(--color-yellow) 35%, transparent)",
-              boxShadow: "var(--shadow-yellow)",
-            }}
-          >
-            <Sparkles className="h-3 w-3" strokeWidth={2.25} />
-            AI Dashboard
-          </span>
-          <h2 className="font-display text-2xl font-extrabold leading-tight tracking-tight text-cloud-white sm:text-3xl">
-            What Lumen thinks{" "}
-            <span className="text-gradient-brand">matters now.</span>
-          </h2>
-          <p className="max-w-2xl font-body text-sm leading-relaxed text-[color:var(--text-secondary)]">
-            Lumen rebuilt this view from scratch. Each tile is something the AI
-            decided to surface — with a one-line read on{" "}
-            <em className="text-cloud-white not-italic">why</em>. Re-enter AI
-            mode to roll a fresh selection.
-          </p>
-        </div>
-      </header>
-
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
-        {tiles.map((tile, i) => (
-          <AITileCard key={tile.id} tile={tile} index={i} />
-        ))}
-      </div>
+    <section
+      aria-label="Lumen Dashboard"
+      className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6"
+    >
+      {tiles.map((tile, i) => (
+        <AITileCard key={tile.id} tile={tile} index={i} />
+      ))}
     </section>
   );
 }

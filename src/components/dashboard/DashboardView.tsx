@@ -69,8 +69,8 @@ function DashboardHeader() {
         <h2 className="font-display text-2xl font-extrabold leading-tight tracking-tight text-cloud-white sm:text-3xl">
           {mode === "ai" ? (
             <>
-              The dashboard{" "}
-              <span className="text-gradient-brand">rebuilt itself.</span>
+              What Lumen thinks{" "}
+              <span className="text-gradient-brand">matters now.</span>
             </>
           ) : (
             <>
@@ -89,7 +89,7 @@ function DashboardHeader() {
         </h2>
         <p className="max-w-xl font-body text-sm text-[color:var(--text-secondary)]">
           {mode === "ai"
-            ? "Lumen looked at the live signals and chose what's worth your attention right now. Step back into My Dashboard for the curated view."
+            ? "Lumen rebuilt this view from scratch — each tile is something the brain decided to surface, with a one-line read on why. Step back into My Dashboard for the curated view."
             : "ROAS crossed your weekly target. CPI is trending down. Lumen flagged two opportunities to scale and one creative to retire."}
         </p>
       </div>
@@ -182,7 +182,7 @@ function ModeToggle({
         }
       >
         <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
-        AI Dashboard
+        Lumen Dashboard
       </button>
     </div>
   );
