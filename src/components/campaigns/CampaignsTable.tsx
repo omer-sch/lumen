@@ -202,17 +202,11 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
                       href={href}
                       aria-label={`Open ${row.name}`}
                       className={cn(
-                        "inline-flex items-center gap-1.5 font-medium transition-[color,transform] duration-280 ease-out-quart focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
-                        i === 0
-                          ? "text-ua"
-                          : "text-cloud-white hover:text-ua group-hover:translate-x-0.5",
+                        "font-medium transition-colors duration-280 ease-out-quart focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
+                        i === 0 ? "text-ua" : "text-cloud-white hover:text-ua",
                       )}
                     >
                       {row.name}
-                      <ArrowUpRight
-                        className="h-3 w-3 opacity-0 transition-opacity duration-280 ease-out-quart group-hover:opacity-100"
-                        strokeWidth={2.25}
-                      />
                     </Link>
                   </td>
                   <td className="whitespace-nowrap px-3 py-3">
