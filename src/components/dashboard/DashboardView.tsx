@@ -48,8 +48,8 @@ function DashboardHeader() {
   const c = findClient(client);
 
   return (
-    <header className="flex flex-wrap items-end justify-between gap-4">
-      <div className="flex flex-col gap-2">
+    <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+      <div className="flex min-w-0 flex-col gap-2">
         <span
           className="inline-flex items-center gap-2 self-start rounded-full px-3 py-1 font-body text-xs font-semibold uppercase tracking-wider"
           style={{
@@ -92,7 +92,24 @@ function DashboardHeader() {
         </p>
       </div>
 
-      <ModeToggle mode={mode} setMode={setMode} />
+      <div className="flex shrink-0 flex-col items-end gap-3">
+        <ModeToggle mode={mode} setMode={setMode} />
+        {mode === "my" && (
+          <GlassCard glow="ua" feature className="flex w-full max-w-sm items-start gap-3 p-4">
+            <GlassIcon icon={Sparkles} accentVar="--color-ua" size="sm" />
+            <div className="min-w-0">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                Today&rsquo;s hint
+              </p>
+              <p className="mt-1 font-body text-sm leading-snug text-cloud-white">
+                TikTok HC creatives are{" "}
+                <span className="font-semibold text-ua">+34%</span>. Worth
+                promoting to its own ad set.
+              </p>
+            </div>
+          </GlassCard>
+        )}
+      </div>
     </header>
   );
 }
@@ -176,21 +193,6 @@ function MyDashboard({ data }: { data: DashboardData }) {
 
   return (
     <div className="flex flex-col gap-8 md:gap-10">
-      {/* Today's hint */}
-      <GlassCard glow="ua" feature className="flex max-w-xl items-start gap-3 self-start p-4">
-        <GlassIcon icon={Sparkles} accentVar="--color-ua" size="sm" />
-        <div className="min-w-0">
-          <p className="font-body text-xs uppercase tracking-wider text-[color:var(--text-muted)]">
-            Today&rsquo;s hint
-          </p>
-          <p className="mt-1 font-body text-sm leading-snug text-cloud-white">
-            TikTok HC creatives are{" "}
-            <span className="font-semibold text-ua">+34%</span>. Worth promoting
-            to its own ad set.
-          </p>
-        </div>
-      </GlassCard>
-
       {/* KPIs */}
       <section className="grid grid-cols-1 gap-5 md:grid-cols-3 lg:grid-cols-12 lg:gap-6">
         {heroKpi && (

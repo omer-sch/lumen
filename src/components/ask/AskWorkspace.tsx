@@ -1,7 +1,14 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { History, Sparkles } from "lucide-react";
+import {
+  BarChart3,
+  Gauge,
+  History,
+  Sparkles,
+  Table,
+  TrendingUp,
+} from "lucide-react";
 import { useGlobalFilters, windowDays } from "@/lib/filters/use-global-filters";
 import { findClient } from "@/lib/mock/clients";
 import { askLumen } from "@/lib/ask/router";
@@ -112,6 +119,8 @@ function AskInner() {
         <AnswerCard answer={answer} onPin={() => handlePin(answer)} />
       )}
 
+      {!loading && !answer && history.length === 0 && <AskExplainer />}
+
       {history.length > 1 && (
         <section
           aria-label="Query history"
@@ -144,5 +153,71 @@ function AskInner() {
         </section>
       )}
     </div>
+  );
+}
+
+function AskExplainer() {
+  const kinds: { Icon: typeof BarChart3; label: string; example: string }[] = [
+    {
+      Icon: Gauge,
+      label: "KPI",
+      example: "“What's our UA ROAS this week?”",
+    },
+    {
+      Icon: TrendingUp,
+      label: "Trend",
+      example: "“Spend over the last 30 days.”",
+    },
+    {
+      Icon: BarChart3,
+      label: "Comparison",
+      example: "“ROAS by channel.”",
+    },
+    {
+      Icon: Table,
+      label: "Top-N",
+      example: "“Top 5 campaigns by ROAS.”",
+    },
+  ];
+  return (
+    <section
+      aria-label="What you can ask"
+      className="flex flex-col gap-3 pt-4"
+    >
+      <p className="text-center font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+        Lumen picks the right view based on the question
+      </p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {kinds.map(({ Icon, label, example }) => (
+          <div
+            key={label}
+            className="flex flex-col items-center gap-2 rounded-lg p-4 text-center"
+            style={{
+              background: "var(--surface-glass)",
+              border: "1px solid var(--border-glass)",
+            }}
+          >
+            <span
+              aria-hidden
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-md"
+              style={{
+                background: "var(--tint-ua-soft)",
+                color: "var(--color-ua)",
+                boxShadow:
+                  "0 0 12px color-mix(in oklab, var(--color-ua) 30%, transparent)",
+              }}
+            >
+              <Icon className="h-4 w-4" strokeWidth={2.25} />
+            </span>
+            <p className="font-display text-xs font-bold uppercase tracking-wider text-cloud-white">
+              {label}
+            </p>
+            <p className="font-body text-xs italic leading-snug text-[color:var(--text-muted)]">
+              {example}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

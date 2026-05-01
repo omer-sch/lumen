@@ -3,17 +3,20 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  BarChart3,
   Check,
   Copy,
   FileText,
+  ListChecks,
   Plus,
   Printer,
+  Send,
   Sparkles,
+  Table,
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import { generateReport } from "@/lib/reports/generate";
 import { useReports } from "@/lib/reports/store";
@@ -255,8 +258,31 @@ function BuilderInput({
   generating: boolean;
   onGenerate: (s: string) => void;
 }) {
+  const sections: { Icon: typeof BarChart3; label: string; body: string }[] = [
+    {
+      Icon: FileText,
+      label: "Executive summary",
+      body: "Two paragraphs that frame the period and the headline movement.",
+    },
+    {
+      Icon: BarChart3,
+      label: "Key metrics",
+      body: "Spend, Installs, CPI, ROAS — with delta vs the prior comparable window.",
+    },
+    {
+      Icon: Table,
+      label: "Channel breakdown",
+      body: "Spend share and ROAS per channel. Top campaigns called out below.",
+    },
+    {
+      Icon: ListChecks,
+      label: "Recommendations",
+      body: "Three plays Lumen suggests, each a hypothesis the team can test.",
+    },
+  ];
+
   return (
-    <div className="flex flex-col gap-6 py-4">
+    <div className="flex flex-col gap-6 py-2">
       <header className="flex flex-col items-start gap-3">
         <span
           className="inline-flex items-center gap-2 rounded-full px-3 py-1 font-body text-xs font-semibold uppercase tracking-wider text-yellow"
@@ -280,14 +306,14 @@ function BuilderInput({
         </p>
       </header>
 
-      <GlassCard glow="ua" feature shimmer bezel className="w-full p-3">
+      <GlassCard glow="ua" feature shimmer bezel className="w-full p-4">
         <form
           aria-label="Generate report"
           onSubmit={(e) => {
             e.preventDefault();
             onGenerate(prompt);
           }}
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-3"
         >
           <label htmlFor="report-prompt" className="sr-only">
             What should this report cover?
@@ -297,61 +323,91 @@ function BuilderInput({
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="What should this report cover? e.g. 'Weekly UA performance summary for Lumi Runner with top campaigns and recommendations.'"
-            rows={3}
-            className="w-full resize-none rounded-md px-3 py-2 font-body text-sm text-cloud-white outline-none transition-[border-color,box-shadow] duration-280 ease-out-quart placeholder:text-[color:var(--text-muted)] focus:border-ua focus:shadow-mint disabled:cursor-not-allowed"
+            rows={4}
+            className="w-full resize-none rounded-md px-4 py-3 font-body text-base text-cloud-white outline-none transition-[border-color,box-shadow] duration-280 ease-out-quart placeholder:text-[color:var(--text-muted)] focus:border-ua focus:shadow-mint disabled:cursor-not-allowed"
             style={{
               background: "var(--surface-input)",
               border: "1px solid var(--border-default)",
             }}
             disabled={generating}
           />
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-body text-xs text-[color:var(--text-muted)]">
-              Your global filter feeds in as the period and client.
+              Your global filter feeds in as the period and client. ⌘ + Enter
+              to generate.
             </p>
             <button
               type="submit"
               disabled={generating || !prompt.trim()}
               className="inline-flex items-center gap-1.5 rounded-md bg-yellow px-4 py-2 font-body text-sm font-semibold text-navy shadow-yellow transition-[transform,box-shadow] duration-280 ease-out-quart hover:-translate-y-px active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
             >
-              <Sparkles className="h-4 w-4" strokeWidth={2.5} />
+              <Send className="h-3.5 w-3.5" strokeWidth={2.5} />
               {generating ? "Generating…" : "Generate report"}
             </button>
           </div>
         </form>
       </GlassCard>
 
-      <div className="flex flex-wrap gap-2">
-        {PROMPT_PRESETS.map((p) => (
-          <button
-            key={p}
-            type="button"
-            disabled={generating}
-            onClick={() => onGenerate(p)}
-            className="rounded-full border px-3 py-1.5 font-body text-xs font-medium text-[color:var(--text-secondary)] transition-[transform,background-color,color] duration-280 ease-out-quart hover:-translate-y-px hover:text-cloud-white disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
-            style={{
-              background: "var(--surface-hover)",
-              borderColor: "var(--border-subtle)",
-            }}
-          >
-            {p}
-          </button>
-        ))}
+      <div className="flex flex-col gap-2">
+        <p className="font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+          Or start from a preset
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {PROMPT_PRESETS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              disabled={generating}
+              onClick={() => onGenerate(p)}
+              className="group rounded-md border px-3 py-2.5 text-left font-body text-xs font-medium leading-snug text-[color:var(--text-secondary)] transition-[transform,background-color,color,border-color] duration-280 ease-out-quart hover:-translate-y-px hover:border-ua hover:bg-[color:var(--surface-hover)] hover:text-cloud-white disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+              style={{
+                background: "var(--surface-glass)",
+                borderColor: "var(--border-subtle)",
+              }}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div
-        className="rounded-lg p-6"
-        style={{
-          background: "var(--surface-glass)",
-          border: "1px dashed var(--border-default)",
-        }}
-      >
-        <EmptyState
-          title="No report on screen yet"
-          description="Type a prompt or pick a preset above. Saved reports appear in the left sidebar — Lumen keeps them across sessions."
-          bulbSize={120}
-          accent="yellow"
-        />
+      <div className="flex flex-col gap-3 pt-2">
+        <p className="font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+          What you&rsquo;ll get back
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {sections.map(({ Icon, label, body }) => (
+            <div
+              key={label}
+              className="flex items-start gap-3 rounded-lg p-4"
+              style={{
+                background: "var(--surface-glass)",
+                border: "1px solid var(--border-glass)",
+              }}
+            >
+              <span
+                aria-hidden
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-md"
+                style={{
+                  background: "var(--tint-ua-soft)",
+                  color: "var(--color-ua)",
+                  boxShadow:
+                    "0 0 12px color-mix(in oklab, var(--color-ua) 30%, transparent)",
+                }}
+              >
+                <Icon className="h-4 w-4" strokeWidth={2.25} />
+              </span>
+              <div className="min-w-0">
+                <p className="font-display text-sm font-bold leading-tight text-cloud-white">
+                  {label}
+                </p>
+                <p className="mt-1 font-body text-xs leading-relaxed text-[color:var(--text-secondary)]">
+                  {body}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
