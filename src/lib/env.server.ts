@@ -19,6 +19,9 @@ export const serverEnv = {
   get ANTHROPIC_API_KEY() {
     return read("ANTHROPIC_API_KEY", { optional: true });
   },
+  get SENTRY_DSN() {
+    return read("SENTRY_DSN", { optional: true });
+  },
 } as const;
 
 /** Call from a server-only entry (e.g. a startup hook) to fail fast. */

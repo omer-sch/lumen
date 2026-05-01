@@ -13,9 +13,11 @@
   "dependencies": {
     "@clerk/nextjs": "^7.2.8",
     "@clerk/themes": "^2.4.57",
+    "@sentry/nextjs": "^10.51.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",
     "next": "^15.5.15",
+    "posthog-js": "^1.372.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^3.8.1",

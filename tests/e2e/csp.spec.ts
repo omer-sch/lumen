@@ -22,18 +22,34 @@ test.describe("CSP — directive validation", () => {
     expect(d["default-src"]).toEqual(["'self'"]);
   });
 
-  test("script-src allows only self + clerk + cloudflare-challenge", async ({ request }) => {
+  test("script-src allows only self + known third-party origins", async ({ request }) => {
     const csp = (await request.get("/sign-in")).headers()["content-security-policy"]!;
     const d = parseCSP(csp);
     expect(d["script-src"]).toContain("'self'");
     expect(d["script-src"]).toContain("'unsafe-inline'");
     // We deliberately do NOT allow unsafe-eval anywhere.
     expect(d["script-src"]).not.toContain("'unsafe-eval'");
-    // Clerk origins are required for the auth widget to load.
-    expect(d["script-src"].some((s) => s.includes("clerk.com"))).toBe(true);
-    expect(d["script-src"].some((s) => s.includes("clerk.accounts.dev"))).toBe(true);
-    // Cloudflare turnstile/challenges (Clerk's bot mitigation).
-    expect(d["script-src"].some((s) => s.includes("challenges.cloudflare.com"))).toBe(true);
+    // No bare wildcard — every host must be explicit.
+    expect(d["script-src"]).not.toContain("*");
+
+    // The full set of allowed remote origins. Adding a new host requires
+    // a paired update here so the security review surfaces on the PR.
+    const ALLOWED_REMOTE = [
+      "clerk.com",                  // Clerk auth widget
+      "clerk.accounts.dev",         // Clerk dev frontend
+      "challenges.cloudflare.com",  // Clerk's bot mitigation (Turnstile)
+      "browser.sentry-cdn.com",     // Sentry browser SDK loader
+      "posthog.com",                // PostHog product analytics
+    ];
+    const remote = d["script-src"].filter(
+      (s) => s.startsWith("https://") || s.includes("cdn"),
+    );
+    for (const host of remote) {
+      expect(
+        ALLOWED_REMOTE.some((h) => host.includes(h)),
+        `script-src origin ${host} is not in the documented allow-list`,
+      ).toBe(true);
+    }
   });
 
   test("connect-src does not include any model provider origin", async ({ request }) => {
@@ -59,6 +75,31 @@ test.describe("CSP — directive validation", () => {
     // of a known origin) but never a standalone `*`.
     expect(sources).not.toContain("*");
     expect(sources).toContain("'self'");
+  });
+
+  test("connect-src observability origins match the documented allow-list", async ({ request }) => {
+    const csp = (await request.get("/sign-in")).headers()["content-security-policy"]!;
+    const d = parseCSP(csp);
+    const sources = d["connect-src"] ?? [];
+    // Sentry + PostHog ship runtime telemetry from the browser. They're
+    // explicitly allowed; any other observability vendor (Datadog,
+    // LogRocket, etc.) requires a paired update to next.config.ts AND
+    // this test, so the security review surfaces on the PR.
+    const ALLOWED_REMOTE = [
+      "clerk.com",
+      "clerk.accounts.dev",
+      "sentry.io",
+      "ingest.sentry.io",
+      "posthog.com",
+      "i.posthog.com",
+    ];
+    const remote = sources.filter((s) => s.startsWith("https://"));
+    for (const host of remote) {
+      expect(
+        ALLOWED_REMOTE.some((h) => host.includes(h)),
+        `connect-src origin ${host} is not in the documented allow-list`,
+      ).toBe(true);
+    }
   });
 
   test("frame-ancestors blocks every embedder", async ({ request }) => {

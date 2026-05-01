@@ -12,4 +12,6 @@ function readPublic(name: string): string {
 
 export const publicEnv = {
   CLERK_PUBLISHABLE_KEY: readPublic("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"),
+  // PostHog key is optional — if missing, analytics are silently skipped.
+  // Sentry DSN is validated via NEXT_PUBLIC_SENTRY_DSN (also optional in dev).
 } as const;

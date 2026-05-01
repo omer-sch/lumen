@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Bricolage_Grotesque, Montserrat } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
+import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 import "./globals.css";
 import "@/lib/env.client";
 
@@ -128,7 +129,9 @@ export default function RootLayout({
       }}
     >
       <html lang="en" className={`${bricolage.variable} ${montserrat.variable}`}>
-        <body>{children}</body>
+        <body>
+          <PostHogProvider>{children}</PostHogProvider>
+        </body>
       </html>
     </ClerkProvider>
   );
