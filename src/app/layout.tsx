@@ -97,7 +97,7 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider
-      signInForceRedirectUrl="/welcome"
+      signInForceRedirectUrl="/dashboard"
       signUpForceRedirectUrl="/welcome"
       afterSignOutUrl="/sign-in"
       appearance={{

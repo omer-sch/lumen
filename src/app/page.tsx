@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 
 export default async function Home() {
-  if (process.env.LUMEN_PREVIEW === "1") redirect("/welcome");
+  if (process.env.LUMEN_PREVIEW === "1") redirect("/dashboard");
   const { userId } = await auth();
-  redirect(userId ? "/welcome" : "/sign-in");
+  redirect(userId ? "/dashboard" : "/sign-in");
 }

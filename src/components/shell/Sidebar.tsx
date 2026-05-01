@@ -5,7 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  Megaphone,
   MessagesSquare,
+  FileText,
   Sparkles,
   BookOpen,
   type LucideIcon,
@@ -23,8 +25,10 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/queries",   label: "Ask",       icon: MessagesSquare, badge: "new" },
-  { href: "/feed",      label: "AI Feed",   icon: Sparkles },
+  { href: "/reports",   label: "Reports",   icon: FileText },
+  { href: "/feed",      label: "Feed",      icon: Sparkles },
   { href: "/knowledge", label: "Knowledge", icon: BookOpen },
 ];
 

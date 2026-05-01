@@ -4,6 +4,8 @@ import { CountUpNumber } from "@/components/ui/CountUpNumber";
 import type { KpiDirection } from "@/lib/mock/dashboard";
 
 type KpiCardProps = {
+  /** Stable identifier — surfaces as `data-testid="kpi-{id}"` when set. */
+  id?: string;
   label: string;
   value: string;
   delta: number;
@@ -55,6 +57,7 @@ function parseKpiValue(raw: string): {
 }
 
 export function KpiCard({
+  id,
   label,
   value,
   delta,
@@ -74,6 +77,7 @@ export function KpiCard({
       feature={highlight}
       shimmer={highlight}
       enterIndex={enterIndex}
+      data-testid={id ? `kpi-${id}` : undefined}
       className={
         isHero
           ? "flex h-full flex-col justify-between gap-6 p-6 sm:p-7"

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowUpRight,
   BookOpen,
@@ -61,10 +62,33 @@ const DESTINATIONS = [
   },
 ];
 
+const COOKIE = "lumen.welcomed";
+
+const hasWelcomedCookie = () => {
+  if (typeof document === "undefined") return false;
+  return document.cookie.split("; ").some((c) => c.startsWith(`${COOKIE}=1`));
+};
+
+const markWelcomed = () => {
+  if (typeof document === "undefined") return;
+  // 1 year — long enough that returning users never see the cinematic again.
+  document.cookie = `${COOKIE}=1; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+};
+
 export default function WelcomePage() {
+  const router = useRouter();
   const [scene, setScene] = useState<Scene>(0);
 
+  // First-visit gate: if the user has already seen the cinematic, send them
+  // straight to the dashboard. Welcome is a once-per-user moment, never a
+  // friction tax on every login.
   useEffect(() => {
+    if (hasWelcomedCookie()) {
+      router.replace("/dashboard");
+      return;
+    }
+    markWelcomed();
+
     const reduce =
       typeof window !== "undefined" &&
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -79,7 +103,7 @@ export default function WelcomePage() {
       ),
     );
     return () => timers.forEach((t) => window.clearTimeout(t));
-  }, []);
+  }, [router]);
 
   const skip = () => setScene(5);
   const isFinale = scene >= 5;
