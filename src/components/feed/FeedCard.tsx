@@ -42,9 +42,11 @@ type FeedCardProps = {
   item: FeedItem;
   /** 1-based position in the grid; drives the staggered entry animation. */
   enterIndex?: number;
+  /** Click handler — opens the drill-in panel in FeedView. */
+  onSelect?: (item: FeedItem) => void;
 };
 
-export function FeedCard({ item, enterIndex }: FeedCardProps) {
+export function FeedCard({ item, enterIndex, onSelect }: FeedCardProps) {
   const Icon = SEVERITY_ICON[item.severity];
   const meta = SEVERITY_META[item.severity];
   const accent = `var(${meta.accentVar})`;
@@ -58,6 +60,21 @@ export function FeedCard({ item, enterIndex }: FeedCardProps) {
       feature={isHighlight}
       shimmer={isHighlight}
       enterIndex={enterIndex}
+      interactive={!!onSelect}
+      onClick={onSelect ? () => onSelect(item) : undefined}
+      onKeyDown={
+        onSelect
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect(item);
+              }
+            }
+          : undefined
+      }
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      data-testid={`feed-card-${item.id}`}
       className={
         isHighlight
           ? "flex h-full flex-col gap-5 p-6 sm:col-span-2 lg:p-7"

@@ -343,6 +343,36 @@ body {
   display: none !important;
 }
 
+/* ─────────────────────────────────────────
+   Print — used by Reports → Export PDF (window.print()).
+   Strip the chrome (sidebar, topbar, action bar) and print just the
+   report document with brand-correct light surface + dark text.
+───────────────────────────────────────── */
+@media print {
+  html, body {
+    background: #FFFFFF !important;
+    color: #0A1428 !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  /* Walk up from the report doc and re-show its ancestors so the document
+     itself stays in the layout flow. */
+  [data-report-doc],
+  [data-report-doc] * {
+    visibility: visible;
+  }
+  [data-report-doc] {
+    position: absolute !important;
+    inset: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 32px 40px !important;
+  }
+}
+
 /* Reduced motion: kill non-essential animations. */
 @media (prefers-reduced-motion: reduce) {
   .animate-mint-pulse,

@@ -1,8 +1,14 @@
-import { MOCK_FEED } from "@/lib/mock/feed";
+"use client";
+
+import { useState } from "react";
+import { MOCK_FEED, type FeedItem } from "@/lib/mock/feed";
 import { FeedCard } from "@/components/feed/FeedCard";
+import { FeedDetailPanel } from "@/components/feed/FeedDetailPanel";
 import { LivePulse } from "@/components/ui/LivePulse";
 
 export function FeedView() {
+  const [selected, setSelected] = useState<FeedItem | null>(null);
+
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-3">
@@ -31,20 +37,23 @@ export function FeedView() {
 
         <p className="max-w-2xl font-body text-sm leading-relaxed text-[color:var(--text-secondary)]">
           Anomalies, trends, and recommendations the AI surfaced from your
-          paid-media data. Triage in seconds — drill in only when something
-          matters.
+          paid-media data. Triage in seconds — open a card to see the chart,
+          the campaigns it affected, and what to do next.
         </p>
       </header>
 
       <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:gap-6">
         {MOCK_FEED.map((item, idx) => (
-          <FeedCard key={item.id} item={item} enterIndex={idx + 1} />
+          <FeedCard
+            key={item.id}
+            item={item}
+            enterIndex={idx + 1}
+            onSelect={setSelected}
+          />
         ))}
       </section>
 
-      <p className="mx-auto pt-2 text-center font-body text-xs uppercase tracking-wider text-[color:var(--text-muted)]">
-        Phase 0 preview · sample insights · real anomaly detection in Phase 2
-      </p>
+      <FeedDetailPanel item={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }
