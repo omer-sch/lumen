@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowDown, ArrowDownRight, ArrowUp, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -66,6 +68,11 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
     dir: "desc",
   });
   const [channel, setChannel] = useState<"all" | Channel>("all");
+
+  // Carry the global filter into the deep-link so the campaign profile
+  // opens with the same window + client the user is browsing.
+  const params = useSearchParams();
+  const profileQuery = params.toString();
 
   const filtered = useMemo(
     () => (channel === "all" ? rows : rows.filter((r) => r.channel === channel)),
@@ -181,20 +188,32 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
               const roasTone =
                 row.deltaRoas > 0 ? "good" : row.deltaRoas < 0 ? "bad" : "neutral";
               const RoasArrow = row.deltaRoas >= 0 ? ArrowUpRight : ArrowDownRight;
+              const href = profileQuery
+                ? `/campaigns/${row.id}?${profileQuery}`
+                : `/campaigns/${row.id}`;
               return (
                 <tr
                   key={row.id}
-                  className="border-t border-[color:var(--border-subtle)] transition-colors duration-280 ease-out-quart hover:bg-[color:var(--surface-hover)]"
+                  data-testid={`campaign-row-${row.id}`}
+                  className="group border-t border-[color:var(--border-subtle)] transition-colors duration-280 ease-out-quart hover:bg-[color:var(--surface-hover)]"
                 >
                   <td className="whitespace-nowrap px-3 py-3">
-                    <span
+                    <Link
+                      href={href}
+                      aria-label={`Open ${row.name}`}
                       className={cn(
-                        "font-medium",
-                        i === 0 ? "text-ua" : "text-cloud-white",
+                        "inline-flex items-center gap-1.5 font-medium transition-[color,transform] duration-280 ease-out-quart focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
+                        i === 0
+                          ? "text-ua"
+                          : "text-cloud-white hover:text-ua group-hover:translate-x-0.5",
                       )}
                     >
                       {row.name}
-                    </span>
+                      <ArrowUpRight
+                        className="h-3 w-3 opacity-0 transition-opacity duration-280 ease-out-quart group-hover:opacity-100"
+                        strokeWidth={2.25}
+                      />
+                    </Link>
                   </td>
                   <td className="whitespace-nowrap px-3 py-3">
                     <span
