@@ -1,11 +1,13 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { LayoutDashboard, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   getDashboardData,
   type DashboardData,
+  type Kpi,
+  type KpiId,
 } from "@/lib/mock/dashboard";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import { useDashboardMode } from "@/lib/filters/use-dashboard-mode";
@@ -186,41 +188,53 @@ function ModeToggle({
   );
 }
 
+/** Default order of metrics across the four KPI slots. */
+const DEFAULT_SLOTS: KpiId[] = ["roas", "spend", "installs", "cpi"];
+
 function MyDashboard({ data }: { data: DashboardData }) {
-  // ROAS is the brand hero KPI — keeps the yellow treatment for visual
-  // weight, but lives in the same single-row strip as the others so the
-  // trend + channel mix land above the fold instead of below it.
-  const heroId = "roas";
-  // Sort so ROAS leads the row visually.
-  const orderedKpis = [
-    ...data.kpis.filter((k) => k.id === heroId),
-    ...data.kpis.filter((k) => k.id !== heroId),
-  ];
+  // Per-slot active metric. Each tile is independently swappable — pick
+  // any of the 4 metrics in any slot. Yellow follows ROAS wherever it
+  // lands so the brand "yellow is intentional" rule still holds.
+  const [slots, setSlots] = useState<KpiId[]>(DEFAULT_SLOTS);
+
+  const setSlot = (slotIndex: number, nextId: KpiId) => {
+    setSlots((cur) => cur.map((id, i) => (i === slotIndex ? nextId : id)));
+  };
+
+  const swapOptions = data.kpis.map((k) => ({ id: k.id, label: k.label }));
+  const kpiById = (id: KpiId): Kpi =>
+    data.kpis.find((k) => k.id === id) ?? data.kpis[0];
 
   return (
     <div className="flex flex-col gap-5 md:gap-6">
       {/* KPI strip — 4 equal tiles in a row on lg+, each with a 30-day
-          sparkline of its own metric. Dense by design so the heavy chart
-          row below sits above the fold on a 1440×900 viewport. */}
+          sparkline of its own metric. Each slot lets the user swap which
+          metric it displays via the chevron next to the label. */}
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {orderedKpis.map((kpi, i) => {
+        {slots.map((activeId, i) => {
+          const kpi = kpiById(activeId);
           const series = data.trend.map((p) => ({
             date: p.date,
-            value: p[kpi.id],
+            value: p[activeId],
           }));
           return (
             <KpiCard
-              key={kpi.id}
+              key={`slot-${i}`}
               id={kpi.id}
               label={kpi.label}
               value={kpi.value}
               delta={kpi.delta}
               direction={kpi.direction}
               hint={kpi.hint}
-              highlight={kpi.id === heroId}
+              highlight={activeId === "roas"}
               size="compact"
               enterIndex={i + 1}
               series={series}
+              swap={{
+                options: swapOptions,
+                activeId,
+                onChange: (next) => setSlot(i, next),
+              }}
             />
           );
         })}

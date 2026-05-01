@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowDownRight, ArrowUpRight, Check, ChevronDown } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -9,9 +10,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { CountUpNumber } from "@/components/ui/CountUpNumber";
-import type { KpiDirection } from "@/lib/mock/dashboard";
+import type { KpiDirection, KpiId } from "@/lib/mock/dashboard";
 
 type KpiCardProps = {
   /** Stable identifier — surfaces as `data-testid="kpi-{id}"` when set. */
@@ -37,6 +39,16 @@ type KpiCardProps = {
    * inferred from the metric prefix/suffix.
    */
   series?: { date: string; value: number }[];
+  /**
+   * Optional metric swap — when provided, the label becomes a clickable
+   * trigger that opens a small popover so the user can change which
+   * metric this slot shows.
+   */
+  swap?: {
+    options: { id: KpiId; label: string }[];
+    activeId: KpiId;
+    onChange: (id: KpiId) => void;
+  };
 };
 
 /**
@@ -94,6 +106,7 @@ export function KpiCard({
   size = "compact",
   enterIndex,
   series,
+  swap,
 }: KpiCardProps) {
   const positive = direction === "higher-better" ? delta >= 0 : delta <= 0;
   const { numeric, prefix, suffix, decimals } = parseKpiValue(value);
@@ -118,9 +131,13 @@ export function KpiCard({
       }
     >
       <div className="flex items-center justify-between">
-        <span className="font-body text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-          {label}
-        </span>
+        {swap ? (
+          <KpiSwap label={label} swap={swap} />
+        ) : (
+          <span className="font-body text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
+            {label}
+          </span>
+        )}
         {isHero && hint && (
           <span className="hidden font-body text-xs text-[color:var(--text-muted)] sm:inline">
             {hint}
@@ -262,5 +279,93 @@ export function KpiCard({
         </div>
       )}
     </GlassCard>
+  );
+}
+
+function KpiSwap({
+  label,
+  swap,
+}: {
+  label: string;
+  swap: NonNullable<KpiCardProps["swap"]>;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        data-testid={`kpi-swap-${swap.activeId}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1 rounded-sm font-body text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)] outline-none transition-colors duration-280 ease-out-quart hover:text-cloud-white focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+      >
+        {label}
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 transition-transform duration-280 ease-out-quart",
+            open && "rotate-180",
+          )}
+          strokeWidth={2.25}
+        />
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          aria-label="Change metric"
+          className="absolute left-0 top-[calc(100%+6px)] z-30 min-w-[150px] rounded-md py-1 shadow-elevated"
+          style={{
+            background:
+              "color-mix(in oklab, var(--surface-elevated) 96%, transparent)",
+            border: "1px solid var(--border-default)",
+          }}
+        >
+          {swap.options.map((opt) => {
+            const selected = opt.id === swap.activeId;
+            return (
+              <li key={opt.id}>
+                <button
+                  type="button"
+                  data-testid={`kpi-swap-option-${opt.id}`}
+                  onClick={() => {
+                    swap.onChange(opt.id);
+                    setOpen(false);
+                  }}
+                  role="option"
+                  aria-selected={selected}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left font-body text-xs font-semibold uppercase tracking-wider transition-colors duration-280 ease-out-quart hover:bg-[color:var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
+                    selected ? "text-ua" : "text-[color:var(--text-secondary)]",
+                  )}
+                >
+                  <span>{opt.label}</span>
+                  {selected && (
+                    <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
