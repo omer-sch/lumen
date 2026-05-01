@@ -33,7 +33,7 @@ function DashboardInner() {
   const data = getDashboardData({ from, to, client });
 
   return (
-    <div className="flex flex-col gap-8 md:gap-10">
+    <div className="flex flex-col gap-6 md:gap-8">
       <DashboardHeader />
       {mode === "ai" ? <AIModeView /> : <MyDashboard data={data} />}
       <PinnedSection />
@@ -187,47 +187,47 @@ function ModeToggle({
 }
 
 function MyDashboard({ data }: { data: DashboardData }) {
+  // ROAS is the brand hero KPI — keeps the yellow treatment for visual
+  // weight, but lives in the same single-row strip as the others so the
+  // trend + channel mix land above the fold instead of below it.
   const heroId = "roas";
-  const heroKpi = data.kpis.find((k) => k.id === heroId);
-  const otherKpis = data.kpis.filter((k) => k.id !== heroId);
+  // Sort so ROAS leads the row visually.
+  const orderedKpis = [
+    ...data.kpis.filter((k) => k.id === heroId),
+    ...data.kpis.filter((k) => k.id !== heroId),
+  ];
 
   return (
-    <div className="flex flex-col gap-8 md:gap-10">
-      {/* KPIs */}
-      <section className="grid grid-cols-1 gap-5 md:grid-cols-3 lg:grid-cols-12 lg:gap-6">
-        {heroKpi && (
-          <div className="md:col-span-3 lg:col-span-7 lg:row-span-3">
+    <div className="flex flex-col gap-5 md:gap-6">
+      {/* KPI strip — 4 equal tiles in a row on lg+, each with a 30-day
+          sparkline of its own metric. Dense by design so the heavy chart
+          row below sits above the fold on a 1440×900 viewport. */}
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {orderedKpis.map((kpi, i) => {
+          const series = data.trend.map((p) => ({
+            date: p.date,
+            value: p[kpi.id],
+          }));
+          return (
             <KpiCard
-              id={heroKpi.id}
-              label={heroKpi.label}
-              value={heroKpi.value}
-              delta={heroKpi.delta}
-              direction={heroKpi.direction}
-              hint={heroKpi.hint}
-              highlight
-              size="hero"
-              enterIndex={1}
-            />
-          </div>
-        )}
-        {otherKpis.map((kpi, i) => (
-          <div key={kpi.id} className="md:col-span-1 lg:col-span-5">
-            <KpiCard
+              key={kpi.id}
               id={kpi.id}
               label={kpi.label}
               value={kpi.value}
               delta={kpi.delta}
               direction={kpi.direction}
               hint={kpi.hint}
+              highlight={kpi.id === heroId}
               size="compact"
-              enterIndex={i + 2}
+              enterIndex={i + 1}
+              series={series}
             />
-          </div>
-        ))}
+          );
+        })}
       </section>
 
       {/* Trend + Channel mix */}
-      <section className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-6">
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-5">
         <div className="lg:col-span-2">
           <TrendChart trend={data.trend} enterIndex={5} />
         </div>

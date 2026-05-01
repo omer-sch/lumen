@@ -1,9 +1,9 @@
 "use client";
 
-import { Pin, PinOff } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, Pin, PinOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { usePinnedTiles } from "@/lib/pins/store";
 import { PinnedRenderer } from "@/components/ask/visualizations/Pinned";
 
@@ -54,20 +54,39 @@ export function PinnedSection() {
       </header>
 
       {tiles.length === 0 ? (
-        <div
-          className="rounded-lg p-6"
+        <Link
+          href="/queries"
+          className="group flex items-center gap-3 rounded-lg p-4 transition-[transform,background-color,border-color] duration-280 ease-out-quart hover:-translate-y-px hover:border-ua focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
           style={{
             background: "var(--surface-glass)",
             border: "1px dashed var(--border-default)",
           }}
         >
-          <EmptyState
-            title="Nothing pinned yet"
-            description="Build a chart in Ask and tap the pin icon to keep it on your dashboard. Pinned views are personal and stay across sessions."
-            bulbSize={120}
-            accent="mint"
-          />
-        </div>
+          <span
+            aria-hidden
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-md"
+            style={{
+              background: "var(--tint-ua-soft)",
+              color: "var(--color-ua)",
+              boxShadow:
+                "0 0 12px color-mix(in oklab, var(--color-ua) 28%, transparent)",
+            }}
+          >
+            <Pin className="h-4 w-4" strokeWidth={2.25} />
+          </span>
+          <div className="flex min-w-0 flex-col">
+            <p className="font-display text-sm font-bold leading-tight text-cloud-white">
+              Nothing pinned yet
+            </p>
+            <p className="font-body text-xs leading-snug text-[color:var(--text-muted)]">
+              Build a chart in Ask, tap the pin icon, and keep it here across sessions.
+            </p>
+          </div>
+          <span className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 font-body text-[11px] font-semibold uppercase tracking-wider text-ua transition-transform duration-280 ease-out-quart group-hover:translate-x-0.5">
+            Open Ask
+            <ArrowUpRight className="h-3 w-3" strokeWidth={2.5} />
+          </span>
+        </Link>
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-6">
           {tiles.map((t, i) => (

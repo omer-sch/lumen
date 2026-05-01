@@ -1,4 +1,14 @@
+"use client";
+
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { CountUpNumber } from "@/components/ui/CountUpNumber";
 import type { KpiDirection } from "@/lib/mock/dashboard";
@@ -21,6 +31,12 @@ type KpiCardProps = {
   size?: "hero" | "compact";
   /** Stagger position in the KPI grid (1-based). */
   enterIndex?: number;
+  /**
+   * Optional time-series. Renders as a mini area chart inside the hero
+   * card so a tall tile doesn't read as empty space. Tick formatter is
+   * inferred from the metric prefix/suffix.
+   */
+  series?: { date: string; value: number }[];
 };
 
 /**
@@ -56,6 +72,17 @@ function parseKpiValue(raw: string): {
   };
 }
 
+const fmtForTick = (prefix?: string, suffix?: string, decimals = 0) =>
+  (n: number) => {
+    if (suffix === "x") return `${n.toFixed(2)}x`;
+    if (prefix === "$") {
+      if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+      return `$${n.toFixed(decimals === 0 ? 0 : 2)}`;
+    }
+    if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+    return `${Math.round(n)}`;
+  };
+
 export function KpiCard({
   id,
   label,
@@ -66,10 +93,16 @@ export function KpiCard({
   direction = "higher-better",
   size = "compact",
   enterIndex,
+  series,
 }: KpiCardProps) {
   const positive = direction === "higher-better" ? delta >= 0 : delta <= 0;
   const { numeric, prefix, suffix, decimals } = parseKpiValue(value);
   const isHero = size === "hero";
+  const hasSeries = series && series.length > 1;
+  const stroke = highlight ? "var(--color-yellow)" : "var(--color-ua)";
+  const heroFillId = highlight ? "kpi-spark-yellow-hero" : "kpi-spark-ua-hero";
+  const compactFillId = `kpi-spark-compact-${id ?? "x"}`;
+  const tickFormat = fmtForTick(prefix, suffix, decimals);
 
   return (
     <GlassCard
@@ -80,7 +113,7 @@ export function KpiCard({
       data-testid={id ? `kpi-${id}` : undefined}
       className={
         isHero
-          ? "flex h-full flex-col justify-between gap-6 p-6 sm:p-7"
+          ? "flex h-full flex-col gap-5 p-6 sm:p-7"
           : "flex h-full flex-col gap-4 p-5"
       }
     >
@@ -133,10 +166,100 @@ export function KpiCard({
       {hint && !isHero && (
         <p className="font-body text-xs text-[color:var(--text-muted)]">{hint}</p>
       )}
-      {isHero && (
+      {isHero && hint && (
         <p className="font-body text-sm leading-relaxed text-[color:var(--text-secondary)] sm:hidden">
           {hint}
         </p>
+      )}
+
+      {/* Hero — full sparkline with axes + tooltip. Compact — bare-bottom
+          strip (no axes), keeps the tile dense without overwhelming it. */}
+      {hasSeries && isHero && (
+        <div className="mt-auto h-40 w-full pt-2 sm:h-48">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={series}
+              margin={{ top: 4, right: 4, bottom: 4, left: 0 }}
+            >
+              <defs>
+                <linearGradient id={heroFillId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={stroke} stopOpacity={0.45} />
+                  <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis
+                dataKey="date"
+                tick={{ fill: "var(--text-muted)", fontSize: 10 }}
+                tickLine={false}
+                axisLine={false}
+                minTickGap={24}
+              />
+              <YAxis
+                tick={{ fill: "var(--text-muted)", fontSize: 10 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={tickFormat}
+                width={36}
+              />
+              <Tooltip
+                cursor={{ stroke, strokeOpacity: 0.4, strokeWidth: 1 }}
+                contentStyle={{
+                  background: "var(--surface-elevated)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 10,
+                  color: "var(--text-primary)",
+                  fontSize: 12,
+                  boxShadow: "var(--shadow-elevated)",
+                }}
+                labelStyle={{ color: "var(--text-muted)", fontSize: 11 }}
+                formatter={(v) => [
+                  tickFormat(typeof v === "number" ? v : Number(v)),
+                  label,
+                ]}
+              />
+              <Area
+                type="monotone"
+                dataKey="value"
+                stroke={stroke}
+                strokeWidth={2}
+                fill={`url(#${heroFillId})`}
+                dot={false}
+                activeDot={{
+                  r: 4,
+                  fill: stroke,
+                  stroke: highlight ? "var(--color-yellow-light)" : "var(--color-ua-glow)",
+                  strokeWidth: 2,
+                }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      {hasSeries && !isHero && (
+        <div className="-mx-2 -mb-2 mt-auto h-12 w-[calc(100%+1rem)]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={series}
+              margin={{ top: 4, right: 0, bottom: 0, left: 0 }}
+            >
+              <defs>
+                <linearGradient id={compactFillId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={stroke} stopOpacity={0.4} />
+                  <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <Area
+                type="monotone"
+                dataKey="value"
+                stroke={stroke}
+                strokeWidth={1.5}
+                fill={`url(#${compactFillId})`}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
       )}
     </GlassCard>
   );
