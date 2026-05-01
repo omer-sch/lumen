@@ -97,7 +97,11 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider
-      signInForceRedirectUrl="/dashboard"
+      // Both sign-in and sign-up flow through /welcome. The welcome page
+      // itself decides what to render based on the lumen.welcomed.last
+      // cookie: full cinematic on first sign-in, ~2s greeting on the
+      // first session of each new day, instant redirect on same-day reloads.
+      signInForceRedirectUrl="/welcome"
       signUpForceRedirectUrl="/welcome"
       afterSignOutUrl="/sign-in"
       appearance={{

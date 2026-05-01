@@ -17,14 +17,32 @@ import { LivePulse } from "@/components/ui/LivePulse";
 import { cn } from "@/lib/utils";
 
 type Scene = 0 | 1 | 2 | 3 | 4 | 5;
+type Mode = "first" | "returning";
 
-const TIMINGS: Array<[Scene, number]> = [
-  [1, 220],   // ambient glows bloom in
-  [2, 780],   // bulb floats up + ignites
-  [3, 1700],  // greeting reveals
-  [4, 2700],  // tagline + secondary line
-  [5, 4100],  // destination cards reveal
-];
+// Two cinematics: a full one for the first sign-in (the brand moment),
+// and a tight 2-second greeting for the first session of each new day.
+// Same-day reloads bypass the page entirely.
+const TIMINGS_BY_MODE: Record<Mode, Array<[Scene, number]>> = {
+  first: [
+    [1, 220],
+    [2, 780],
+    [3, 1700],
+    [4, 2700],
+    [5, 4100],
+  ],
+  returning: [
+    [1, 60],
+    [2, 220],
+    [3, 500],
+    [4, 850],
+    [5, 1200],
+  ],
+};
+
+// Auto-advance for returning users — they're here to work, not to watch
+// a cinematic. Long enough to register the bulb + signal, short enough to
+// feel like a flash of brand presence rather than a tax.
+const RETURNING_AUTO_ADVANCE_MS = 2400;
 
 const DESTINATIONS = [
   {
@@ -46,7 +64,7 @@ const DESTINATIONS = [
   },
   {
     href: "/feed",
-    label: "AI Feed",
+    label: "Feed",
     description:
       "Anomalies, trend shifts, and recommendations as they emerge.",
     icon: Sparkles,
@@ -62,55 +80,119 @@ const DESTINATIONS = [
   },
 ];
 
-const COOKIE = "lumen.welcomed";
+const COOKIE = "lumen.welcomed.last";
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
-const hasWelcomedCookie = () => {
-  if (typeof document === "undefined") return false;
-  return document.cookie.split("; ").some((c) => c.startsWith(`${COOKIE}=1`));
+const readCookieDate = (): string | null => {
+  if (typeof document === "undefined") return null;
+  const part = document.cookie
+    .split("; ")
+    .find((c) => c.startsWith(`${COOKIE}=`));
+  return part ? part.split("=")[1] ?? null : null;
 };
 
-const markWelcomed = () => {
+const setCookieDate = (date: string) => {
   if (typeof document === "undefined") return;
-  // 1 year — long enough that returning users never see the cinematic again.
-  document.cookie = `${COOKIE}=1; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+  document.cookie =
+    `${COOKIE}=${date}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
 };
+
+const fmtToday = () =>
+  new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
 
 export default function WelcomePage() {
   const router = useRouter();
   const [scene, setScene] = useState<Scene>(0);
+  const [mode, setMode] = useState<Mode | null>(null);
 
-  // First-visit gate: if the user has already seen the cinematic, send them
-  // straight to the dashboard. Welcome is a once-per-user moment, never a
-  // friction tax on every login.
   useEffect(() => {
-    if (hasWelcomedCookie()) {
+    const last = readCookieDate();
+    const today = todayISO();
+
+    // Same-day reload — never re-play.
+    if (last === today) {
       router.replace("/dashboard");
       return;
     }
-    markWelcomed();
+
+    const next: Mode = last ? "returning" : "first";
+    setMode(next);
+    setCookieDate(today);
 
     const reduce =
       typeof window !== "undefined" &&
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (reduce) {
       setScene(5);
+      // Reduced-motion returners still auto-advance.
+      if (next === "returning") {
+        const t = window.setTimeout(() => router.replace("/dashboard"), 800);
+        return () => window.clearTimeout(t);
+      }
       return;
     }
-    const timers = TIMINGS.map(([s, ms]) =>
+
+    const timers = TIMINGS_BY_MODE[next].map(([s, ms]) =>
       window.setTimeout(
         () => setScene((cur) => (s > cur ? s : cur)),
         ms,
       ),
     );
-    return () => timers.forEach((t) => window.clearTimeout(t));
+
+    let autoAdvance: number | undefined;
+    if (next === "returning") {
+      autoAdvance = window.setTimeout(
+        () => router.replace("/dashboard"),
+        RETURNING_AUTO_ADVANCE_MS,
+      );
+    }
+
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t));
+      if (autoAdvance) window.clearTimeout(autoAdvance);
+    };
   }, [router]);
 
-  const skip = () => setScene(5);
+  // Returning users can dismiss the greeting instantly with click / Enter / Esc.
+  // First-time users keep the deliberate cards-pick flow.
+  useEffect(() => {
+    if (mode !== "returning") return;
+    const skip = () => router.replace("/dashboard");
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        skip();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mode, router]);
+
+  // Hold a bare navy frame until we know which mode to render — avoids a
+  // flash of the wrong copy during the cookie read.
+  if (mode === null) {
+    return <main className="min-h-[100dvh] bg-navy" aria-hidden />;
+  }
+
   const isFinale = scene >= 5;
+  const isReturning = mode === "returning";
+  const skip = () => router.replace("/dashboard");
 
   return (
-    <main className="relative min-h-[100dvh] overflow-hidden bg-navy">
-      {/* Ambient brand glows — bloom in once the curtain rises */}
+    <main
+      onClick={isReturning ? skip : undefined}
+      role={isReturning ? "button" : undefined}
+      aria-label={isReturning ? "Continue to dashboard" : undefined}
+      className={cn(
+        "relative min-h-[100dvh] overflow-hidden bg-navy",
+        isReturning && "cursor-pointer",
+      )}
+    >
+      {/* Ambient brand glows + grain */}
       <div
         aria-hidden
         className={cn(
@@ -136,7 +218,7 @@ export default function WelcomePage() {
         }}
       />
 
-      {/* Top bar — brand mark + skip */}
+      {/* Top bar — brand mark + manual skip (first-time only) */}
       <header className="relative z-20 flex items-center justify-between px-6 py-6 sm:px-10">
         <div className="flex items-center gap-3">
           <span
@@ -156,29 +238,36 @@ export default function WelcomePage() {
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={skip}
-          aria-hidden={isFinale}
-          tabIndex={isFinale ? -1 : 0}
-          className={cn(
-            "rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)] transition-[opacity,color,background-color] duration-280 ease-out-quart hover:bg-[color:var(--surface-hover)] hover:text-cloud-white focus-mint focus-visible:outline-none",
-            isFinale ? "pointer-events-none opacity-0" : "opacity-100",
-          )}
-        >
-          Skip intro
-        </button>
+        {!isReturning && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setScene(5);
+            }}
+            aria-hidden={isFinale}
+            tabIndex={isFinale ? -1 : 0}
+            className={cn(
+              "rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)] transition-[opacity,color,background-color] duration-280 ease-out-quart hover:bg-[color:var(--surface-hover)] hover:text-cloud-white focus-mint focus-visible:outline-none",
+              isFinale ? "pointer-events-none opacity-0" : "opacity-100",
+            )}
+          >
+            Skip intro
+          </button>
+        )}
       </header>
 
       <div
         className={cn(
           "relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center px-6 transition-[gap,padding,min-height] duration-[700ms] ease-out-quart sm:px-10",
-          isFinale
-            ? "gap-8 pb-16 pt-2 sm:gap-10"
-            : "min-h-[calc(100dvh-160px)] justify-center gap-8 pb-12",
+          isReturning
+            ? "min-h-[calc(100dvh-160px)] justify-center gap-6 pb-12"
+            : isFinale
+              ? "gap-8 pb-16 pt-2 sm:gap-10"
+              : "min-h-[calc(100dvh-160px)] justify-center gap-8 pb-12",
         )}
       >
-        {/* Bulb — the signature brand sculpture, scales down once cards arrive */}
+        {/* Bulb — smaller for returning users, the cinematic hero size for first-timers */}
         <div
           className={cn(
             "transition-[opacity,transform] duration-[800ms] ease-out-quart",
@@ -187,7 +276,10 @@ export default function WelcomePage() {
               : "translate-y-3 opacity-0",
           )}
         >
-          <GlassBulb size={isFinale ? 168 : 260} accent="mint" />
+          <GlassBulb
+            size={isReturning ? 160 : isFinale ? 168 : 260}
+            accent="mint"
+          />
         </div>
 
         {/* Greeting block */}
@@ -201,116 +293,160 @@ export default function WelcomePage() {
             )}
           >
             <LivePulse accent="mint" size={6} />
-            Lumen is awake
+            {isReturning ? fmtToday() : "Lumen is awake"}
           </span>
 
           <h1
             className={cn(
               "font-display font-extrabold leading-[1.04] tracking-tight text-cloud-white transition-[opacity,transform,font-size] duration-[800ms] ease-out-quart",
-              isFinale
+              isReturning
                 ? "text-3xl sm:text-4xl"
-                : "text-4xl sm:text-[72px] lg:text-[84px]",
+                : isFinale
+                  ? "text-3xl sm:text-4xl"
+                  : "text-4xl sm:text-[72px] lg:text-[84px]",
               scene >= 3
                 ? "translate-y-0 opacity-100"
                 : "translate-y-4 opacity-0",
             )}
           >
-            Hi, I&rsquo;m{" "}
-            <span className="text-gradient-brand">Lumen.</span>
+            {isReturning ? (
+              <>
+                Welcome <span className="text-gradient-brand">back.</span>
+              </>
+            ) : (
+              <>
+                Hi, I&rsquo;m{" "}
+                <span className="text-gradient-brand">Lumen.</span>
+              </>
+            )}
           </h1>
 
-          <div
-            className={cn(
-              "flex max-w-2xl flex-col gap-2 transition-[opacity,transform] duration-[700ms] ease-out-quart",
-              scene >= 4
-                ? "translate-y-0 opacity-100"
-                : "translate-y-3 opacity-0",
-            )}
-          >
-            <p className="font-display text-lg font-bold leading-snug text-cloud-white sm:text-xl">
-              Your AI lens on yellowHEAD performance.
+          {isReturning ? (
+            <div
+              className={cn(
+                "flex max-w-xl flex-col gap-1 transition-[opacity,transform] duration-[700ms] ease-out-quart",
+                scene >= 4
+                  ? "translate-y-0 opacity-100"
+                  : "translate-y-3 opacity-0",
+              )}
+            >
+              <p className="font-display text-lg font-bold leading-snug text-cloud-white sm:text-xl">
+                ROAS is up{" "}
+                <span className="text-ua">5.7%</span> week-over-week.
+              </p>
+              <p className="font-body text-sm leading-relaxed text-[color:var(--text-muted)]">
+                Three signals worth a look on your dashboard.
+              </p>
+            </div>
+          ) : (
+            <div
+              className={cn(
+                "flex max-w-2xl flex-col gap-2 transition-[opacity,transform] duration-[700ms] ease-out-quart",
+                scene >= 4
+                  ? "translate-y-0 opacity-100"
+                  : "translate-y-3 opacity-0",
+              )}
+            >
+              <p className="font-display text-lg font-bold leading-snug text-cloud-white sm:text-xl">
+                Your AI lens on yellowHEAD performance.
+              </p>
+              <p className="font-body text-sm leading-relaxed text-[color:var(--text-secondary)] sm:text-base">
+                I read every signal across Meta, TikTok, Google and AppsFlyer
+                &mdash; so you can spend the day on the decisions, not the
+                dashboards.
+              </p>
+            </div>
+          )}
+
+          {isReturning && (
+            <p
+              className={cn(
+                "font-body text-[10px] uppercase tracking-[0.28em] text-[color:var(--text-muted)] transition-opacity duration-[600ms] ease-out-quart",
+                scene >= 5 ? "opacity-100" : "opacity-0",
+              )}
+            >
+              Click anywhere to continue
             </p>
-            <p className="font-body text-sm leading-relaxed text-[color:var(--text-secondary)] sm:text-base">
-              I read every signal across Meta, TikTok, Google and AppsFlyer
-              &mdash; so you can spend the day on the decisions, not the
-              dashboards.
-            </p>
-          </div>
+          )}
         </div>
 
-        {/* Destination grid — staggered finale */}
-        <section
-          aria-label="Where to start"
-          className={cn(
-            "w-full transition-opacity duration-[500ms] ease-out-quart",
-            isFinale ? "opacity-100" : "pointer-events-none opacity-0",
-          )}
-        >
-          <p
+        {/* Destination grid — first-time users only */}
+        {!isReturning && (
+          <section
+            aria-label="Where to start"
             className={cn(
-              "mb-4 text-center text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)] transition-opacity duration-[600ms] ease-out-quart",
-              isFinale ? "opacity-100" : "opacity-0",
+              "w-full transition-opacity duration-[500ms] ease-out-quart",
+              isFinale ? "opacity-100" : "pointer-events-none opacity-0",
             )}
           >
-            Pick a starting point
-          </p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {DESTINATIONS.map((d, i) => {
-              const Icon = d.icon;
-              const isYellow = d.accent === "yellow";
-              return (
-                <Link
-                  key={d.href}
-                  href={d.href}
-                  aria-label={`Open ${d.label}`}
-                  className="group block rounded-lg focus-mint focus-visible:outline-none"
-                >
-                  <GlassCard
-                    glow={d.accent}
-                    feature={isYellow}
-                    shimmer={isYellow}
-                    interactive
-                    enterIndex={isFinale ? i + 1 : 0}
-                    className="flex h-full flex-col gap-4 p-5"
+            <p
+              className={cn(
+                "mb-4 text-center text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)] transition-opacity duration-[600ms] ease-out-quart",
+                isFinale ? "opacity-100" : "opacity-0",
+              )}
+            >
+              Pick a starting point
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {DESTINATIONS.map((d, i) => {
+                const Icon = d.icon;
+                const isYellow = d.accent === "yellow";
+                return (
+                  <Link
+                    key={d.href}
+                    href={d.href}
+                    aria-label={`Open ${d.label}`}
+                    className="group block rounded-lg focus-mint focus-visible:outline-none"
                   >
-                    <div className="flex items-start justify-between">
-                      <GlassIcon
-                        icon={Icon}
-                        accentVar={isYellow ? "--color-yellow" : "--color-ua"}
-                      />
-                      {d.badge && (
-                        <span
-                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-yellow"
-                          style={{ background: "var(--tint-yellow-soft)" }}
-                        >
-                          {d.badge}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <h3 className="font-display text-lg font-bold leading-tight text-cloud-white">
-                        {d.label}
-                      </h3>
-                      <p className="text-sm leading-relaxed text-[color:var(--text-secondary)]">
-                        {d.description}
-                      </p>
-                    </div>
-                    <span
-                      className={cn(
-                        "mt-auto inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] transition-transform duration-280 ease-out-quart group-hover:translate-x-1",
-                        isYellow ? "text-yellow" : "text-ua",
-                      )}
+                    <GlassCard
+                      glow={d.accent}
+                      feature={isYellow}
+                      shimmer={isYellow}
+                      interactive
+                      enterIndex={isFinale ? i + 1 : 0}
+                      className="flex h-full flex-col gap-4 p-5"
                     >
-                      Open
-                      <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.25} />
-                    </span>
-                  </GlassCard>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-
+                      <div className="flex items-start justify-between">
+                        <GlassIcon
+                          icon={Icon}
+                          accentVar={isYellow ? "--color-yellow" : "--color-ua"}
+                        />
+                        {d.badge && (
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-yellow"
+                            style={{ background: "var(--tint-yellow-soft)" }}
+                          >
+                            {d.badge}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <h3 className="font-display text-lg font-bold leading-tight text-cloud-white">
+                          {d.label}
+                        </h3>
+                        <p className="text-sm leading-relaxed text-[color:var(--text-secondary)]">
+                          {d.description}
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          "mt-auto inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] transition-transform duration-280 ease-out-quart group-hover:translate-x-1",
+                          isYellow ? "text-yellow" : "text-ua",
+                        )}
+                      >
+                        Open
+                        <ArrowUpRight
+                          className="h-3.5 w-3.5"
+                          strokeWidth={2.25}
+                        />
+                      </span>
+                    </GlassCard>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );
