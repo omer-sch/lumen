@@ -12,6 +12,10 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/welcome(.*)",
+  // Sentry tunnel route — receives Sentry SDK events from the browser
+  // and forwards them server-side to bypass ad-blockers. Configured via
+  // tunnelRoute in next.config.ts.
+  "/monitoring(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

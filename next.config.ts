@@ -57,4 +57,8 @@ export default withSentryConfig(nextConfig, {
   widenClientFileUpload: true,
   disableLogger: true,
   automaticVercelMonitors: true,
+  // Tunnel client-side Sentry events through /monitoring on our own
+  // origin so ad-blockers don't drop them. The middleware excludes the
+  // path explicitly (see src/middleware.ts) so it isn't auth-gated.
+  tunnelRoute: "/monitoring",
 });

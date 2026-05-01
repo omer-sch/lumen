@@ -96,7 +96,12 @@
       "Bash(/usr/bin/tr ';' '\\\\n')",
       "Bash(/usr/bin/grep -i \"^location:\")",
       "Bash(npm pkg *)",
-      "Bash(BASE_URL=http://localhost:3001 npx playwright test tests/e2e/csp.spec.ts tests/e2e/security-headers.spec.ts --reporter=list)"
+      "Bash(BASE_URL=http://localhost:3001 npx playwright test tests/e2e/csp.spec.ts tests/e2e/security-headers.spec.ts --reporter=list)",
+      "Bash(git -C /Users/omer/Desktop/Lumen log --oneline -30)",
+      "Bash(BASE_URL=http://localhost:3001 npx playwright test tests/e2e/csp.spec.ts tests/e2e/security-headers.spec.ts tests/e2e/preview-flag.spec.ts --reporter=list)",
+      "Bash(git -C /Users/omer/Desktop/Lumen status)",
+      "Bash(git -C /Users/omer/Desktop/Lumen branch --show-current)",
+      "Bash(git -C /Users/omer/Desktop/Lumen remote -v)"
     ]
   },
   "enableAllProjectMcpServers": true,
