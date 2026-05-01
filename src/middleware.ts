@@ -1,8 +1,12 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// PREVIEW MODE — when LUMEN_PREVIEW=1, auth is bypassed for local design work.
-// Off by default. Must be unset for any real deployment.
-const PREVIEW = process.env.LUMEN_PREVIEW === "1";
+// PREVIEW MODE — bypasses Clerk for local design work. Hard-gated to
+// non-production builds: even if LUMEN_PREVIEW=1 leaks into a production
+// environment (copy-pasted from preview config, accidental .env.production
+// commit), this evaluates to false and the auth gate stays on.
+const PREVIEW =
+  process.env.NODE_ENV !== "production" &&
+  process.env.LUMEN_PREVIEW === "1";
 
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
