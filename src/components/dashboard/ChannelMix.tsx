@@ -29,7 +29,7 @@ export function ChannelMix({ data, enterIndex }: ChannelMixProps) {
     <GlassCard
       glow="ua"
       enterIndex={enterIndex}
-      className="flex flex-col gap-5 p-6"
+      className="flex flex-col gap-3 p-4"
     >
       <div>
         <h2 className="font-display text-md font-bold leading-none text-cloud-white">
@@ -40,7 +40,7 @@ export function ChannelMix({ data, enterIndex }: ChannelMixProps) {
         </p>
       </div>
 
-      <ul className="flex flex-col gap-4">
+      <ul className="flex flex-col gap-2.5">
         {data.map((row, i) => {
           const isTop = i === 0;
           const target = Math.min(Math.max(row.pct, 0), 100);

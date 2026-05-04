@@ -59,11 +59,11 @@ export default function KnowledgePage() {
   const HeroStatIcon = heroStat.icon;
 
   return (
-    <div className="flex flex-col gap-12">
+    <div className="flex flex-col gap-5 md:gap-6">
       {/* Hero — compact inline header. The yellow + glass-bulb SectionBreak
           is reserved for real brand moments (loading, onboarding, success);
           it doesn't belong at every page top. */}
-      <header className="flex flex-col gap-2">
+      <header className="flex flex-col gap-1.5">
         <p className="font-body text-xs uppercase tracking-wider text-[color:var(--text-muted)]">
           The brain
         </p>
@@ -79,19 +79,19 @@ export default function KnowledgePage() {
 
       {/* Pillars — asymmetric bento. Hero spans 7 cols + the two side
           pillars stack in the remaining 5. */}
-      <section className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:gap-4">
         <GlassCard
           glow={heroPillar.glow}
           feature={heroPillar.feature}
           shimmer={heroPillar.shimmer}
           enterIndex={1}
-          className="flex flex-col gap-5 p-6 sm:p-7 lg:col-span-7 lg:row-span-2"
+          className="flex flex-col gap-3 p-5 lg:col-span-7 lg:row-span-2"
         >
-          <GlassIcon icon={HeroIcon} accentVar="--color-yellow" size="lg" />
-          <h3 className="font-display text-xl font-extrabold leading-snug tracking-tight text-cloud-white sm:text-2xl">
+          <GlassIcon icon={HeroIcon} accentVar="--color-yellow" size="md" />
+          <h3 className="font-display text-lg font-extrabold leading-snug tracking-tight text-cloud-white sm:text-xl">
             {heroPillar.title}
           </h3>
-          <p className="max-w-lg font-body text-base leading-relaxed text-[color:var(--text-secondary)]">
+          <p className="max-w-lg font-body text-sm leading-relaxed text-[color:var(--text-secondary)]">
             {heroPillar.body}
           </p>
         </GlassCard>
@@ -103,9 +103,9 @@ export default function KnowledgePage() {
               key={p.title}
               glow={p.glow}
               enterIndex={i + 2}
-              className="flex flex-col gap-4 p-6 lg:col-span-5"
+              className="flex flex-col gap-2.5 p-4 lg:col-span-5"
             >
-              <GlassIcon icon={Icon} accentVar="--color-ua" size="md" />
+              <GlassIcon icon={Icon} accentVar="--color-ua" size="sm" />
               <h3 className="font-display text-md font-bold leading-snug text-cloud-white">
                 {p.title}
               </h3>
@@ -118,25 +118,25 @@ export default function KnowledgePage() {
       </section>
 
       {/* Currently learned strip — asymmetric bento (hero stat + two compact). */}
-      <section className="flex flex-col gap-5">
-        <h3 className="font-display text-2xl font-bold leading-snug tracking-tight text-cloud-white">
+      <section className="flex flex-col gap-3">
+        <h3 className="font-display text-lg font-bold leading-snug tracking-tight text-cloud-white sm:text-xl">
           Currently learned
         </h3>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:gap-4">
           <GlassCard
             glow="yellow"
             feature
             shimmer
             enterIndex={4}
-            className="flex items-center gap-5 p-6 lg:col-span-6"
+            className="flex items-center gap-4 p-4 lg:col-span-6"
           >
-            <GlassIcon icon={HeroStatIcon} accentVar="--color-yellow" size="md" />
+            <GlassIcon icon={HeroStatIcon} accentVar="--color-yellow" size="sm" />
             <div className="min-w-0">
               <p className="font-body text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
                 {heroStat.label}
               </p>
               <p
-                className="mt-1 font-display text-3xl font-extrabold leading-none tracking-tight tabular-nums sm:text-4xl"
+                className="mt-0.5 font-display text-2xl font-extrabold leading-none tracking-tight tabular-nums sm:text-3xl"
                 style={{
                   color: "var(--color-yellow)",
                   textShadow: "var(--shadow-yellow)",
@@ -144,7 +144,7 @@ export default function KnowledgePage() {
               >
                 <CountUpNumber value={heroStat.value} duration={1400} />
               </p>
-              <p className="mt-2 font-body text-xs text-[color:var(--text-muted)]">
+              <p className="mt-1 font-body text-xs text-[color:var(--text-muted)]">
                 Patterns Lumen distilled from your accounts so far.
               </p>
             </div>
@@ -156,7 +156,7 @@ export default function KnowledgePage() {
                 key={s.label}
                 glow="ua"
                 enterIndex={i + 5}
-                className="flex items-center gap-4 p-5 lg:col-span-3"
+                className="flex items-center gap-3 p-4 lg:col-span-3"
               >
                 <GlassIcon icon={Icon} accentVar="--color-ua" size="sm" />
                 <div className="min-w-0">
@@ -164,7 +164,7 @@ export default function KnowledgePage() {
                     {s.label}
                   </p>
                   <p
-                    className="font-display text-2xl font-extrabold leading-none tracking-tight tabular-nums"
+                    className="font-display text-xl font-extrabold leading-none tracking-tight tabular-nums sm:text-2xl"
                     style={{
                       color: "var(--color-ua)",
                       textShadow:
@@ -185,9 +185,9 @@ export default function KnowledgePage() {
         <GlassCard
           glow="ua"
           enterIndex={7}
-          className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between"
+          className="flex flex-col items-start gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
         >
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <GlassIcon icon={Sparkles} accentVar="--color-ua" size="sm" />
             <div className="flex flex-col gap-1">
               <p className="font-display text-md font-bold leading-snug text-cloud-white">

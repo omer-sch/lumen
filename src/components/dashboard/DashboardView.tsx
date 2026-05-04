@@ -35,7 +35,7 @@ function DashboardInner() {
   const data = getDashboardData({ from, to, client });
 
   return (
-    <div className="flex flex-col gap-6 md:gap-8">
+    <div className="flex flex-col gap-4 md:gap-5">
       <DashboardHeader />
       {mode === "ai" ? <AIModeView /> : <MyDashboard data={data} />}
       <PinnedSection />
@@ -50,8 +50,8 @@ function DashboardHeader() {
   const c = findClient(client);
 
   return (
-    <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
-      <div className="flex min-w-0 flex-col gap-2">
+    <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+      <div className="flex min-w-0 flex-col gap-1.5">
         <span
           className="inline-flex items-center gap-2 self-start rounded-full px-3 py-1 font-body text-xs font-semibold uppercase tracking-wider"
           style={{
@@ -94,10 +94,10 @@ function DashboardHeader() {
         </p>
       </div>
 
-      <div className="flex shrink-0 flex-col items-end gap-3">
+      <div className="flex shrink-0 flex-col items-end gap-2">
         <ModeToggle mode={mode} setMode={setMode} />
         {mode === "my" && (
-          <GlassCard glow="ua" feature className="flex w-full max-w-sm items-start gap-3 p-4">
+          <GlassCard glow="ua" feature className="hidden w-full max-w-sm items-start gap-3 p-3 lg:flex">
             <GlassIcon icon={Sparkles} accentVar="--color-ua" size="sm" />
             <div className="min-w-0">
               <p className="font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
@@ -206,11 +206,11 @@ function MyDashboard({ data }: { data: DashboardData }) {
     data.kpis.find((k) => k.id === id) ?? data.kpis[0];
 
   return (
-    <div className="flex flex-col gap-5 md:gap-6">
+    <div className="flex flex-col gap-3 md:gap-4">
       {/* KPI strip — 4 equal tiles in a row on lg+, each with a 30-day
           sparkline of its own metric. Each slot lets the user swap which
           metric it displays via the chevron next to the label. */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {slots.map((activeId, i) => {
           const kpi = kpiById(activeId);
           const series = data.trend.map((p) => ({
@@ -241,7 +241,7 @@ function MyDashboard({ data }: { data: DashboardData }) {
       </section>
 
       {/* Trend + Channel mix */}
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-5">
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4">
         <div className="lg:col-span-2">
           <TrendChart trend={data.trend} enterIndex={5} />
         </div>

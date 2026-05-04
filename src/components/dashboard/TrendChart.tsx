@@ -61,11 +61,11 @@ export function TrendChart({
       feature
       shimmer
       enterIndex={enterIndex}
-      className="flex flex-col p-6"
+      className="flex flex-col p-4"
       data-testid="trend-chart"
       data-metric={metric}
     >
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-display text-md font-bold leading-none text-cloud-white">
             {active.label} over time
@@ -91,7 +91,7 @@ export function TrendChart({
       <div
         role="tablist"
         aria-label="Trend metric"
-        className="mb-5 flex flex-wrap items-center gap-1 rounded-md p-1 self-start"
+        className="mb-3 flex flex-wrap items-center gap-1 rounded-md p-1 self-start"
         style={{
           background: "var(--surface-input)",
           border: "1px solid var(--border-subtle)",
@@ -129,7 +129,7 @@ export function TrendChart({
         })}
       </div>
 
-      <div className="h-72 w-full">
+      <div className="h-52 w-full sm:h-56">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={trend} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
             <defs>
