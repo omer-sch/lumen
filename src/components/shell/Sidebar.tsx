@@ -9,6 +9,7 @@ import {
   MessagesSquare,
   FileText,
   Sparkles,
+  Bot,
   BookOpen,
   type LucideIcon,
 } from "lucide-react";
@@ -29,6 +30,7 @@ const NAV: NavItem[] = [
   { href: "/queries",   label: "Ask",       icon: MessagesSquare, badge: "new" },
   { href: "/reports",   label: "Reports",   icon: FileText },
   { href: "/feed",      label: "Feed",      icon: Sparkles },
+  { href: "/agents",    label: "Agents",    icon: Bot },
   { href: "/knowledge", label: "Knowledge", icon: BookOpen },
 ];
 

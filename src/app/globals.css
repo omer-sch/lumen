@@ -373,6 +373,57 @@ body {
   }
 }
 
+/* ─────────────────────────────────────────
+   Mint range slider — Agent feedback score input.
+   Track is filled to --fill (set inline as a percentage), thumb is mint
+   with the brand glow. Used by AgentDetailPanel.
+───────────────────────────────────────── */
+.agent-score-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--color-ua) 0%,
+    var(--color-ua) var(--fill, 0%),
+    rgba(255, 255, 255, 0.08) var(--fill, 0%),
+    rgba(255, 255, 255, 0.08) 100%
+  );
+  outline: none;
+  box-shadow: 0 0 12px color-mix(in oklab, var(--color-ua) 18%, transparent);
+}
+.agent-score-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--color-ua);
+  border: 2px solid var(--surface-base);
+  box-shadow: 0 0 0 1px var(--color-ua),
+    0 0 12px color-mix(in oklab, var(--color-ua) 60%, transparent);
+  cursor: pointer;
+  transition: transform 180ms var(--ease-out-quart);
+}
+.agent-score-range::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+.agent-score-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--color-ua);
+  border: 2px solid var(--surface-base);
+  box-shadow: 0 0 0 1px var(--color-ua),
+    0 0 12px color-mix(in oklab, var(--color-ua) 60%, transparent);
+  cursor: pointer;
+}
+.agent-score-range:focus-visible {
+  box-shadow: var(--ring-mint);
+}
+
 /* Reduced motion: kill non-essential animations. */
 @media (prefers-reduced-motion: reduce) {
   .animate-mint-pulse,
