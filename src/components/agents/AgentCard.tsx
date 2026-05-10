@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { ChevronDown, Pause } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -21,6 +22,7 @@ export function AgentCard({ agent, enterIndex, expanded, onToggle }: AgentCardPr
   const display: DisplayStatus = agent.paused ? "paused" : agent.status;
   const isRunning = display === "running";
   const isPaused = display === "paused";
+  const [avatarFailed, setAvatarFailed] = useState(false);
 
   return (
     <GlassCard
@@ -45,32 +47,50 @@ export function AgentCard({ agent, enterIndex, expanded, onToggle }: AgentCardPr
         isPaused && "opacity-90",
       )}
     >
-      {/* Header — bulb avatar + status pill */}
+      {/* Header — avatar (placeholder) + status pill */}
       <div className="flex items-start gap-4">
-        <div
-          className="relative grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-md"
-          style={{
-            background: isRunning
-              ? "color-mix(in oklab, var(--color-ua) 12%, var(--surface-icon-bg))"
-              : "var(--surface-icon-bg)",
-            border: "1px solid var(--border-glass)",
-            boxShadow: isRunning
-              ? "var(--shadow-mint), inset 0 1px 0 rgba(255,255,255,0.06)"
-              : "inset 0 1px 0 rgba(255,255,255,0.04)",
-          }}
-        >
-          <GlassBulb
-            size={48}
-            accent="mint"
-            float={isRunning}
+        {avatarFailed ? (
+          <div
+            className="relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full"
             style={{
-              opacity: isRunning ? 1 : isPaused ? 0.4 : 0.6,
-              filter: isRunning
-                ? undefined
-                : "saturate(0.7) drop-shadow(0 8px 16px rgba(0,0,0,0.3))",
+              background: isRunning
+                ? "color-mix(in oklab, var(--color-ua) 12%, var(--surface-icon-bg))"
+                : "var(--surface-icon-bg)",
+              border: "1px solid var(--border-glass)",
+              boxShadow: isRunning
+                ? "var(--shadow-mint), inset 0 1px 0 rgba(255,255,255,0.06)"
+                : "inset 0 1px 0 rgba(255,255,255,0.04)",
+            }}
+          >
+            <GlassBulb
+              size={40}
+              accent="mint"
+              float={isRunning}
+              style={{
+                opacity: isRunning ? 1 : isPaused ? 0.4 : 0.6,
+                filter: isRunning
+                  ? undefined
+                  : "saturate(0.7) drop-shadow(0 8px 16px rgba(0,0,0,0.3))",
+              }}
+            />
+          </div>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/avatars/${agent.id}.svg`}
+            alt={`${agent.name} avatar`}
+            onError={() => setAvatarFailed(true)}
+            className={cn(
+              "h-16 w-16 shrink-0 rounded-full object-cover",
+              isRunning && "ring-2 ring-[#54F0A3]/60",
+              isPaused && "opacity-60 grayscale",
+            )}
+            style={{
+              background: "var(--surface-icon-bg)",
+              border: "1px solid var(--border-glass)",
             }}
           />
-        </div>
+        )}
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">

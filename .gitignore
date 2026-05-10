@@ -6,6 +6,10 @@
 
 # testing
 /coverage
+# Playwright authenticated storage state — never commit session tokens.
+/tests/.auth/
+/test-results/
+/playwright-report/
 
 # next.js
 /.next/

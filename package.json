@@ -25,6 +25,7 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@clerk/testing": "^2.0.24",
     "@playwright/test": "^1.59.1",
     "@types/node": "^20",
     "@types/react": "^19",

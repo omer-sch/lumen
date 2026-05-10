@@ -117,13 +117,14 @@ Does not log in daily but wants: cross-account health, team productivity signals
 
 **Known:**
 - Data comes from: Meta, TikTok, Google, AppsFlyer, AppTweak, Google Search Console, Apple Console
-- Pipeline: Rivery ingests -> yellowHEAD DB -> currently Looker Studio
+- Pipeline: Rivery ingests -> yellowHEAD DB (BigQuery) -> currently Looker Studio
+- Database: BigQuery (confirmed 2026-05-04). This means: SQL query layer, no real-time, data freshness depends on Rivery sync cadence, NL-to-SQL is the query strategy, cost scales with bytes scanned so query optimization matters.
 - The app is read-only (never writes back to platforms)
 - Next.js 15 + TypeScript is the chosen stack
 - Brand design system is defined (see `.claude/skills/yellowhead-brand/SKILL.md`)
 
 **Not yet known (open questions to resolve with Omer):**
-- Database type: BigQuery vs. PostgreSQL vs. something else. This affects the query layer, real-time feasibility, and how we build the natural language query system. Waiting for answer from Gal.
+- Rivery sync cadence: how often does data land in BigQuery? This determines data freshness for the dashboard.
 - Access to real data for development: do we have a test environment, anonymized data, or do we build with mocks first?
 - Which team or use case do we build the first version for? Recommend starting with UA because they have the clearest, most quantifiable daily workflow.
 - Authentication: is there an existing SSO or do we build login from scratch?

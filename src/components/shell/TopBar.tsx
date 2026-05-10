@@ -50,7 +50,11 @@ export function TopBar() {
       </div>
 
       {meta.showFilters && (
-        <div className="ml-4 flex min-w-0 flex-1 items-center justify-end gap-2 overflow-x-auto md:gap-3">
+        // overflow-visible (not overflow-x-auto) — the Custom-date popover and
+        // the client listbox are absolutely positioned children, and any
+        // ancestor with overflow != visible becomes a clipping context that
+        // hides them on open. Layout space is reserved by min-w-0 + flex-1.
+        <div className="ml-4 flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2 md:gap-3">
           {/* Suspense boundary required because useGlobalFilters reads
               search params, which suspend during route transitions. */}
           <Suspense fallback={null}>
