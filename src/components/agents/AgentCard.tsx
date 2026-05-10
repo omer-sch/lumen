@@ -1,11 +1,11 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Pause } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassBulb } from "@/components/ui/GlassBulb";
 import { LivePulse } from "@/components/ui/LivePulse";
-import type { Agent, AgentStatus } from "@/lib/mock/agents";
+import type { Agent } from "@/lib/mock/agents";
 
 type AgentCardProps = {
   agent: Agent;
@@ -15,8 +15,12 @@ type AgentCardProps = {
   onToggle: (id: string) => void;
 };
 
+type DisplayStatus = "running" | "completed" | "scheduled" | "paused";
+
 export function AgentCard({ agent, enterIndex, expanded, onToggle }: AgentCardProps) {
-  const isRunning = agent.status === "running";
+  const display: DisplayStatus = agent.paused ? "paused" : agent.status;
+  const isRunning = display === "running";
+  const isPaused = display === "paused";
 
   return (
     <GlassCard
@@ -38,6 +42,7 @@ export function AgentCard({ agent, enterIndex, expanded, onToggle }: AgentCardPr
       className={cn(
         "flex h-full flex-col gap-4 p-5",
         expanded && "ring-1 ring-[color:var(--color-ua)]/40",
+        isPaused && "opacity-90",
       )}
     >
       {/* Header — bulb avatar + status pill */}
@@ -59,7 +64,7 @@ export function AgentCard({ agent, enterIndex, expanded, onToggle }: AgentCardPr
             accent="mint"
             float={isRunning}
             style={{
-              opacity: isRunning ? 1 : 0.6,
+              opacity: isRunning ? 1 : isPaused ? 0.4 : 0.6,
               filter: isRunning
                 ? undefined
                 : "saturate(0.7) drop-shadow(0 8px 16px rgba(0,0,0,0.3))",
@@ -77,7 +82,7 @@ export function AgentCard({ agent, enterIndex, expanded, onToggle }: AgentCardPr
                 {agent.role}
               </p>
             </div>
-            <StatusPill status={agent.status} />
+            <StatusPill status={display} />
           </div>
         </div>
       </div>
@@ -101,13 +106,26 @@ export function AgentCard({ agent, enterIndex, expanded, onToggle }: AgentCardPr
           accent="yellow"
         />
         <Stat label="Total runs" value={String(agent.totalRuns)} />
-        <Stat label="Schedule" value={agent.schedule.split(" · ")[0]} hint={agent.schedule.split(" · ")[1]} />
+        <Stat
+          label="Schedule"
+          value={agent.schedule.split(" · ")[0]}
+          hint={agent.schedule.split(" · ")[1]}
+          dimmed={isPaused}
+        />
       </div>
+
+      {/* Live progress — present while running and not paused */}
+      {isRunning && agent.liveRun && (
+        <LiveProgress
+          progress={agent.liveRun.progress}
+          step={agent.liveRun.step}
+        />
+      )}
 
       {/* Footer */}
       <div className="mt-auto flex items-center justify-between gap-3 pt-1">
         <span className="font-body text-xs text-[color:var(--text-muted)]">
-          {agent.lastRun}
+          {isPaused ? "Paused — schedule suspended" : agent.lastRun}
         </span>
         <ChevronDown
           className={cn(
@@ -126,15 +144,17 @@ function Stat({
   value,
   hint,
   accent,
+  dimmed,
 }: {
   label: string;
   value: string;
   hint?: string;
   accent?: "yellow";
+  dimmed?: boolean;
 }) {
   return (
     <div
-      className="flex flex-col gap-0.5 px-3 py-2.5"
+      className={cn("flex flex-col gap-0.5 px-3 py-2.5", dimmed && "opacity-50")}
       style={{ background: "var(--surface-glass)" }}
     >
       <span className="font-body text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--text-muted)]">
@@ -144,6 +164,7 @@ function Stat({
         className={cn(
           "font-display text-md font-bold tabular-nums leading-none",
           accent === "yellow" ? "text-yellow" : "text-cloud-white",
+          dimmed && "line-through",
         )}
       >
         {value}
@@ -157,7 +178,44 @@ function Stat({
   );
 }
 
-function StatusPill({ status }: { status: AgentStatus }) {
+function LiveProgress({ progress, step }: { progress: number; step: string }) {
+  const pct = Math.max(0, Math.min(100, progress));
+  return (
+    <div
+      className="flex flex-col gap-1.5 rounded-md px-3 py-2.5"
+      style={{
+        background: "var(--tint-ua-soft)",
+        border: "1px solid color-mix(in oklab, var(--color-ua) 22%, transparent)",
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate font-body text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-ua)]">
+          {step}
+        </span>
+        <span className="font-display text-xs font-bold tabular-nums text-[color:var(--color-ua)]">
+          {Math.round(pct)}%
+        </span>
+      </div>
+      <div
+        className="relative h-1.5 overflow-hidden rounded-full"
+        style={{ background: "rgba(255,255,255,0.06)" }}
+      >
+        <div
+          className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-200 ease-out-quart"
+          style={{
+            width: `${pct}%`,
+            background:
+              "linear-gradient(90deg, var(--color-ua) 0%, var(--color-ua-glow) 100%)",
+            boxShadow:
+              "0 0 12px color-mix(in oklab, var(--color-ua) 60%, transparent)",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ status }: { status: DisplayStatus }) {
   if (status === "running") {
     return (
       <span
@@ -182,6 +240,20 @@ function StatusPill({ status }: { status: AgentStatus }) {
         }}
       >
         Scheduled
+      </span>
+    );
+  }
+  if (status === "paused") {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-body text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--text-secondary)]"
+        style={{
+          background: "rgba(255,255,255,0.04)",
+          border: "1px dashed var(--border-default)",
+        }}
+      >
+        <Pause className="h-2.5 w-2.5" strokeWidth={2.5} />
+        Paused
       </span>
     );
   }

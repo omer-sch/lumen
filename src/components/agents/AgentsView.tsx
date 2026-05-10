@@ -1,23 +1,93 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
-import { AGENTS } from "@/lib/mock/agents";
+import { AGENTS, type Agent } from "@/lib/mock/agents";
 import { LivePulse } from "@/components/ui/LivePulse";
 import { AgentCard } from "@/components/agents/AgentCard";
 import { AgentDetailPanel } from "@/components/agents/AgentDetailPanel";
 
+/** Per-tick progress increment for running agents. ~2% every 220ms = ~11s
+ *  to complete from 0, ~4s to complete from 62 (Aria's starting state). */
+const TICK_MS = 220;
+const PROGRESS_STEP = 2;
+
+/** Opening step text used when "Run now" kicks off a fresh run. Each agent
+ *  has a sensible default that the progress bar will surface. */
+const RUN_STEP: Record<string, string> = {
+  aria: "Sketching composition · pass 1 of 3",
+  max: "Querying BigQuery · scanning 28 campaigns",
+  nova: "Drafting executive summary",
+};
+
 export function AgentsView() {
+  const [agents, setAgents] = useState<Agent[]>(AGENTS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Tick effect — advance any running, unpaused agent's progress. When a run
+  // crosses 100%, transition the agent back to "completed" with a fresh
+  // last-run line. We don't synthesize a full run record here; the existing
+  // mock history stays stable so the demo reads consistently across reloads.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setAgents((prev) =>
+        prev.map((a) => {
+          if (a.status !== "running" || a.paused || !a.liveRun) return a;
+          const next = a.liveRun.progress + PROGRESS_STEP;
+          if (next >= 100) {
+            return {
+              ...a,
+              status: "completed" as const,
+              liveRun: undefined,
+              lastRun: "Completed · just now",
+              totalRuns: a.totalRuns + 1,
+            };
+          }
+          return {
+            ...a,
+            liveRun: { progress: next, step: a.liveRun.step },
+          };
+        }),
+      );
+    }, TICK_MS);
+    return () => window.clearInterval(id);
+  }, []);
 
   const toggle = (id: string) => {
     setSelectedId((cur) => (cur === id ? null : id));
   };
 
+  const handlePauseToggle = (id: string) => {
+    setAgents((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, paused: !a.paused } : a)),
+    );
+  };
+
+  const handleRunNow = (id: string) => {
+    setAgents((prev) =>
+      prev.map((a) => {
+        if (a.id !== id) return a;
+        if (a.status === "running" && !a.paused) return a;
+        return {
+          ...a,
+          status: "running" as const,
+          paused: false,
+          lastRun: "Running now · just kicked off",
+          liveRun: {
+            progress: 0,
+            step: RUN_STEP[a.id] ?? "Starting up...",
+          },
+        };
+      }),
+    );
+  };
+
   const selected = selectedId
-    ? AGENTS.find((a) => a.id === selectedId) ?? null
+    ? agents.find((a) => a.id === selectedId) ?? null
     : null;
-  const activeCount = AGENTS.filter((a) => a.status === "running").length;
+  const activeCount = agents.filter(
+    (a) => a.status === "running" && !a.paused,
+  ).length;
 
   return (
     <div className="flex flex-col gap-6 md:gap-7">
@@ -52,7 +122,7 @@ export function AgentsView() {
           <p className="flex items-center gap-2 font-body text-sm text-[color:var(--text-secondary)]">
             <LivePulse accent="mint" size={7} />
             <span>
-              {AGENTS.length} agents active · last run 2 min ago
+              {agents.length} agents active · {activeCount > 0 ? "live" : "last run 2 min ago"}
             </span>
           </p>
         </div>
@@ -63,7 +133,7 @@ export function AgentsView() {
       </header>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-5">
-        {AGENTS.map((agent, idx) => (
+        {agents.map((agent, idx) => (
           <AgentCard
             key={agent.id}
             agent={agent}
@@ -76,7 +146,12 @@ export function AgentsView() {
 
       {selected && (
         <section aria-label={`${selected.name} details`}>
-          <AgentDetailPanel key={selected.id} agent={selected} />
+          <AgentDetailPanel
+            key={selected.id}
+            agent={selected}
+            onPauseToggle={handlePauseToggle}
+            onRunNow={handleRunNow}
+          />
         </section>
       )}
     </div>
