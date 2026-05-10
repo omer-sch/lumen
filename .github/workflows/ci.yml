@@ -1,0 +1,250 @@
+# Lumen CI/CD pipeline
+#
+# Branch strategy:
+#   - feature/* (or any non-main) branch → CI runs on PR; Vercel ships a
+#     preview deploy in parallel.
+#   - main → CI runs on every push; Vercel ships a production deploy.
+#
+# Vercel's GitHub integration handles the actual deploys — this workflow
+# only proves the build is healthy. To make Vercel WAIT for these checks
+# before promoting a deploy, enable in Vercel:
+#   Project Settings → Git → "Wait for CI before deploying preview deployments"
+# (vercel.json's "github.enabled": true alone is not sufficient on newer
+#  Vercel; the dashboard toggle is the authoritative gate.)
+#
+# ─── Required GitHub repo secrets ─────────────────────────────────────
+# Set in Settings → Secrets and variables → Actions:
+#
+#   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY   — required by env.client.ts at
+#                                         build time; build crashes without it
+#   CLERK_SECRET_KEY                    — Clerk admin key, required by
+#                                         create-e2e-user.mjs and
+#                                         @clerk/testing in auth.setup.ts
+#   E2E_CLERK_USER_USERNAME             — typically "lumen-e2e"
+#   E2E_CLERK_USER_PASSWORD             — strong (≥16 chars), used both to
+#                                         provision the user (idempotent)
+#                                         and to sign in during e2e
+#
+# Optional (build will succeed without them; features silently no-op):
+#   NEXT_PUBLIC_POSTHOG_KEY             — analytics
+#   NEXT_PUBLIC_SENTRY_DSN              — browser error reporting
+#   SENTRY_DSN                          — server error reporting
+#   SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT  — source-map upload
+#   ANTHROPIC_API_KEY                   — only when /api routes use Claude
+#   VERCEL_TOKEN                        — reserved for future Vercel CLI work
+#
+# ─── Clerk-side prerequisites ─────────────────────────────────────────
+# 1. The lumen-e2e Clerk user must be re-creatable. The
+#    scripts/create-e2e-user.mjs job below provisions it idempotently
+#    using E2E_CLERK_USER_PASSWORD. If the user already exists, the
+#    script no-ops; if not, it creates with that password.
+# 2. Clerk testing tokens must be enabled in the Clerk dashboard
+#    (Configure → Developers → Testing). Without this, @clerk/testing's
+#    signIn flow throws.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs of the same workflow on the same ref —
+# saves CI minutes when you push twice in a minute.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  # ─── Stage 1 ──────────────────────────────────────────────────────
+  # Fast gate. If lint or types are broken, nothing else runs.
+  lint-and-typecheck:
+    name: Lint + typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint (fail on any warning)
+        run: npx next lint --max-warnings 0
+
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit
+
+  # ─── Stage 2 ──────────────────────────────────────────────────────
+  # Runs in parallel with Stage 1 (no `needs:`). This guards the
+  # dependency tree, separate from the runtime security e2e suite.
+  security-audit:
+    name: npm audit (high+)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      # `npm audit` exits non-zero on any vuln at or above --audit-level.
+      # We pass `high` so moderate (currently next/postcss, accepted in the
+      # security review) does not break the build. Bump to `moderate` once
+      # those advisories have a real fix path.
+      - name: npm audit
+        run: npm audit --audit-level=high
+
+  # ─── Stage 3 ──────────────────────────────────────────────────────
+  # Production build. Validates that next build succeeds with the same
+  # env wiring Vercel uses. Caches .next/cache so incremental builds
+  # speed up subsequent runs.
+  build:
+    name: Build
+    needs: lint-and-typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache .next/cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.[jt]s', '**/*.[jt]sx') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}-
+
+      - name: Build
+        env:
+          # Required — env.client.ts throws without it.
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          # Required by Sentry + server modules; lazy-validated but safer
+          # to inject at build time.
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          # Optional — empty is fine. PostHog/Sentry no-op when missing.
+          NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          # Source map upload to Sentry — only happens when these three
+          # are set. Without them, build still succeeds.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: npm run build
+
+      # Hand .next/ off to the e2e job so it doesn't have to rebuild.
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-build
+          path: |
+            .next
+            !.next/cache
+          retention-days: 1
+
+  # ─── Stage 4 ──────────────────────────────────────────────────────
+  # E2E suite against the production build. Provisions the Clerk test
+  # user idempotently, then lets playwright start `next start` itself
+  # (per the CI branch in playwright.config.ts:webServer).
+  e2e-tests:
+    name: Playwright e2e
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: .next
+
+      # Cache the browser binaries — saves ~30s per run after first.
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      # Always reinstall system deps even on cache hit — Ubuntu image
+      # changes between runs and missing libs cause silent crashes.
+      - name: Install Playwright system deps
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # Provision the Clerk test user. Idempotent: no-op if it already
+      # exists with the right password. Required because the script
+      # creates it with the password from E2E_CLERK_USER_PASSWORD, which
+      # auth.setup.ts then reads to sign in.
+      - name: Provision Clerk e2e user
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          E2E_CLERK_USER_PASSWORD: ${{ secrets.E2E_CLERK_USER_PASSWORD }}
+        run: node scripts/create-e2e-user.mjs
+
+      - name: Run Playwright tests
+        env:
+          # Server-side
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          # Client-side
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          # E2E sign-in identity
+          E2E_CLERK_USER_USERNAME: ${{ secrets.E2E_CLERK_USER_USERNAME }}
+          E2E_CLERK_USER_PASSWORD: ${{ secrets.E2E_CLERK_USER_PASSWORD }}
+          # Optional analytics — empty is fine
+          NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          # Tell playwright.config.ts CI branch to fire — sets
+          # forbidOnly, retries=2, workers=1, github reporter, and
+          # switches webServer to `npm run start`.
+          CI: "true"
+        run: npm run test:e2e
+
+      # On failure only — gives the team a downloadable HTML report
+      # with traces, screenshots, and per-test breakdown.
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 14
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results
+          retention-days: 7

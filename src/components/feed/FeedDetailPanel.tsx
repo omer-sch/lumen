@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef } from "react";
 import {
   Area,
@@ -293,7 +294,7 @@ export function FeedDetailPanel({ item, onClose }: FeedDetailPanelProps) {
               </p>
             </div>
 
-            <a
+            <Link
               href="/campaigns"
               className="inline-flex items-center justify-center gap-1.5 rounded-md py-2.5 font-body text-xs font-semibold uppercase tracking-wider text-navy"
               style={{
@@ -309,7 +310,7 @@ export function FeedDetailPanel({ item, onClose }: FeedDetailPanelProps) {
             >
               Open in Campaigns
               <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.5} />
-            </a>
+            </Link>
           </div>
         )}
       </aside>

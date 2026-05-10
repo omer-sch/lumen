@@ -49,7 +49,7 @@ function CampaignsInner() {
           </h2>
           <p className="max-w-2xl font-body text-sm text-[color:var(--text-secondary)]">
             One row per campaign across the active window. Sort any column,
-            scope to a single channel, and read each row's 7-day trend at a
+            scope to a single channel, and read each row&apos;s 7-day trend at a
             glance — the same drill-down a UA analyst opens when a number on
             the dashboard moves.
           </p>

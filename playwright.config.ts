@@ -53,9 +53,13 @@ export default defineConfig({
       testMatch: ["**/welcome.spec.ts", "**/dashboard.spec.ts"],
     },
   ],
-  // Reuse a running dev server; spin one up if there isn't one.
+  // Local: reuse a running dev server, spin one up if there isn't one.
+  // CI: always start a production server against the prebuilt .next/ output.
+  // Tests run against the same artifact Vercel ships, not turbopack/dev.
   webServer: {
-    command: "npm run dev",
+    command: process.env.CI
+      ? `npm run start -- --port ${PORT}`
+      : "npm run dev",
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
