@@ -23,13 +23,13 @@ The findings below are mostly hardening polish and one real authn boundary
 issue (open sign-up). Nothing critical is currently exploitable in a way
 that would justify a hot-fix push tonight.
 
-| Severity | Count | Already remediated |
-|----------|-------|--------------------|
-| Critical | 0     | —                  |
-| High     | 1     | 1 (password leak)  |
-| Moderate | 3     | 0                  |
-| Low      | 4     | 0                  |
-| Info     | 3     | 0                  |
+| Severity | Count | Fixed | Accepted | Deferred | Notes                       |
+|----------|-------|-------|----------|----------|-----------------------------|
+| Critical | 0     | —     | —        | —        | —                           |
+| High     | 1     | 1     | 0        | 0        | F-1 (password leak rotated) |
+| Moderate | 3     | 1     | 1        | 1        | F-3 fixed; F-2 accepted; F-4 deferred to /api wave |
+| Low      | 4     | 2     | 1        | 1        | F-5/F-8 fixed; F-6 accepted; F-7 deferred to /api wave |
+| Info     | 3     | 0     | 3        | 0        | F-9/F-10/F-11 informational |
 
 ---
 
@@ -73,23 +73,34 @@ that would justify a hot-fix push tonight.
   undo GitHub scanner cache — usually not worth it).
 
 ### F-2 · Open public sign-up against the production Clerk instance
-- **Severity:** Moderate (assumes prod Clerk; informational if every env uses
-  a separate dev Clerk org)
+- **Severity:** Moderate
+- **Status:** **Accepted by product owner (Omer) on 2026-05-10.** Leaving
+  `/sign-up` open as-is.
 - **Location:** `src/middleware.ts:13` and `src/app/sign-up/[[...sign-up]]/page.tsx`
 - **What:** `/sign-up` is in the public-routes allowlist. yellowHEAD is an
   internal agency tool — anyone with the deploy URL can create an account
   and reach `/dashboard`.
-- **Why this matters:** Clerk allows allowlist/blocklist by email domain at
-  the instance level; without it, the only thing keeping outsiders out is
-  obscurity of the URL. That's not a security boundary.
-- **Recommendation:** One of:
-  1. **Best:** In Clerk dashboard, set sign-up restrictions
-     (domain allowlist for `@yellowhead.com` / known partner domains).
-  2. **Or:** Remove the `/sign-up` route entirely from this app — invite-only
-     via Clerk's admin-create flow. Drop the route from
-     `src/app/sign-up/...` and from `isPublicRoute` in middleware.
-  3. **Or:** Add an application-level allowlist check in middleware that
-     redirects unknown emails to a "request access" page after Clerk auth.
+- **Residual risk after acceptance:** The deploy URL is the only access
+  control on account creation. If the URL leaks (shared link, search
+  indexing, social, recruiter screenshot), anyone can self-provision an
+  account and see whatever the dashboard renders. Mitigating factors today:
+  data is mock; Sentry/PostHog will surface the new-user signal; nothing
+  destructive can be done from the UI.
+- **Mitigations to revisit when real data ships:**
+  - Set `<meta name="robots" content="noindex">` and `X-Robots-Tag: noindex`
+    on `/sign-up` to keep it out of search results.
+  - Add a Clerk webhook → Slack notification on `user.created` so a real
+    person sees every new account in real time.
+  - Periodic audit of the Clerk users list against the yellowHEAD employee
+    directory; deactivate strangers.
+- **Re-review trigger:** Reopen this finding the moment any of the following
+  ship — real BigQuery data flows into the dashboard, real client
+  reports become viewable, or any write-capable action lands in the UI.
+  At that point "anyone can sign up" stops being acceptable.
+- **Original recommendations** (for future reference, not actioned):
+  1. Clerk dashboard sign-up domain allowlist (zero code).
+  2. Remove the `/sign-up` route entirely — invite-only via Clerk admin.
+  3. App-level allowlist check in middleware.
 
 ### F-3 · `fast-uri` transitive vulnerability (high CVSS 7.5)
 - **Severity:** Moderate (high CVSS, but reachability is limited — used only
@@ -201,11 +212,10 @@ Triage, then dispatch in this order. Numbers map to findings above.
 - F-5 `Math.random` → `crypto.randomUUID`
 - F-8 untrack `test-results/.last-run.json`
 
-**Wave B — auth boundary (medium risk, needs dashboard work + code):**
-- F-2 lock down sign-up. Recommend option 1 (Clerk dashboard email-domain
-  allowlist) — zero code change, fastest to ship. Option 2 (delete
-  `/sign-up` route) is the most defensive and worth doing if the Clerk
-  dashboard option isn't available on your plan.
+**Wave B — auth boundary:**
+- F-2 sign-up lockdown — **closed-by-acceptance on 2026-05-10.** Owner
+  decision: leave `/sign-up` open. See F-2 above for residual risk and
+  re-review trigger. Wave B has no further work.
 
 **Wave C — hardening, needs care:**
 - F-4 nonce-based CSP. Touches middleware + root layout + every `<Script>`.
