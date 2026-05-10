@@ -31,9 +31,19 @@ const USERNAME = "lumen-e2e";
 // IANA-reserved domain — Clerk accepts it and there's no real inbox to leak
 // notifications to.
 const EMAIL = "lumen-e2e@example.com";
-// Strong static password — fine for a non-human test user that lives only
-// in Clerk and only signs in from Playwright.
-const PASSWORD = "Lumen-E2E-yH-2026-Stable!";
+// Password is read from env, never committed. Set E2E_CLERK_USER_PASSWORD in
+// .env.local (or your CI secret store) to a strong value before running this
+// script. Anyone with this value can sign in as the lumen-e2e Clerk user, so
+// treat it like any other credential — rotate it via the Clerk dashboard if
+// it ever leaks.
+const PASSWORD = process.env.E2E_CLERK_USER_PASSWORD;
+if (!PASSWORD || PASSWORD.length < 16) {
+  console.error(
+    "❌ E2E_CLERK_USER_PASSWORD missing or too short (min 16 chars). " +
+      "Add it to .env.local before running this script.",
+  );
+  process.exit(1);
+}
 
 const API = "https://api.clerk.com/v1";
 const headers = {
@@ -88,10 +98,10 @@ async function verifyEmail(userId, emailId) {
 
 function printEnvBlock() {
   console.log("\n" + "─".repeat(60));
-  console.log("Add these two lines to .env.local:");
+  console.log("Make sure these two lines are in .env.local:");
   console.log("─".repeat(60));
   console.log(`E2E_CLERK_USER_USERNAME=${USERNAME}`);
-  console.log(`E2E_CLERK_USER_PASSWORD=${PASSWORD}`);
+  console.log(`E2E_CLERK_USER_PASSWORD=<the value you used above>`);
   console.log("─".repeat(60));
   console.log("Then run:  npm run test:e2e\n");
 }
