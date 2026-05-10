@@ -35,8 +35,7 @@ const writeAll = (items: PinnedTile[]) => {
 
 /** ---- Public API */
 
-const newId = () =>
-  `pin_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+const newId = () => `pin_${crypto.randomUUID()}`;
 
 export function usePinnedTiles(userId: string = MOCK_USER_ID) {
   const [all, setAll] = useState<PinnedTile[]>([]);

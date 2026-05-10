@@ -165,7 +165,9 @@
       "Bash(npx --no-install tsc --noEmit -p tsconfig.json)",
       "Bash(cp /tmp/aria.svg /Users/omer/Desktop/Lumen/public/avatars/aria.svg)",
       "Bash(cp /tmp/max.svg /Users/omer/Desktop/Lumen/public/avatars/max.svg)",
-      "Bash(cp /tmp/nova.svg /Users/omer/Desktop/Lumen/public/avatars/nova.svg)"
+      "Bash(cp /tmp/nova.svg /Users/omer/Desktop/Lumen/public/avatars/nova.svg)",
+      "Bash(grep -E 'sk_\\(test|live\\)_[a-zA-Z0-9]{10,}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); m=d['metadata']['vulnerabilities']; print\\('After fix:', m\\); print\\('---'\\); [print\\(name, v['severity']\\) for name,v in d.get\\('vulnerabilities',{}\\).items\\(\\)]\")"
     ]
   },
   "enableAllProjectMcpServers": true,
