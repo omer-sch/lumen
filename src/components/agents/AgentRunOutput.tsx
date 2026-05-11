@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, FileText, Image as ImageIcon, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  ArrowUpRight,
+  Expand,
+  FileText,
+  Image as ImageIcon,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { GlassBulb } from "@/components/ui/GlassBulb";
 import type { RunOutput } from "@/lib/mock/agents";
 
@@ -28,39 +36,156 @@ function ImageOutputPreview({
 }: {
   data: Extract<RunOutput, { kind: "image" }>["data"];
 }) {
+  const [zoomed, setZoomed] = useState(false);
+
+  // Close on Escape, and lock body scroll while the lightbox is open.
+  useEffect(() => {
+    if (!zoomed) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setZoomed(false);
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [zoomed]);
+
   return (
     <div className="flex flex-col gap-3">
       <SectionLabel icon={<ImageIcon className="h-3 w-3" strokeWidth={2.5} />}>
         Generated image
       </SectionLabel>
 
-      <div
-        className="relative grid h-44 w-full place-items-center overflow-hidden rounded-md"
-        style={{
-          background: `radial-gradient(circle at 30% 25%, ${data.palette.from} 0%, transparent 55%), radial-gradient(circle at 70% 80%, ${data.palette.to} 0%, transparent 55%), var(--surface-icon-bg)`,
-          border: "1px solid var(--border-glass)",
-          boxShadow:
-            "inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 24px rgba(0,0,0,0.35)",
-        }}
-      >
-        {/* Faux god-ray shafts */}
+      {data.imageUrl ? (
         <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-60"
+          className="relative w-full overflow-hidden rounded-md"
           style={{
-            background:
-              "linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.08) 38%, transparent 46%), linear-gradient(125deg, transparent 50%, rgba(255,255,255,0.05) 56%, transparent 62%)",
+            border: "1px solid var(--border-glass)",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 24px rgba(0,0,0,0.35)",
           }}
-        />
-        <GlassBulb size={84} accent="mint" float />
-        <span className="absolute bottom-2 left-3 font-display text-xs font-bold uppercase tracking-[0.18em] text-cloud-white/85">
-          {data.title}
-        </span>
-      </div>
+        >
+          <button
+            type="button"
+            onClick={() => setZoomed(true)}
+            aria-label="Open full image"
+            className="block w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={data.imageUrl}
+              alt={data.title}
+              className="w-full max-h-72 cursor-zoom-in rounded-md object-cover transition-transform duration-280 ease-out-quart hover:scale-[1.01]"
+            />
+          </button>
+          <span className="pointer-events-none absolute bottom-2 left-3 font-display text-xs font-bold uppercase tracking-[0.18em] text-cloud-white/85">
+            {data.title}
+          </span>
+          <button
+            type="button"
+            onClick={() => setZoomed(true)}
+            aria-label="Open full image"
+            className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md px-2 py-1 font-body text-[10px] font-semibold uppercase tracking-[0.16em] text-cloud-white transition-[background-color,opacity] duration-280 ease-out-quart hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua"
+            style={{
+              background: "rgba(10, 20, 40, 0.55)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            <Expand className="h-3 w-3" strokeWidth={2.5} />
+            Open
+          </button>
+
+          {zoomed && (
+            <ImageLightbox
+              src={data.imageUrl}
+              alt={data.title}
+              onClose={() => setZoomed(false)}
+            />
+          )}
+        </div>
+      ) : (
+        <div
+          className="relative grid h-44 w-full place-items-center overflow-hidden rounded-md"
+          style={{
+            background: `radial-gradient(circle at 30% 25%, ${data.palette.from} 0%, transparent 55%), radial-gradient(circle at 70% 80%, ${data.palette.to} 0%, transparent 55%), var(--surface-icon-bg)`,
+            border: "1px solid var(--border-glass)",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 24px rgba(0,0,0,0.35)",
+          }}
+        >
+          {/* Faux god-ray shafts */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-60"
+            style={{
+              background:
+                "linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.08) 38%, transparent 46%), linear-gradient(125deg, transparent 50%, rgba(255,255,255,0.05) 56%, transparent 62%)",
+            }}
+          />
+          <GlassBulb size={84} accent="mint" float />
+          <span className="absolute bottom-2 left-3 font-display text-xs font-bold uppercase tracking-[0.18em] text-cloud-white/85">
+            {data.title}
+          </span>
+        </div>
+      )}
 
       <p className="font-body text-xs leading-relaxed text-[color:var(--text-secondary)]">
         {data.composition}
       </p>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────
+   Image lightbox — fullscreen overlay
+   ────────────────────────────────────────── */
+function ImageLightbox({
+  src,
+  alt,
+  onClose,
+}: {
+  src: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={alt}
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8"
+      style={{
+        background: "rgba(5, 10, 24, 0.88)",
+        backdropFilter: "blur(8px)",
+      }}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close full image"
+        className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-md text-cloud-white transition-[background-color] duration-280 ease-out-quart hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua"
+        style={{
+          background: "rgba(10, 20, 40, 0.55)",
+          border: "1px solid rgba(255,255,255,0.18)",
+        }}
+      >
+        <X className="h-4 w-4" strokeWidth={2.5} />
+      </button>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={alt}
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-full max-w-full cursor-default rounded-md object-contain"
+        style={{
+          boxShadow: "0 8px 60px rgba(0,0,0,0.6)",
+        }}
+      />
     </div>
   );
 }

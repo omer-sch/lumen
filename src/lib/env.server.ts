@@ -19,6 +19,12 @@ export const serverEnv = {
   get ANTHROPIC_API_KEY() {
     return read("ANTHROPIC_API_KEY", { optional: true });
   },
+  get FAL_KEY() {
+    return read("FAL_KEY", { optional: true });
+  },
+  get HF_TOKEN() {
+    return read("HF_TOKEN", { optional: true });
+  },
   get SENTRY_DSN() {
     return read("SENTRY_DSN", { optional: true });
   },

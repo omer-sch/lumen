@@ -19,6 +19,8 @@ export type ImageOutput = {
   palette: { from: string; to: string };
   /** One-line description of what the agent built. */
   composition: string;
+  /** Real fal.ai URL. Absent on mock/legacy runs. */
+  imageUrl?: string;
 };
 
 /** Report output for Nova — opens in Reports later. */

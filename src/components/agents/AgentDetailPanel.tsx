@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Brain,
   Check,
@@ -24,26 +24,96 @@ type AgentDetailPanelProps = {
 
 type Verdict = "up" | "down" | null;
 
+type SavedMemoryEntry = {
+  runId: string;
+  thumbs: Verdict;
+  note: string;
+  score: number;
+  date: string;
+  savedAt: string;
+};
+
 export function AgentDetailPanel({
   agent,
   onPauseToggle,
   onRunNow,
 }: AgentDetailPanelProps) {
   const mostRecent = agent.history[0];
+  const usesRating = agent.id === "nova";
+  const initialScore = usesRating
+    ? (mostRecent?.rating ?? 4)
+    : (mostRecent?.score ?? 80);
   const [verdict, setVerdict] = useState<Verdict>(null);
   const [note, setNote] = useState("");
-  const [score, setScore] = useState<number>(mostRecent?.score ?? 80);
+  const [score, setScore] = useState<number>(initialScore);
   const [saved, setSaved] = useState(false);
   const [openRunId, setOpenRunId] = useState<string | null>(
     mostRecent?.id ?? null,
   );
 
-  const usesRating = agent.id === "nova";
   const trackMax = usesRating ? 5 : 100;
   const isRunning = agent.status === "running" && !agent.paused;
   const canRunNow = !isRunning;
 
-  const handleSave = () => {
+  const [savedEntries, setSavedEntries] = useState<SavedMemoryEntry[]>([]);
+
+  const refreshSaved = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/memory`, {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const { entries } = (await res.json()) as { entries: SavedMemoryEntry[] };
+      setSavedEntries(entries);
+    } catch (err) {
+      console.error("Load saved memory failed", err);
+    }
+  }, [agent.id]);
+
+  useEffect(() => {
+    void refreshSaved();
+  }, [refreshSaved]);
+
+  // When a fresh run lands at history[0] (e.g. after Run now), follow it:
+  // jump the inline open-row to the new run and reset the score slider so
+  // the feedback form is ready for the new image. Without this the user
+  // has to scroll/click to find the result and the slider stays pinned to
+  // the previous run's score.
+  // Primitives are pulled out so the effect's deps are stable references —
+  // depending on `mostRecent` directly would refire on every parent re-render
+  // since AgentsView rebuilds the agent objects each tick.
+  const recentId = mostRecent?.id;
+  const recentScore = mostRecent?.score;
+  const recentRating = mostRecent?.rating;
+  useEffect(() => {
+    if (!recentId) return;
+    setOpenRunId(recentId);
+    setScore(usesRating ? (recentRating ?? 4) : (recentScore ?? 80));
+  }, [recentId, recentScore, recentRating, usesRating]);
+
+  const handleSave = async () => {
+    if (mostRecent) {
+      try {
+        const res = await fetch(`/api/agents/${agent.id}/memory`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            runId: mostRecent.id,
+            thumbs: verdict,
+            note,
+            score,
+            date: mostRecent.date,
+          }),
+        });
+        if (res.ok) {
+          await refreshSaved();
+          setNote("");
+          setVerdict(null);
+        }
+      } catch (err) {
+        console.error("Save to memory failed", err);
+      }
+    }
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
   };
@@ -110,6 +180,27 @@ export function AgentDetailPanel({
             <MemoryChip key={m.id} memory={m} />
           ))}
         </ul>
+
+        {savedEntries.length > 0 && (
+          <div className="mt-2 flex flex-col gap-2">
+            <div className="flex items-baseline justify-between">
+              <h4 className="font-body text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-secondary)]">
+                Your saved feedback
+              </h4>
+              <span className="font-body text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--text-muted)]">
+                {savedEntries.length} entr{savedEntries.length === 1 ? "y" : "ies"}
+              </span>
+            </div>
+            <ul className="flex flex-col gap-1.5">
+              {[...savedEntries]
+                .reverse()
+                .slice(0, 5)
+                .map((e) => (
+                  <SavedEntryRow key={e.savedAt} entry={e} />
+                ))}
+            </ul>
+          </div>
+        )}
       </section>
 
       {/* Run history + feedback */}
@@ -312,6 +403,53 @@ function MemoryChip({ memory }: { memory: AgentMemory }) {
           Applied <span className="tabular-nums">{memory.appliedCount}</span>×
         </span>
       </div>
+    </li>
+  );
+}
+
+/* ──────────────────────────────────────────
+   Saved entry — one row of persisted user feedback
+   ────────────────────────────────────────── */
+function SavedEntryRow({ entry }: { entry: SavedMemoryEntry }) {
+  const Icon =
+    entry.thumbs === "up"
+      ? ThumbsUp
+      : entry.thumbs === "down"
+        ? ThumbsDown
+        : null;
+  const iconColor =
+    entry.thumbs === "down"
+      ? "var(--color-creative)"
+      : "var(--color-ua)";
+  return (
+    <li
+      className="flex items-center gap-3 rounded-md px-3 py-2"
+      style={{
+        background: "var(--surface-glass)",
+        border: "1px solid var(--border-glass)",
+      }}
+    >
+      <span className="font-body text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--text-muted)]">
+        {entry.date}
+      </span>
+      {Icon && (
+        <Icon
+          className="h-3.5 w-3.5 shrink-0"
+          style={{ color: iconColor }}
+          strokeWidth={2.5}
+          aria-label={entry.thumbs === "up" ? "Good run" : "Needs work"}
+        />
+      )}
+      <span className="font-display text-xs font-bold tabular-nums text-yellow">
+        {Math.round(entry.score)}
+      </span>
+      <p className="min-w-0 flex-1 truncate font-body text-xs text-[color:var(--text-secondary)]">
+        {entry.note || (
+          <span className="italic text-[color:var(--text-muted)]">
+            (no note)
+          </span>
+        )}
+      </p>
     </li>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
-import { AGENTS, type Agent } from "@/lib/mock/agents";
+import { AGENTS, type Agent, type AgentRun } from "@/lib/mock/agents";
 import { LivePulse } from "@/components/ui/LivePulse";
 import { AgentCard } from "@/components/agents/AgentCard";
 import { AgentDetailPanel } from "@/components/agents/AgentDetailPanel";
@@ -15,10 +15,38 @@ const PROGRESS_STEP = 2;
 /** Opening step text used when "Run now" kicks off a fresh run. Each agent
  *  has a sensible default that the progress bar will surface. */
 const RUN_STEP: Record<string, string> = {
-  aria: "Sketching composition · pass 1 of 3",
+  aria: "Sending to Flux · generating image",
   max: "Querying BigQuery · scanning 28 campaigns",
   nova: "Drafting executive summary",
 };
+
+type RecentMemoryEntry = {
+  runId: string;
+  thumbs: "up" | "down" | null;
+  note: string;
+  score: number;
+  date: string;
+  savedAt: string;
+};
+
+function buildAriaPrompt(
+  agent: Agent,
+  recentMemory: RecentMemoryEntry[],
+): string {
+  const rules = agent.memory.map((m) => m.rule).join(". ");
+  const base = `Lumen AI hero image. Single glass light bulb floating on deep navy background. ${rules}. Cinematic dark studio lighting, 4k photorealistic render.`;
+
+  const noted = recentMemory.filter((e) => e.note.trim());
+  if (noted.length === 0) return base;
+
+  const feedback = noted
+    .map(
+      (e) =>
+        `[${e.thumbs === "up" ? "GOOD" : "BAD"}, ${e.score}/10] ${e.note}`,
+    )
+    .join(" | ");
+  return `${base} Recent feedback: ${feedback}`;
+}
 
 export function AgentsView() {
   const [agents, setAgents] = useState<Agent[]>(AGENTS);
@@ -80,6 +108,62 @@ export function AgentsView() {
         };
       }),
     );
+
+    if (id === "aria") {
+      const agent = agents.find((a) => a.id === id);
+      if (!agent) return;
+
+      (async () => {
+        try {
+          const memRes = await fetch(`/api/agents/${agent.id}/memory`);
+          const { entries } = (await memRes.json()) as {
+            entries: RecentMemoryEntry[];
+          };
+          const recentMemory = entries.slice(-5);
+          const prompt = buildAriaPrompt(agent, recentMemory);
+
+          const res = await fetch("/api/agents/aria/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt }),
+          });
+          if (!res.ok) throw new Error(`Generate failed: ${res.status}`);
+          const { imageUrl } = (await res.json()) as {
+            imageUrl: string;
+            seed?: number;
+          };
+
+          const date = new Date().toLocaleDateString("en-US", {
+            month: "short",
+            day: "2-digit",
+          });
+          const newRun: AgentRun = {
+            id: `aria-run-${Date.now()}`,
+            date,
+            note: "Generated just now · awaiting virality score",
+            output: {
+              kind: "image",
+              data: {
+                title: `Generated · ${date}`,
+                palette: {
+                  from: "var(--color-ua)",
+                  to: "var(--color-yellow)",
+                },
+                composition: prompt,
+                imageUrl,
+              },
+            },
+          };
+          setAgents((prev) =>
+            prev.map((a) =>
+              a.id === id ? { ...a, history: [newRun, ...a.history] } : a,
+            ),
+          );
+        } catch (err) {
+          console.error("Aria generate failed", err);
+        }
+      })();
+    }
   };
 
   const selected = selectedId
