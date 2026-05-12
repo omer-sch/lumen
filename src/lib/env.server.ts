@@ -64,20 +64,29 @@ export const serverEnv = {
   },
   /**
    * Optional at import-time, required when a Supabase-backed API route
-   * actually runs. The public-prefixed URL is the project endpoint
-   * (`https://<ref>.supabase.co`). Mirrored here (despite the
-   * NEXT_PUBLIC_ prefix) so server code has a single env entry point.
+   * actually runs. The project endpoint (`https://<ref>.supabase.co`).
+   * Accepts either NEXT_PUBLIC_SUPABASE_URL (Next.js convention, makes
+   * the URL also available client-side) or plain SUPABASE_URL (when
+   * you don't want it bundled into the client).
    */
   get SUPABASE_URL() {
-    return read("NEXT_PUBLIC_SUPABASE_URL", { optional: true });
+    return (
+      read("NEXT_PUBLIC_SUPABASE_URL", { optional: true }) ||
+      read("SUPABASE_URL", { optional: true })
+    );
   },
   /**
-   * Optional. The publishable (anon) key. Only needed if the client ever
-   * talks to Supabase directly — we don't today, but the var is here so
-   * the env shape matches the dev DB setup doc.
+   * Optional. The publishable (anon) key. Only needed if the client
+   * ever talks to Supabase directly — we don't today, but the var is
+   * here so the env shape matches the dev DB setup doc. Accepts either
+   * NEXT_PUBLIC_SUPABASE_ANON_KEY (legacy name) or
+   * SUPABASE_PUBLISHABLE_KEY (Supabase's current naming).
    */
   get SUPABASE_ANON_KEY() {
-    return read("NEXT_PUBLIC_SUPABASE_ANON_KEY", { optional: true });
+    return (
+      read("NEXT_PUBLIC_SUPABASE_ANON_KEY", { optional: true }) ||
+      read("SUPABASE_PUBLISHABLE_KEY", { optional: true })
+    );
   },
   /**
    * Optional at read-time. The service-role key bypasses RLS — never
@@ -95,13 +104,14 @@ export const serverEnv = {
  * True when both the project URL and the service-role key are set.
  * Server routes that have a mock fallback consult this; routes that
  * cannot meaningfully run without the DB (e.g. /api/agents/.../memory)
- * should let supabaseAdmin() throw the loud error instead.
+ * should let supabaseAdmin() throw the loud error instead. Mirrors the
+ * env-name fallbacks in the getters above so the boolean stays
+ * consistent with what supabaseAdmin() will actually find.
  */
 export function isSupabaseConfigured(): boolean {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-  );
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  return Boolean(url && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
 /** Call from a server-only entry (e.g. a startup hook) to fail fast. */
