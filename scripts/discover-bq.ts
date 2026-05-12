@@ -394,7 +394,9 @@ async function dateSpans(
   console.log("Phase 6: date span + recency for fact tables…");
 
   // Only run cheap MIN/MAX for objects we sized > 0 rows and have a date col.
-  const byKey = new Map(objects.map((o) => [`${o.dataset}.${o.table_name}`, o] as const));
+  const byKey = new Map<string, ObjectMeta>(
+    objects.map((o) => [`${o.dataset}.${o.table_name}`, o]),
+  );
   const targets = Object.entries(schemas).filter(([k, cols]) => {
     const o = byKey.get(k);
     if (!o) return false;
