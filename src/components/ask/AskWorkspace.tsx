@@ -57,6 +57,22 @@ function AskInner() {
       setHistory((cur) =>
         [{ id: `q_${Date.now().toString(36)}`, askedAt: Date.now(), answer: a }, ...cur].slice(0, 8),
       );
+      // Fire-and-forget persistence — the active session UI continues
+      // even if the DB write fails (preview mode returns 200 without
+      // persisting, so the call is always safe to make). The global
+      // filter range is Date objects; ask_queries.date_range_* are
+      // DATE columns, so serialise to YYYY-MM-DD.
+      const isoDate = (d: Date) => d.toISOString().slice(0, 10);
+      fetch("/api/ask/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          answer: a,
+          dateRangeStart: isoDate(from),
+          dateRangeEnd: isoDate(to),
+          clientId: client,
+        }),
+      }).catch((err) => console.error("[ask] persist failed", err));
     } finally {
       setLoading(false);
     }
@@ -88,8 +104,7 @@ function AskInner() {
         </h2>
         <p className="max-w-xl font-body text-sm leading-relaxed text-[color:var(--text-secondary)]">
           Plain English. Lumen pulls the data, builds the chart, and explains
-          what it sees. Your global filter
-          {c.slug === "all" ? " " : ` (${c.name})`} and {days}-day window feed
+          what it sees. Your global filter ({c.name}) and {days}-day window feed
           in as default context.
         </p>
       </header>

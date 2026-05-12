@@ -370,6 +370,7 @@ export type Database = {
           created_at: string
           id: string
           position_index: number
+          question: string | null
           source: string
           source_query_id: string | null
           title: string
@@ -380,6 +381,7 @@ export type Database = {
           created_at?: string
           id?: string
           position_index?: number
+          question?: string | null
           source: string
           source_query_id?: string | null
           title: string
@@ -390,6 +392,7 @@ export type Database = {
           created_at?: string
           id?: string
           position_index?: number
+          question?: string | null
           source?: string
           source_query_id?: string | null
           title?: string
