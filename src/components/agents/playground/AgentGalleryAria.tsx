@@ -290,19 +290,25 @@ function ImageOrPlaceholder({
 
 function Thumbnail({
   run,
+  onOpen,
 }: {
   run: AgentRun & { output: { kind: "image"; data: ImageOutput } };
+  /** Click handler. Only wired when the run has a real imageUrl —
+   *  the gradient placeholder is not zoomable. */
+  onOpen?: () => void;
 }) {
-  return (
-    <div
-      className={cn(
-        "relative aspect-square overflow-hidden rounded-md",
-      )}
-      style={{
-        border: "1px solid var(--border-glass)",
-        boxShadow: "var(--shadow-card)",
-      }}
-    >
+  const containerClass = cn(
+    "relative aspect-square overflow-hidden rounded-md",
+    onOpen &&
+      "cursor-zoom-in transition-transform duration-280 ease-out-quart hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
+  );
+  const containerStyle = {
+    border: "1px solid var(--border-glass)",
+    boxShadow: "var(--shadow-card)",
+  } as const;
+
+  const body = (
+    <>
       <ImageOrPlaceholder data={run.output.data} alt={run.output.data.title} />
       {run.score != null && (
         <span
@@ -326,6 +332,25 @@ function Thumbnail({
       >
         {run.date}
       </span>
+    </>
+  );
+
+  if (onOpen) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open full image for run on ${run.date}`}
+        className={containerClass}
+        style={containerStyle}
+      >
+        {body}
+      </button>
+    );
+  }
+  return (
+    <div className={containerClass} style={containerStyle}>
+      {body}
     </div>
   );
 }

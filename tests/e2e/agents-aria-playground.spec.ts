@@ -240,6 +240,101 @@ test.describe("Aria · playground end-to-end", () => {
     await expect(input).toBeEnabled({ timeout: 10_000 });
   });
 
+  test("hero image opens the lightbox and Escape closes it", async ({
+    page,
+  }) => {
+    // Run-now first so the hero card has a real imageUrl (the seed runs
+    // are gradient placeholders that are intentionally not zoomable).
+    await page.goto("/agents/aria");
+    await page.getByRole("button", { name: /run aria now/i }).click();
+
+    // After the stub resolves, an "Open" affordance shows up. There are
+    // two clickable targets on the hero (the wrapping image button + the
+    // top-left Open chip) — both share the same aria-label. Take the
+    // first.
+    const openBtn = page
+      .getByRole("button", { name: "Open full image" })
+      .first();
+    await expect(openBtn).toBeVisible({ timeout: 15_000 });
+    await openBtn.click();
+
+    const dialog = page.locator('[role="dialog"][aria-modal="true"]');
+    await expect(dialog).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+  });
+
+  test("Try a different vibe injects a vibe modifier and shows it in the note", async ({
+    page,
+  }) => {
+    await page.goto("/agents/aria");
+
+    const generatePromise = page.waitForRequest(
+      (r) =>
+        r.url().endsWith("/api/agents/aria/generate") && r.method() === "POST",
+    );
+    await page
+      .getByRole("button", { name: /try a different vibe/i })
+      .click();
+
+    const req = await generatePromise;
+    const prompt = (JSON.parse(req.postData() ?? "{}") as { prompt?: string })
+      .prompt;
+    // Vibe line is present, no Subject (chat input was empty).
+    expect(prompt).toMatch(/\bVibe: [^.]+\./);
+    expect(prompt).not.toMatch(/\bSubject: /);
+    // Cinematic tail still ends the prompt — vibe slots before it.
+    expect(prompt).toMatch(
+      /Cinematic dark studio lighting, 4k photorealistic render\.$/,
+    );
+
+    // Note line on the new hero shows the picked vibe.
+    await expect(
+      page.getByText(/Vibe: .+ · awaiting virality score/i),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("two consecutive vibe clicks never use the same vibe", async ({
+    page,
+  }) => {
+    // Capture the prompts sent on each click. The picker excludes the
+    // previous vibe from its pool, so over many runs we expect no
+    // back-to-back repeats. With a 10-element pool this is deterministic.
+    const sentPrompts: string[] = [];
+    await page.route("**/api/agents/aria/generate", async (route) => {
+      const body = JSON.parse(route.request().postData() ?? "{}") as {
+        prompt?: string;
+      };
+      if (body.prompt) sentPrompts.push(body.prompt);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ imageUrl: FAKE_IMAGE }),
+      });
+    });
+
+    await page.goto("/agents/aria");
+
+    const vibeBtn = page.getByRole("button", { name: /try a different vibe/i });
+
+    // First click
+    await vibeBtn.click();
+    await expect(vibeBtn).toBeEnabled({ timeout: 10_000 });
+
+    // Second click — should produce a different vibe than the first.
+    await vibeBtn.click();
+    await expect(vibeBtn).toBeEnabled({ timeout: 10_000 });
+
+    expect(sentPrompts.length).toBeGreaterThanOrEqual(2);
+    const vibe = (s: string) => s.match(/Vibe: ([^.]+)\./)?.[1] ?? "";
+    const first = vibe(sentPrompts[0]);
+    const second = vibe(sentPrompts[1]);
+    expect(first).not.toEqual("");
+    expect(second).not.toEqual("");
+    expect(second).not.toEqual(first);
+  });
+
   test("Pause toggles avatar opacity + button label", async ({ page }) => {
     await page.goto("/agents/aria");
 

@@ -90,6 +90,25 @@ type RecentMemoryEntry = {
 };
 
 /**
+ * Hardcoded vibe pool for "Try a different vibe". Each click picks one
+ * at random, excluding whatever was last used so two consecutive clicks
+ * never produce the same vibe. Easy to tune; revisit once we've scored
+ * the resulting renders. v1 is intentionally not LLM-generated.
+ */
+const ARIA_VIBES = [
+  "moodier, low-key shadows",
+  "more minimal, fewer elements",
+  "warmer palette, sunset bias",
+  "cooler palette, blue-shifted",
+  "more negative space, breathing room",
+  "wider crop, environmental",
+  "closer crop, intimate detail",
+  "high contrast, dramatic",
+  "softer focus, dreamy",
+  "sharper edges, technical precision",
+] as const;
+
+/**
  * Build the prompt for Aria's Hugging Face FLUX.1-schnell call. Memory rules
  * + recent thumbs/note feedback are layered into the prompt so the model
  * sees the agent's persistent learnings before each generation. Ported from
@@ -98,26 +117,39 @@ type RecentMemoryEntry = {
  * Memory is the *style* (glass bulb, navy, mint, god rays). When a
  * `directive` is supplied (typed by the user in the chat input), it slots
  * in as a "Subject: …" line so the user can steer what Aria depicts
- * without losing the brand baseline.
+ * without losing the brand baseline. When a `vibe` is supplied (from
+ * "Try a different vibe"), it slots in just before the cinematic tail as
+ * a per-run tone modifier — never teaches Aria anything permanent.
+ *
+ * Prompt shape (slots present only when supplied):
+ *   "Lumen AI hero image. [Subject: X.] Single glass light bulb floating
+ *    on deep navy background. {rules}. [Recent feedback: ...] [Vibe: Y.]
+ *    Cinematic dark studio lighting, 4k photorealistic render."
  */
 function buildAriaPrompt(
   memory: AgentMemory[],
   recentMemory: RecentMemoryEntry[],
   directive?: string,
+  vibe?: string,
 ): string {
   const rules = memory.map((m) => m.rule).join(". ");
   const trimmedDirective = directive?.trim();
+  const trimmedVibe = vibe?.trim();
   const subjectLine = trimmedDirective ? ` Subject: ${trimmedDirective}.` : "";
-  const base = `Lumen AI hero image.${subjectLine} Single glass light bulb floating on deep navy background. ${rules}. Cinematic dark studio lighting, 4k photorealistic render.`;
+  const vibeLine = trimmedVibe ? ` Vibe: ${trimmedVibe}.` : "";
+
   const noted = recentMemory.filter((e) => e.note.trim());
-  if (noted.length === 0) return base;
-  const feedback = noted
-    .map(
-      (e) =>
-        `[${e.thumbs === "up" ? "GOOD" : "BAD"}, ${e.score}/10] ${e.note}`,
-    )
-    .join(" | ");
-  return `${base} Recent feedback: ${feedback}`;
+  const feedbackLine =
+    noted.length === 0
+      ? ""
+      : ` Recent feedback: ${noted
+          .map(
+            (e) =>
+              `[${e.thumbs === "up" ? "GOOD" : "BAD"}, ${e.score}/10] ${e.note}`,
+          )
+          .join(" | ")}.`;
+
+  return `Lumen AI hero image.${subjectLine} Single glass light bulb floating on deep navy background. ${rules}.${feedbackLine}${vibeLine} Cinematic dark studio lighting, 4k photorealistic render.`;
 }
 
 const RUN_STEP: Record<string, string> = {
@@ -154,12 +186,28 @@ export function AgentPlaygroundPage({
   // with no completion mechanism on this page) would leave the button
   // permanently disabled.
   const [running, setRunning] = useState<boolean>(false);
+  // Tracks the last vibe used by "Try a different vibe" so the picker can
+  // exclude it from the next roll. Resets to null on page reload.
+  const [lastVibe, setLastVibe] = useState<string | null>(null);
 
   const statsLine = useMemo(() => variant.stats(agent), [variant, agent]);
 
+  /** Pick a vibe at random, never repeating the previous one. */
+  const pickNextVibe = useCallback((): string => {
+    const pool = ARIA_VIBES.filter((v) => v !== lastVibe);
+    const next = pool[Math.floor(Math.random() * pool.length)];
+    setLastVibe(next);
+    return next;
+  }, [lastVibe]);
+
   const runAria = useCallback(
-    async (currentAgent: Agent, directive?: string): Promise<void> => {
+    async (
+      currentAgent: Agent,
+      directive?: string,
+      vibe?: string,
+    ): Promise<void> => {
       const trimmedDirective = directive?.trim() || undefined;
+      const trimmedVibe = vibe?.trim() || undefined;
       try {
         // 1. Pull recent saved feedback so the prompt can learn from it.
         let recentMemory: RecentMemoryEntry[] = [];
@@ -179,6 +227,7 @@ export function AgentPlaygroundPage({
           currentAgent.memory,
           recentMemory,
           trimmedDirective,
+          trimmedVibe,
         );
 
         // 2. Generate via Hugging Face FLUX.1-schnell.
@@ -204,12 +253,21 @@ export function AgentPlaygroundPage({
           month: "short",
           day: "2-digit",
         });
+        // Note covers four cases: neither / directive only / vibe only /
+        // both. Both is supported even though v1 UI never combines them,
+        // so when v2 introduces "subject + vibe" the data shape is ready.
+        const noteTags: string[] = [];
+        if (trimmedDirective) noteTags.push(`Directive: "${trimmedDirective}"`);
+        if (trimmedVibe) noteTags.push(`Vibe: ${trimmedVibe}`);
+        const note =
+          noteTags.length === 0
+            ? "Generated just now · awaiting virality score"
+            : `${noteTags.join(" · ")} · awaiting virality score`;
+
         const newRun: AgentRun = {
           id: `aria-run-${Date.now()}`,
           date,
-          note: trimmedDirective
-            ? `Directive: "${trimmedDirective}" · awaiting virality score`
-            : "Generated just now · awaiting virality score",
+          note,
           output: {
             kind: "image",
             data: {
@@ -248,6 +306,18 @@ export function AgentPlaygroundPage({
   const handleTogglePause = useCallback(() => {
     setPaused((p) => !p);
   }, []);
+
+  // "Try a different vibe" — rolls a fresh vibe modifier and kicks off a
+  // generation. Subject directive is intentionally NOT carried over from
+  // any current chat input; combining the two is parked for v2 because
+  // the UI doesn't yet show users what's about to be applied.
+  const handleVibeRetry = useCallback(() => {
+    if (running || agent.id !== "aria") return;
+    setRunning(true);
+    setPaused(false);
+    const vibe = pickNextVibe();
+    void runAria(agent, undefined, vibe).finally(() => setRunning(false));
+  }, [agent, running, runAria, pickNextVibe]);
 
   // Aria's chat directly kicks off generation with the user's text as a
   // directive layered on top of memory rules. Max / Nova don't get this
@@ -336,7 +406,7 @@ export function AgentPlaygroundPage({
       {agent.id === "aria" && (
         <AgentGalleryAria
           agent={agent}
-          onRetry={handleRunNow}
+          onRetry={handleVibeRetry}
           running={running}
         />
       )}
