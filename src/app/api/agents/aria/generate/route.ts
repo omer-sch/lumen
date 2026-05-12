@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 import { serverEnv } from "@/lib/env.server";
+import { getUserId } from "@/lib/db/user";
+import { rateLimit } from "@/lib/rate-limit";
 
 const HF_MODEL_URL =
   "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell";
+
+const MAX_PROMPT_LENGTH = 2000;
+// Per-user budget. Image gen is expensive; 10/min is plenty for a real
+// session and stops a runaway client from burning through HF_TOKEN.
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 export async function POST(request: Request) {
   const token = serverEnv.HF_TOKEN;
@@ -13,9 +21,45 @@ export async function POST(request: Request) {
     );
   }
 
-  const { prompt } = (await request.json()) as { prompt?: string };
-  if (!prompt) {
-    return NextResponse.json({ error: "prompt is required" }, { status: 400 });
+  // Defence-in-depth: the middleware already requires a Clerk session
+  // for this path (even in PREVIEW mode), but we re-derive the user id
+  // here so a future middleware regression can't turn this route into
+  // an unauthenticated HF proxy.
+  const userId = await getUserId();
+
+  const limit = rateLimit(
+    `aria:generate:${userId}`,
+    RATE_LIMIT_MAX,
+    RATE_LIMIT_WINDOW_MS,
+  );
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Try again shortly." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limit.retryAfterSeconds) },
+      },
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
+  }
+  const prompt = (body as { prompt?: unknown } | null)?.prompt;
+  if (typeof prompt !== "string" || prompt.length === 0) {
+    return NextResponse.json(
+      { error: "prompt is required (string)" },
+      { status: 400 },
+    );
+  }
+  if (prompt.length > MAX_PROMPT_LENGTH) {
+    return NextResponse.json(
+      { error: `prompt exceeds ${MAX_PROMPT_LENGTH} chars` },
+      { status: 400 },
+    );
   }
 
   const hfRes = await fetch(HF_MODEL_URL, {
@@ -33,22 +77,23 @@ export async function POST(request: Request) {
   const isJson = contentType.includes("application/json");
 
   if (!hfRes.ok || isJson) {
-    let body: unknown;
+    let upstreamBody: unknown;
     try {
-      body = isJson ? await hfRes.json() : await hfRes.text();
+      upstreamBody = isJson ? await hfRes.json() : await hfRes.text();
     } catch {
-      body = null;
+      upstreamBody = null;
     }
 
     const errMsg =
-      typeof body === "object" && body !== null && "error" in body
-        ? String((body as { error: unknown }).error ?? "")
+      typeof upstreamBody === "object" && upstreamBody !== null && "error" in upstreamBody
+        ? String((upstreamBody as { error: unknown }).error ?? "")
         : "";
     const isLoading =
       hfRes.status === 503 || /loading/i.test(errMsg);
 
     if (isLoading) {
-      const eta = (body as { estimated_time?: number } | null)?.estimated_time;
+      const eta = (upstreamBody as { estimated_time?: number } | null)
+        ?.estimated_time;
       console.warn("[aria/generate] HF model warming up", { eta });
       return NextResponse.json(
         {
@@ -60,10 +105,16 @@ export async function POST(request: Request) {
       );
     }
 
-    console.error("[aria/generate] HF error", { status: hfRes.status, body });
+    // Log the upstream body server-side for debugging, but never echo it
+    // to the client — it can leak model names, account routing, and
+    // upstream diagnostics.
+    console.error("[aria/generate] HF error", {
+      status: hfRes.status,
+      body: upstreamBody,
+    });
     return NextResponse.json(
-      { error: errMsg || "Hugging Face request failed", body },
-      { status: hfRes.status || 500 },
+      { error: "Image generation failed" },
+      { status: hfRes.status >= 500 ? 502 : 500 },
     );
   }
 

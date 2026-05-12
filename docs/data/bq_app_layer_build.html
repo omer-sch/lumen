@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BQ App-Consumer Layer — Build Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy-base: #0A1428;
+    --navy-card: #0D1B35;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.15);
+    --text: #FAFAFA;
+    --text-body: rgba(255,255,255,0.75);
+    --text-muted: rgba(255,255,255,0.45);
+    --mint: #54F0A3;
+    --mint-soft: rgba(84, 240, 163, 0.12);
+    --mint-border: rgba(84, 240, 163, 0.35);
+    --yellow: #FFDD0C;
+    --yellow-soft: rgba(255, 221, 12, 0.12);
+    --coral: #F88673;
+    --violet: #926FDE;
+    --bricolage: 'Bricolage Grotesque', system-ui, -apple-system, sans-serif;
+    --mont: 'Montserrat', system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--navy-base); color: var(--text); font-family: var(--mont); -webkit-font-smoothing: antialiased; }
+  body {
+    background:
+      radial-gradient(circle at 0% 0%, rgba(84, 240, 163, 0.04) 0%, transparent 35%),
+      radial-gradient(circle at 100% 100%, rgba(255, 221, 12, 0.03) 0%, transparent 30%),
+      var(--navy-base);
+    min-height: 100vh; line-height: 1.5;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 48px 32px 80px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; padding-bottom: 32px; border-bottom: 1px solid var(--border); margin-bottom: 48px; flex-wrap: wrap; }
+  .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700; color: var(--mint); margin-bottom: 12px; }
+  h1 { font-family: var(--bricolage); font-weight: 800; font-size: 44px; line-height: 1.05; letter-spacing: -0.02em; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-top: 12px; font-weight: 500; max-width: 700px; }
+  .badge-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge { padding: 6px 12px; background: var(--mint-soft); color: var(--mint); border: 1px solid var(--mint-border); border-radius: 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+  .badge.yellow { background: var(--yellow-soft); color: var(--yellow); border-color: rgba(255, 221, 12, 0.35); }
+  .section { margin-top: 56px; }
+  .section-title { font-family: var(--bricolage); font-weight: 700; font-size: 24px; letter-spacing: -0.01em; margin-bottom: 6px; }
+  .section-sub { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+
+  /* STATS */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .stat-card { background: var(--navy-card); border: 1px solid var(--border); border-radius: 14px; padding: 20px 24px; }
+  .stat-label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 8px; }
+  .stat-value { font-family: var(--bricolage); font-weight: 800; font-size: 32px; line-height: 1; }
+  .stat-value.mint { color: var(--mint); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-foot { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
+
+  /* ARCHITECTURE */
+  .arch { background: var(--navy-card); border: 1px solid var(--border); border-radius: 16px; padding: 32px; }
+  .arch-flow { display: grid; grid-template-columns: 1fr 60px 1.4fr 60px 1fr; gap: 8px; align-items: stretch; }
+  .arch-col { display: flex; flex-direction: column; gap: 10px; }
+  .arch-col-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
+  .arch-item { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-size: 12px; color: var(--text-body); }
+  .arch-item .name { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: var(--text); display: block; margin-bottom: 2px; }
+  .arch-item .desc { color: var(--text-muted); font-size: 11px; }
+  .arch-col.center .arch-item { background: var(--mint-soft); border-color: var(--mint-border); }
+  .arch-col.center .arch-item .name { color: var(--mint); }
+  .arch-arrow { display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 24px; }
+
+  /* VIEWS GRID */
+  .views-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .view-card { background: var(--navy-card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; position: relative; overflow: hidden; }
+  .view-card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--mint); }
+  .view-card.dim::before { background: var(--violet); }
+  .view-card.helper::before { background: var(--yellow); }
+  .view-card.ref::before { background: var(--coral); }
+  .view-tag-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .view-type { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: var(--text-muted); }
+  .view-shape { font-size: 10px; padding: 3px 8px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--text-muted); }
+  .view-name { font-family: 'SF Mono', Menlo, monospace; font-size: 16px; color: var(--mint); margin-bottom: 8px; font-weight: 600; }
+  .view-card.dim .view-name { color: var(--violet); }
+  .view-card.helper .view-name { color: var(--yellow); }
+  .view-card.ref .view-name { color: var(--coral); }
+  .view-grain { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+  .view-grain code { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: var(--text); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; }
+  .view-desc { font-size: 13px; color: var(--text-body); line-height: 1.5; }
+
+  /* CONTRACT */
+  .contract { background: linear-gradient(135deg, rgba(84, 240, 163, 0.06), transparent); border: 1px solid var(--mint-border); border-radius: 16px; padding: 28px; }
+  .contract-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .contract-item { padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; }
+  .contract-item-title { font-family: var(--bricolage); font-weight: 700; font-size: 13px; color: var(--mint); margin-bottom: 6px; }
+  .contract-item-detail { font-size: 12px; color: var(--text-body); line-height: 1.5; }
+  .contract-item-detail code { font-family: 'SF Mono', Menlo, monospace; font-size: 10px; color: var(--text); background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 4px; }
+
+  /* SEQUENCE */
+  .timeline { display: flex; flex-direction: column; }
+  .step { display: grid; grid-template-columns: 56px 1fr auto; gap: 20px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border); }
+  .step:last-child { border-bottom: none; }
+  .step-num { font-family: var(--bricolage); font-weight: 800; font-size: 26px; color: var(--mint); width: 56px; text-align: center; }
+  .step-body { display: flex; flex-direction: column; gap: 4px; }
+  .step-title { font-family: var(--bricolage); font-weight: 700; font-size: 16px; color: var(--text); }
+  .step-detail { font-size: 13px; color: var(--text-body); line-height: 1.5; }
+  .step-detail code { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: var(--text); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; }
+  .step-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .step-hours { font-family: var(--bricolage); font-weight: 700; font-size: 13px; color: var(--mint); padding: 4px 10px; background: var(--mint-soft); border-radius: 6px; white-space: nowrap; }
+
+  /* VALIDATION */
+  .validation { background: var(--navy-card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
+  .v-row { padding: 14px 0; border-top: 1px solid var(--border); display: grid; grid-template-columns: 50px 1fr; gap: 16px; }
+  .v-row:first-of-type { border-top: none; padding-top: 0; }
+  .v-num { font-family: var(--bricolage); font-weight: 800; font-size: 14px; color: var(--mint); }
+  .v-name { font-family: var(--bricolage); font-weight: 700; font-size: 14px; color: var(--text); margin-bottom: 4px; }
+  .v-expect { font-size: 12px; color: var(--text-body); line-height: 1.5; }
+  .v-expect strong { color: var(--mint); font-weight: 600; }
+
+  /* RISKS */
+  .risks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .risk { background: var(--navy-card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; border-left: 3px solid var(--coral); }
+  .risk-title { font-family: var(--bricolage); font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+  .risk-mit { font-size: 12px; color: var(--text-body); line-height: 1.5; }
+  .risk-mit strong { color: var(--mint); font-weight: 600; }
+
+  /* DEFERRED */
+  .deferred-list { background: var(--navy-card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
+  .deferred { padding: 12px 0; border-top: 1px solid var(--border); display: flex; gap: 12px; align-items: flex-start; }
+  .deferred:first-of-type { border-top: none; padding-top: 0; }
+  .deferred-when { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; padding: 3px 8px; border-radius: 4px; background: var(--yellow-soft); color: var(--yellow); flex-shrink: 0; margin-top: 2px; min-width: 75px; text-align: center; }
+  .deferred-text { font-size: 13px; color: var(--text-body); line-height: 1.5; }
+
+  /* DONE */
+  .done { margin-top: 56px; padding: 32px; background: linear-gradient(135deg, rgba(84, 240, 163, 0.12), rgba(255, 221, 12, 0.06)); border: 1px solid var(--mint-border); border-radius: 16px; }
+  .done-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: var(--mint); margin-bottom: 12px; }
+  .done-text { font-family: var(--bricolage); font-weight: 700; font-size: 22px; line-height: 1.4; }
+  .done-foot { font-size: 13px; color: var(--text-body); margin-top: 16px; line-height: 1.6; }
+  .done-foot code { font-family: 'SF Mono', Menlo, monospace; font-size: 12px; color: var(--text); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; }
+
+  @media (max-width: 900px) {
+    .stats-row, .arch-flow, .views-grid, .contract-grid, .risks { grid-template-columns: 1fr; }
+    .header { flex-direction: column; align-items: flex-start; }
+    h1 { font-size: 32px; }
+    .arch-arrow { transform: rotate(90deg); }
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+</style>
+</head>
+<body>
+<h2 class="sr-only">BigQuery app-consumer layer build plan: a structured view of the new yh_app_layer dataset, its five views, the contract for consumers, and the 10-step build sequence.</h2>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <div class="eyebrow">BigQuery side · App-agnostic</div>
+      <h1>Build the BQ consumer layer</h1>
+      <div class="subtitle">A clean, normalized data contract in BigQuery itself. Lumen reads it. A future tool reads it. A notebook reads it. Same view, same shape, same promise.</div>
+    </div>
+    <div class="badge-row">
+      <span class="badge">10 steps</span>
+      <span class="badge">~5 hours</span>
+      <span class="badge yellow">No app code</span>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">New dataset</div>
+      <div class="stat-value mint">1</div>
+      <div class="stat-foot">yh_app_layer</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Views to ship</div>
+      <div class="stat-value mint">5</div>
+      <div class="stat-foot">3 fact, 1 dim, 1 helper</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Source tables read</div>
+      <div class="stat-value">5</div>
+      <div class="stat-foot">4 management_dashboard_* + roster</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Validation queries</div>
+      <div class="stat-value yellow">5</div>
+      <div class="stat-foot">Run all before granting access</div>
+    </div>
+  </div>
+
+  <!-- ARCHITECTURE -->
+  <div class="section">
+    <div class="section-title">The shape of the layer</div>
+    <div class="section-sub">Source tables on the left. The app-consumer views in the middle. Any consumer on the right reads only the middle.</div>
+    <div class="arch">
+      <div class="arch-flow">
+        <div class="arch-col">
+          <div class="arch-col-label">Sources (read-only)</div>
+          <div class="arch-item"><span class="name">management_dashboard_fb2</span><span class="desc">Meta daily aggregates</span></div>
+          <div class="arch-item"><span class="name">management_dashboard_fb_ios14</span><span class="desc">Meta iOS14 daily</span></div>
+          <div class="arch-item"><span class="name">management_dashboard_apple</span><span class="desc">Apple Search Ads daily</span></div>
+          <div class="arch-item"><span class="name">management_dashboard_google</span><span class="desc">Google Ads daily</span></div>
+          <div class="arch-item"><span class="name">pre_sales_updated_clients_tracking</span><span class="desc">Sales-side roster</span></div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-col center">
+          <div class="arch-col-label" style="color: var(--mint);">yh_app_layer (new)</div>
+          <div class="arch-item"><span class="name">fact_daily_campaign</span><span class="desc">Unified, normalized, daily</span></div>
+          <div class="arch-item"><span class="name">dim_client</span><span class="desc">Roster + spend recency</span></div>
+          <div class="arch-item"><span class="name">v_unattributed_spend</span><span class="desc">NULL master_account, daily</span></div>
+          <div class="arch-item"><span class="name">v_data_freshness</span><span class="desc">Latest date per platform</span></div>
+          <div class="arch-item"><span class="name">dim_network</span><span class="desc">Display labels reference</span></div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-col">
+          <div class="arch-col-label">Consumers</div>
+          <div class="arch-item"><span class="name">Lumen (Phase 1)</span><span class="desc">Thin renderer, reads views</span></div>
+          <div class="arch-item"><span class="name">Future internal tool</span><span class="desc">Same contract</span></div>
+          <div class="arch-item"><span class="name">Analyst notebook</span><span class="desc">Same contract</span></div>
+          <div class="arch-item"><span class="name">Looker rebuild</span><span class="desc">Same contract</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEWS DETAIL -->
+  <div class="section">
+    <div class="section-title">The five views</div>
+    <div class="section-sub">Three workhorses, one dimension, one static reference. All live in <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 12px; color: var(--mint); background: var(--mint-soft); padding: 2px 6px; border-radius: 4px;">yellowhead-visionbi-rivery.yh_app_layer</code>.</div>
+    <div class="views-grid">
+      <div class="view-card">
+        <div class="view-tag-row"><span class="view-type">Fact view · workhorse</span><span class="view-shape">Daily campaign-level</span></div>
+        <div class="view-name">fact_daily_campaign</div>
+        <div class="view-grain">Grain: <code>(date, master_account_id, campaign_id, network)</code></div>
+        <div class="view-desc">Unified daily fact view across the 4 healthy platforms. Filters NULL master_account at source. Adds <code>client_key</code>, <code>client_slug</code>, normalized <code>network</code> labels. 90% of consumer queries hit this.</div>
+      </div>
+      <div class="view-card dim">
+        <div class="view-tag-row"><span class="view-type">Dimension view</span><span class="view-shape">One row per client</span></div>
+        <div class="view-name">dim_client</div>
+        <div class="view-grain">Grain: <code>client_key</code></div>
+        <div class="view-desc">Active UA roster joined with spend recency. Carries team, account_manager, monthly_budget, dashboard_link from the sales table. Includes computed status: <code>active</code>, <code>paused</code>, or <code>stale</code>.</div>
+      </div>
+      <div class="view-card helper">
+        <div class="view-tag-row"><span class="view-type">Helper view · honesty</span><span class="view-shape">Daily per-network</span></div>
+        <div class="view-name">v_unattributed_spend</div>
+        <div class="view-grain">Grain: <code>(date, network)</code></div>
+        <div class="view-desc">Daily spend where master_account is NULL. Surfaces the Apple unattributed problem so consumers can render an honest "X% unattributed" footnote without doing their own filter math.</div>
+      </div>
+      <div class="view-card helper">
+        <div class="view-tag-row"><span class="view-type">Helper view · trust</span><span class="view-shape">4 rows total</span></div>
+        <div class="view-name">v_data_freshness</div>
+        <div class="view-grain">Grain: <code>network</code></div>
+        <div class="view-desc">Per-platform latest data date. One query, four rows. Lets any consumer build a freshness banner without round-tripping through Rivery telemetry.</div>
+      </div>
+      <div class="view-card ref">
+        <div class="view-tag-row"><span class="view-type">Reference table · static</span><span class="view-shape">4 rows, hand-maintained</span></div>
+        <div class="view-name">dim_network</div>
+        <div class="view-grain">Grain: <code>network</code></div>
+        <div class="view-desc">Static reference for display labels, parent family grouping (Meta + Meta iOS14 → Meta family), brand color, sort order. Hand-edited by us when networks change.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTRACT -->
+  <div class="section">
+    <div class="section-title">What consumers can rely on</div>
+    <div class="section-sub">The promise to anyone reading this layer. Versioned. Stable. App-agnostic.</div>
+    <div class="contract">
+      <div class="contract-grid">
+        <div class="contract-item">
+          <div class="contract-item-title">Schema stability</div>
+          <div class="contract-item-detail">Column names and types do not change without a deprecation period. New columns appended; old ones never silently removed.</div>
+        </div>
+        <div class="contract-item">
+          <div class="contract-item-title">Identifier consistency</div>
+          <div class="contract-item-detail"><code>client_key</code> is always <code>LOWER(TRIM(master_account))</code>. Never <code>master_account_id</code>.</div>
+        </div>
+        <div class="contract-item">
+          <div class="contract-item-title">Network normalization</div>
+          <div class="contract-item-detail">Always one of: Meta, Meta iOS14, Apple Search Ads, Google Ads. No raw upstream labels leak through.</div>
+        </div>
+        <div class="contract-item">
+          <div class="contract-item-title">No NULL identifiers</div>
+          <div class="contract-item-detail">Rows where master_account is NULL are filtered at the view. Unattributed total exposed separately in <code>v_unattributed_spend</code>.</div>
+        </div>
+        <div class="contract-item">
+          <div class="contract-item-title">Always live</div>
+          <div class="contract-item-detail">Views run against source on every query. Freshness lags only the upstream <code>management_dashboard_*</code> refresh (~daily 09:00 UTC).</div>
+        </div>
+        <div class="contract-item">
+          <div class="contract-item-title">Cost baseline</div>
+          <div class="contract-item-detail">Full <code>fact_daily_campaign</code> scan ≈ 110 MB. Date-filtered queries scale linearly. Always include a date filter.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BUILD SEQUENCE -->
+  <div class="section">
+    <div class="section-title">10-step build sequence</div>
+    <div class="section-sub">In dependency order. Each step is independently runnable. Step 6 is the only real surprise risk.</div>
+    <div class="timeline">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <div class="step-title">Create the dataset</div>
+          <div class="step-detail"><code>bq mk --dataset --location=US yellowhead-visionbi-rivery:yh_app_layer</code>. Add a description.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">5 min</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-body">
+          <div class="step-title">Create dim_network</div>
+          <div class="step-detail">Static CREATE TABLE + INSERT for the 4 networks with display labels and brand colors.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">10 min</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-body">
+          <div class="step-title">Create fact_daily_campaign</div>
+          <div class="step-detail">The big one. Run the UNION ALL DDL from the plan. Validate immediately with V1 (row count match against sources).</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">30 min</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <div class="step-body">
+          <div class="step-title">Create v_unattributed_spend</div>
+          <div class="step-detail">UNION ALL of the NULL-master_account spend per platform. Validate with V4 (Apple share between 1% and 20%).</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">15 min</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">05</div>
+        <div class="step-body">
+          <div class="step-title">Create v_data_freshness</div>
+          <div class="step-detail">4 MAX(date) selects unioned. Validate with V5 (all 4 networks within 48h).</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">10 min</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">06</div>
+        <div class="step-body">
+          <div class="step-title">Roster Team-value reality check</div>
+          <div class="step-detail">Before building dim_client, run <code>SELECT DISTINCT Team, COUNT(*) FROM pre_sales_updated_clients_tracking GROUP BY Team</code>. Confirm "UA" spelling. Adjust the WHERE clause in Step 7 if needed.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">15 min</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">07</div>
+        <div class="step-body">
+          <div class="step-title">Create dim_client</div>
+          <div class="step-detail">Roster join with spend recency from fact_daily_campaign. Status logic baked in. Validate with V2 (active count) and V3 (network coverage for 3 known clients).</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">30 min</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">08</div>
+        <div class="step-body">
+          <div class="step-title">Grant access</div>
+          <div class="step-detail">Create <code>lumen-app</code> service account if needed. Grant <code>bigquery.dataViewer</code> on yh_app_layer + <code>bigquery.jobUser</code> on the project.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">30 min</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">09</div>
+        <div class="step-body">
+          <div class="step-title">Write the contract doc</div>
+          <div class="step-detail"><code>docs/data/app_layer_contract.md</code>. Per-view column tables, semantics, edge cases, example consumer queries.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">1 hr</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">10</div>
+        <div class="step-body">
+          <div class="step-title">Monitoring</div>
+          <div class="step-detail">Schedule the 5 validation queries daily. Write results to <code>yh_app_layer.qa_checks</code>. Alert on any failure (BQ Data Transfer scheduler + Cloud Monitoring works).</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">1-2 hrs</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VALIDATION -->
+  <div class="section">
+    <div class="section-title">5 validation queries</div>
+    <div class="section-sub">Run each one after creating the relevant view. All five must pass before granting external access.</div>
+    <div class="validation">
+      <div class="v-row">
+        <div class="v-num">V1</div>
+        <div>
+          <div class="v-name">Row count sanity</div>
+          <div class="v-expect">Sum of <code>master_account IS NOT NULL</code> rows across the 4 source tables == <code>fact_daily_campaign</code> row count. <strong>Expect: exact match.</strong></div>
+        </div>
+      </div>
+      <div class="v-row">
+        <div class="v-num">V2</div>
+        <div>
+          <div class="v-name">Active client count</div>
+          <div class="v-expect"><code>SELECT COUNT(*) FROM dim_client WHERE status = 'active'</code>. <strong>Expect: ~8 (or whatever Step 6 confirmed).</strong></div>
+        </div>
+      </div>
+      <div class="v-row">
+        <div class="v-num">V3</div>
+        <div>
+          <div class="v-name">Network coverage</div>
+          <div class="v-expect">Lookup Smart Sleep Coach, Keno, Stardust Casino in dim_client. <strong>Expect SSC=Meta+Apple, Keno=Meta family, Stardust=Google.</strong></div>
+        </div>
+      </div>
+      <div class="v-row">
+        <div class="v-num">V4</div>
+        <div>
+          <div class="v-name">Apple unattributed share</div>
+          <div class="v-expect">Compute <code>unattributed / (unattributed + attributed)</code> for Apple, last 30 days. <strong>Expect: 0.01 to 0.20.</strong></div>
+        </div>
+      </div>
+      <div class="v-row">
+        <div class="v-num">V5</div>
+        <div>
+          <div class="v-name">Freshness sanity</div>
+          <div class="v-expect"><code>SELECT * FROM v_data_freshness</code>. <strong>Expect: all 4 networks have <code>latest_data_date</code> within last 48 hours.</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RISKS -->
+  <div class="section">
+    <div class="section-title">Failure modes</div>
+    <div class="section-sub">What can go wrong, in decreasing likelihood. All three have one-file recoveries.</div>
+    <div class="risks">
+      <div class="risk">
+        <div class="risk-title">Upstream column rename</div>
+        <div class="risk-mit">A column in <code>management_dashboard_fb2</code> or similar gets renamed. Views fail loudly with a clear BQ error. <strong>Recovery:</strong> edit the view DDL, redeploy. One-file change.</div>
+      </div>
+      <div class="risk">
+        <div class="risk-title">Upstream table dropped</div>
+        <div class="risk-mit">Same loud failure. If replaced by <code>dwh_management_dashboard_new</code>, rewrite is one UNION branch per platform. <strong>One-day change at most.</strong></div>
+      </div>
+      <div class="risk">
+        <div class="risk-title">Roster Team values drift</div>
+        <div class="risk-mit">New variants of "UA" appear in the roster and dim_client silently drops them. <strong>Detection:</strong> V2 returns a number much lower than expected. Daily monitor catches it within 24h.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEFERRED -->
+  <div class="section">
+    <div class="section-title">Not in this version of the layer</div>
+    <div class="section-sub">Future additions. None block Phase 1.</div>
+    <div class="deferred-list">
+      <div class="deferred"><div class="deferred-when">v2</div><div class="deferred-text"><strong>fact_daily_campaign_singular</strong> for Superbloom Games clients (Venue, aTable, Highrise, Obsidian Knight, Kingdom Maker, Mundo Slots) via yh_singular + pw_yh_cohort_*.</div></div>
+      <div class="deferred"><div class="deferred-when">v2</div><div class="deferred-text"><strong>fact_daily_cohort</strong> for cohort revenue attribution (D0/D7/D14/D30/D90) once the schema is stable across more than one client.</div></div>
+      <div class="deferred"><div class="deferred-when">v2</div><div class="deferred-text"><strong>fact_daily_creative</strong> for adset / ad / creative grain. Requires sourcing from per-platform <code>dwh_*</code> and <code>uni_*</code> tables.</div></div>
+      <div class="deferred"><div class="deferred-when">v3</div><div class="deferred-text"><strong>fact_daily_geo, fact_daily_placement</strong> for country and placement breakdowns. Available in <code>uni_*</code>.</div></div>
+      <div class="deferred"><div class="deferred-when">v3</div><div class="deferred-text"><strong>fact_anomaly</strong> exposing <code>ml_superbloom_*</code> and <code>metalstorm_*</code> outputs once we understand the schema.</div></div>
+      <div class="deferred"><div class="deferred-when">v4</div><div class="deferred-text"><strong>Organic / Creative / CSM data.</strong> Not in the warehouse yet, so cannot be in the app layer.</div></div>
+    </div>
+  </div>
+
+  <!-- DONE BANNER -->
+  <div class="done">
+    <div class="done-eyebrow">Done means</div>
+    <div class="done-text">The dataset yh_app_layer exists, contains the 5 views, all 5 validation queries pass, the lumen-app service account has read access, and the contract is documented.</div>
+    <div class="done-foot">After that, every consumer reads the app layer and never touches <code>yellowhead_prod</code> directly. The Lumen TypeScript work that follows is trivial: query the views, render the result. No union logic, no roster join, no NULL filtering, no normalization. All of that lives in BigQuery, once, where any tool can use it.</div>
+  </div>
+
+</div>
+</body>
+</html>

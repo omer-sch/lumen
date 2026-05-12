@@ -87,6 +87,24 @@ test.describe("ask page — query → answer", () => {
     ).toBeVisible();
   });
 
+  test("the answer card credits the building agent in a byline", async ({
+    page,
+  }) => {
+    await page.goto("/queries");
+
+    const input = page.getByRole("textbox", { name: /ask lumen/i });
+    await input.fill("Spend trend over the last 30 days");
+    await page.getByRole("button", { name: /^ask$/i }).click();
+
+    // Every router answer is `answeredBy: "aria"` today — the byline
+    // primitive is the user-visible attribution and must render before the
+    // narration on every answer.
+    const byline = page.locator('[data-testid="agent-byline-aria"]');
+    await expect(byline).toBeVisible({ timeout: 10_000 });
+    await expect(byline.getByText(/built by/i)).toBeVisible();
+    await expect(byline.getByText("Aria", { exact: true })).toBeVisible();
+  });
+
   test("the browser never calls Anthropic during a query", async ({ page }) => {
     const offenders: string[] = [];
     page.on("request", (req) => {

@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { LivePulse } from "@/components/ui/LivePulse";
-import type { KpiId, TrendPoint } from "@/lib/mock/dashboard";
+import type { KpiId, TrendPoint } from "@/types/dashboard";
 
 type TrendChartProps = {
   trend: TrendPoint[];

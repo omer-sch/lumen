@@ -30,6 +30,8 @@ export default defineConfig({
         "**/auth.setup.ts",
         "**/welcome.spec.ts",
         "**/dashboard.spec.ts",
+        "**/bq-dashboard.spec.ts",
+        "**/agents-aria-playground.spec.ts",
       ],
     },
 
@@ -50,12 +52,40 @@ export default defineConfig({
         storageState: STORAGE_STATE,
       },
       dependencies: ["auth-setup"],
-      testMatch: ["**/welcome.spec.ts", "**/dashboard.spec.ts"],
+      testMatch: [
+        "**/welcome.spec.ts",
+        "**/dashboard.spec.ts",
+        "**/bq-dashboard.spec.ts",
+        "**/agents-aria-playground.spec.ts",
+      ],
+    },
+
+    // Preview-mode UI suite — runs the BQ-backed dashboard spec without
+    // Clerk. Engaged by setting PLAYWRIGHT_PREVIEW=1 and LUMEN_PREVIEW=1,
+    // then targeting --project=chromium-preview. This sidesteps auth-setup
+    // entirely so it's safe to use against a dev server that has no test
+    // user provisioned. When PLAYWRIGHT_PREVIEW is unset the testMatch is
+    // empty, so `npm run test:e2e` without the flag silently no-ops this
+    // project rather than tripping over a missing webServer setup.
+    {
+      name: "chromium-preview",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch:
+        process.env.PLAYWRIGHT_PREVIEW === "1"
+          ? [
+              "**/bq-dashboard.spec.ts",
+              "**/agents-aria-playground.spec.ts",
+            ]
+          : [],
     },
   ],
   // Local: reuse a running dev server, spin one up if there isn't one.
   // CI: always start a production server against the prebuilt .next/ output.
   // Tests run against the same artifact Vercel ships, not turbopack/dev.
+  //
+  // PLAYWRIGHT_PREVIEW=1 (CLI env) → spin the dev server with LUMEN_PREVIEW=1
+  // so auth is short-circuited and the BQ-backed UI tests can render
+  // /dashboard without a Clerk session. Outside CI only.
   webServer: {
     command: process.env.CI
       ? `npm run start -- --port ${PORT}`
@@ -63,5 +93,13 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env:
+      process.env.PLAYWRIGHT_PREVIEW === "1"
+        ? {
+            ...(process.env as Record<string, string>),
+            LUMEN_PREVIEW: "1",
+            PORT,
+          }
+        : undefined,
   },
 });

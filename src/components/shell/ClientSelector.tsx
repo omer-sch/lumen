@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Users } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CLIENTS } from "@/lib/mock/clients";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
+
+const LIMITED_COVERAGE_LABEL: Record<string, string> = {
+  playw3: "Limited: Meta & Twitter only",
+};
 
 export function ClientSelector() {
   const { client, setClient } = useGlobalFilters();
@@ -28,7 +32,7 @@ export function ClientSelector() {
   }, [open]);
 
   const active = CLIENTS.find((c) => c.slug === client) ?? CLIENTS[0];
-  const isAll = active.slug === "all";
+  const coverageWarning = LIMITED_COVERAGE_LABEL[active.slug];
 
   return (
     <div ref={ref} className="relative">
@@ -39,21 +43,16 @@ export function ClientSelector() {
         aria-haspopup="listbox"
         aria-expanded={open}
         className={cn(
-          "inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 font-body text-xs font-semibold uppercase tracking-wider transition-[transform,background-color,color,border-color] duration-280 ease-out-quart hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
-          isAll
-            ? "text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)]"
-            : "text-ua",
+          "inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 font-body text-xs font-semibold uppercase tracking-wider text-ua transition-[transform,background-color,color,border-color] duration-280 ease-out-quart hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
         )}
         style={{
-          background: isAll ? "transparent" : "var(--color-ua-dim)",
-          border: isAll
-            ? "1px solid var(--border-subtle)"
-            : "1px solid color-mix(in oklab, var(--color-ua) 35%, transparent)",
+          background: "var(--color-ua-dim)",
+          border:
+            "1px solid color-mix(in oklab, var(--color-ua) 35%, transparent)",
         }}
       >
         <Users className="h-3.5 w-3.5" strokeWidth={2} />
-        <span className="hidden sm:inline">{active.name}</span>
-        <span className="sm:hidden">{isAll ? "Clients" : active.name}</span>
+        <span>{active.name}</span>
         <ChevronDown
           className={cn(
             "h-3 w-3 transition-transform duration-280 ease-out-quart",
@@ -62,6 +61,22 @@ export function ClientSelector() {
           strokeWidth={2.25}
         />
       </button>
+
+      {coverageWarning && (
+        <span
+          data-testid="client-coverage-warning"
+          className="ml-2 hidden items-center gap-1 rounded-full px-2 py-0.5 font-body text-[10px] font-semibold uppercase tracking-wider md:inline-flex"
+          style={{
+            background: "color-mix(in oklab, var(--color-ua) 14%, transparent)",
+            color: "var(--color-ua)",
+            border:
+              "1px solid color-mix(in oklab, var(--color-ua) 30%, transparent)",
+          }}
+        >
+          <AlertCircle className="h-3 w-3" strokeWidth={2.25} />
+          {coverageWarning}
+        </span>
+      )}
 
       {open && (
         <ul
@@ -96,11 +111,9 @@ export function ClientSelector() {
                     <span className="font-body text-sm font-semibold leading-none">
                       {c.name}
                     </span>
-                    {c.slug !== "all" && (
-                      <span className="mt-1 text-[10px] uppercase tracking-wider text-[color:var(--text-muted)]">
-                        {c.vertical}
-                      </span>
-                    )}
+                    <span className="mt-1 text-[10px] uppercase tracking-wider text-[color:var(--text-muted)]">
+                      {c.vertical}
+                    </span>
                   </div>
                   {selected && <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />}
                 </button>

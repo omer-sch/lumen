@@ -66,15 +66,64 @@ export async function listFeedbackForAgent(
   });
 }
 
+/** Max length of the free-text `note` field. The UI textarea allows
+ *  far less than this; the cap exists so a hostile API caller can't
+ *  flood the table with multi-MB rows. Mirrored at the DB level by
+ *  migration 0003. */
+export const MAX_FEEDBACK_TEXT_LENGTH = 2000;
+
+export class FeedbackValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FeedbackValidationError";
+  }
+}
+
+export class FeedbackForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FeedbackForbiddenError";
+  }
+}
+
 /**
  * Persist a feedback save from the panel. Maps the UI's combined-save
  * shape onto an agent_feedback row.
+ *
+ * Verifies the supplied `runId` actually belongs to `agentId` before
+ * inserting — without this check, an authenticated user could write
+ * feedback against any other user's run id (the FK only enforces "the
+ * run exists"). The check runs through the service-role client, which
+ * is fine because we're only reading the agent_id column.
  */
 export async function addFeedback(
   incoming: IncomingFeedback,
   userId: string,
+  agentId: AgentId,
 ): Promise<void> {
+  if (typeof incoming.note !== "string") {
+    throw new FeedbackValidationError("note must be a string");
+  }
+  if (incoming.note.length > MAX_FEEDBACK_TEXT_LENGTH) {
+    throw new FeedbackValidationError(
+      `note exceeds ${MAX_FEEDBACK_TEXT_LENGTH} chars`,
+    );
+  }
+
   const sb = supabaseAdmin();
+
+  const { data: runRow, error: runErr } = await sb
+    .from("agent_runs")
+    .select("agent_id")
+    .eq("id", incoming.runId)
+    .maybeSingle();
+
+  if (runErr) throw new Error(`[db/agent-feedback] verify run: ${runErr.message}`);
+  if (!runRow) throw new FeedbackForbiddenError("run not found");
+  if (runRow.agent_id !== agentId) {
+    throw new FeedbackForbiddenError("run does not belong to agent");
+  }
+
   const kind = thumbsToKind(incoming.thumbs, incoming.note);
 
   const { error } = await sb.from("agent_feedback").insert({

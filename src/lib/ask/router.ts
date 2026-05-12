@@ -121,6 +121,7 @@ function kpiAnswer(question: string, metric: Metric, windowDays: number): Answer
       kind: "line",
       reason: `Want to see how ${labelMetric[metric]} moved across the window?`,
     },
+    answeredBy: "aria",
     config,
   };
 }
@@ -166,6 +167,7 @@ function lineAnswer(question: string, metric: Metric, windowDays: number, channe
       kind: "kpi",
       reason: `Or just the headline number for the window.`,
     },
+    answeredBy: "aria",
     config,
   };
 }
@@ -205,6 +207,7 @@ function barAnswer(question: string, metric: Metric, dimension: "channel", windo
       kind: "table",
       reason: `Want the exact numbers in a sortable table?`,
     },
+    answeredBy: "aria",
     config,
   };
 }
@@ -268,6 +271,7 @@ function tableAnswer(question: string, metric: Metric, windowDays: number): Answ
       kind: "bar",
       reason: `Or a bar chart of just the ${labelMetric[metric]} column?`,
     },
+    answeredBy: "aria",
     config,
   };
 }

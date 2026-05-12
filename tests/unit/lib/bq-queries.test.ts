@@ -1,0 +1,270 @@
+// Layer 2 (backend lib unit). File under test: src/lib/bq-queries.ts. Priority: P0.
+// The generated SQL is the contract between Lumen and BigQuery. These tests
+// snapshot the shape of each query and verify the date guard fires before any
+// query is dispatched. We do NOT execute SQL against BQ.
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Pass-through unstable_cache: invokes the inner function directly so we can
+// inspect the captured query without dealing with Next's cache layer.
+vi.mock("next/cache", () => ({
+  unstable_cache: <T extends (...args: unknown[]) => unknown>(fn: T) => fn,
+}));
+
+const queryFn = vi.fn();
+
+vi.mock("@google-cloud/bigquery", () => {
+  class BigQuery {
+    query(opts: unknown) {
+      return queryFn(opts);
+    }
+  }
+  return { BigQuery };
+});
+
+beforeEach(() => {
+  queryFn.mockReset();
+  vi.stubEnv("BQ_PROJECT", "test-project");
+  vi.stubEnv("BQ_DATASET", "test_dataset");
+  vi.stubEnv("ALLOWED_CLIENTS", "globalcomix,playw3,100play");
+  vi.stubEnv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe("bq-queries: date guard", () => {
+  it.each([
+    "not-a-date",
+    "2026/01/01",
+    "2026-1-1",
+    "20260101",
+    "'; DROP TABLE--",
+    "",
+  ])("rejects %s before any SQL is sent", async (badDate) => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryDashboardKPIs, InvalidDateError } = await import(
+      "@/lib/bq-queries"
+    );
+    await expect(
+      queryDashboardKPIs("globalcomix", badDate, "2026-05-12"),
+    ).rejects.toThrow(InvalidDateError);
+    expect(queryFn).not.toHaveBeenCalled();
+  });
+
+  it("InvalidDateError carries the bad value in the message", async () => {
+    const { queryTrend, InvalidDateError } = await import("@/lib/bq-queries");
+    try {
+      await queryTrend("globalcomix", "bogus", "2026-05-12");
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(InvalidDateError);
+      expect((err as Error).message).toContain("bogus");
+    }
+  });
+});
+
+describe("bq-queries: client allowlist", () => {
+  it("rejects an unknown client before any SQL is sent", async () => {
+    const { queryDashboardKPIs } = await import("@/lib/bq-queries");
+    await expect(
+      queryDashboardKPIs("evil_client", "2026-05-01", "2026-05-12"),
+    ).rejects.toThrow(/not permitted|forbidden/i);
+    expect(queryFn).not.toHaveBeenCalled();
+  });
+
+  it("rejects 100play on the agent-layer path (no agent view)", async () => {
+    const { queryDashboardKPIs } = await import("@/lib/bq-queries");
+    await expect(
+      queryDashboardKPIs("100play", "2026-05-01", "2026-05-12"),
+    ).rejects.toThrow();
+    expect(queryFn).not.toHaveBeenCalled();
+  });
+});
+
+describe("bq-queries: SQL shape (queryDashboardKPIs)", () => {
+  it("builds the GlobalComix KPI query with cost_usd, rev_gross_d7_usd, and no dedupe", async () => {
+    queryFn.mockResolvedValue([
+      [{ spend: 1, installs: 2, cpi: 0.5, roas: 1.1 }],
+    ]);
+    const { queryDashboardKPIs } = await import("@/lib/bq-queries");
+    await queryDashboardKPIs("globalcomix", "2026-05-01", "2026-05-12");
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    const opts = queryFn.mock.calls[0][0] as { query: string; params: object };
+    expect(opts.query).toContain("SUM(cost_usd)");
+    expect(opts.query).toContain("SUM(rev_gross_d7_usd)");
+    expect(opts.query).toContain("`test-project.test_dataset.v_agent_globalcomix`");
+    expect(opts.query).not.toContain("breakdown_type");
+    expect(opts.params).toEqual({ from: "2026-05-01", to: "2026-05-12" });
+  });
+
+  it("builds the Playw3 KPI query with spend_usd, revenue_usd, and the No Breakdown dedupe", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryDashboardKPIs } = await import("@/lib/bq-queries");
+    await queryDashboardKPIs("playw3", "2026-05-01", "2026-05-12");
+    const opts = queryFn.mock.calls[0][0] as { query: string };
+    expect(opts.query).toContain("SUM(spend_usd)");
+    expect(opts.query).toContain("SUM(revenue_usd)");
+    expect(opts.query).toContain("`test-project.test_dataset.v_playw3_agent`");
+    expect(opts.query).toContain("breakdown_type = 'No Breakdown'");
+  });
+
+  it("uses parameterized @from / @to placeholders, never inline strings", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryDashboardKPIs } = await import("@/lib/bq-queries");
+    await queryDashboardKPIs("globalcomix", "2026-05-01", "2026-05-12");
+    const opts = queryFn.mock.calls[0][0] as { query: string };
+    expect(opts.query).toContain("@from");
+    expect(opts.query).toContain("@to");
+    expect(opts.query).not.toContain("'2026-05-01'");
+    expect(opts.query).not.toContain('"2026-05-12"');
+  });
+});
+
+describe("bq-queries: numeric coercion (queryDashboardKPIs)", () => {
+  it("treats nullish numerics as 0 for totals; preserves null on deltas", async () => {
+    queryFn.mockResolvedValue([
+      [
+        {
+          spend: null,
+          installs: undefined,
+          cpi: NaN,
+          roas: "1.42",
+          spend_delta: null,
+          installs_delta: 0.05,
+          cpi_delta: NaN,
+          roas_delta: -0.1,
+        },
+      ],
+    ]);
+    const { queryDashboardKPIs } = await import("@/lib/bq-queries");
+    const result = await queryDashboardKPIs(
+      "globalcomix",
+      "2026-05-01",
+      "2026-05-12",
+    );
+    expect(result.spend).toBe(0);
+    expect(result.installs).toBe(0);
+    expect(result.cpi).toBe(0);
+    expect(result.roas).toBeCloseTo(1.42);
+    expect(result.spendDelta).toBeNull();
+    expect(result.installsDelta).toBeCloseTo(0.05);
+    expect(result.cpiDelta).toBeNull();
+    expect(result.roasDelta).toBeCloseTo(-0.1);
+  });
+
+  it("coerces BigQueryInt-style objects via toNumber()", async () => {
+    queryFn.mockResolvedValue([
+      [
+        {
+          spend: { toNumber: () => 12345 },
+          installs: { value: "67" },
+          cpi: 1.23,
+          roas: 1.5,
+        },
+      ],
+    ]);
+    const { queryDashboardKPIs } = await import("@/lib/bq-queries");
+    const result = await queryDashboardKPIs(
+      "globalcomix",
+      "2026-05-01",
+      "2026-05-12",
+    );
+    expect(result.spend).toBe(12345);
+    expect(result.installs).toBe(67);
+  });
+});
+
+describe("bq-queries: queryTrend / queryChannelMix / queryCampaigns", () => {
+  it("queryTrend orders ascending and groups by date", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryTrend } = await import("@/lib/bq-queries");
+    await queryTrend("globalcomix", "2026-05-01", "2026-05-12");
+    const opts = queryFn.mock.calls[0][0] as { query: string };
+    expect(opts.query).toContain("GROUP BY 1");
+    expect(opts.query).toMatch(/ORDER BY 1 ASC/);
+  });
+
+  it("queryChannelMix joins against a totals CTE and orders by spend desc", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryChannelMix } = await import("@/lib/bq-queries");
+    await queryChannelMix("globalcomix", "2026-05-01", "2026-05-12");
+    const opts = queryFn.mock.calls[0][0] as { query: string };
+    expect(opts.query).toContain("WITH totals AS");
+    expect(opts.query).toContain("ORDER BY spend DESC");
+  });
+
+  it("queryChannelMix normalizes network labels: facebook -> Meta, googleads -> Google", async () => {
+    queryFn.mockResolvedValue([
+      [
+        { network: "facebook", spend: 10, share: 0.5 },
+        { network: "googleads", spend: 5, share: 0.25 },
+        { network: "x", spend: 5, share: 0.25 },
+      ],
+    ]);
+    const { queryChannelMix } = await import("@/lib/bq-queries");
+    const out = await queryChannelMix(
+      "globalcomix",
+      "2026-05-01",
+      "2026-05-12",
+    );
+    expect(out.map((r) => r.network)).toEqual(["Meta", "Google", "Twitter"]);
+  });
+
+  it("queryCampaigns caps at 100 rows and orders by current-period spend desc", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryCampaigns } = await import("@/lib/bq-queries");
+    await queryCampaigns("globalcomix", "2026-05-01", "2026-05-12");
+    const opts = queryFn.mock.calls[0][0] as { query: string };
+    expect(opts.query).toContain("LIMIT 100");
+    expect(opts.query).toContain("ORDER BY c.spend DESC");
+  });
+});
+
+describe("bq-queries: queryFreshness", () => {
+  it("queries the rivery_activity_anlytics view (note: typo is upstream)", async () => {
+    queryFn.mockResolvedValue([[{ last_updated: { value: "2026-05-11" } }]]);
+    const { queryFreshness } = await import("@/lib/bq-queries");
+    await queryFreshness();
+    const opts = queryFn.mock.calls[0][0] as { query: string };
+    expect(opts.query).toContain("rivery_activity_anlytics");
+    expect(opts.query).toContain("v_rivery_activity_check");
+  });
+
+  it("returns hoursAgo: -1 when BQ throws (graceful degrade)", async () => {
+    queryFn.mockRejectedValue(new Error("BQ permission denied for table xyz"));
+    const { queryFreshness } = await import("@/lib/bq-queries");
+    const out = await queryFreshness();
+    expect(out.hoursAgo).toBe(-1);
+    expect(typeof out.lastUpdated).toBe("string");
+  });
+});
+
+describe("bq-queries: toBounds coercion", () => {
+  it("passes through string YYYY-MM-DD values", async () => {
+    const { toBounds } = await import("@/lib/bq-queries");
+    expect(
+      toBounds({ earliest: "2024-01-01", latest: "2026-05-12" }),
+    ).toEqual({ earliest: "2024-01-01", latest: "2026-05-12" });
+  });
+
+  it("unwraps BQ DATE { value: 'YYYY-MM-DD' } shape", async () => {
+    const { toBounds } = await import("@/lib/bq-queries");
+    expect(
+      toBounds({
+        earliest: { value: "2024-01-01" },
+        latest: { value: "2026-05-12" },
+      }),
+    ).toEqual({ earliest: "2024-01-01", latest: "2026-05-12" });
+  });
+
+  it("returns null for missing / wrong-shape values", async () => {
+    const { toBounds } = await import("@/lib/bq-queries");
+    expect(toBounds(undefined)).toEqual({ earliest: null, latest: null });
+    expect(toBounds({})).toEqual({ earliest: null, latest: null });
+    expect(toBounds({ earliest: 123, latest: true })).toEqual({
+      earliest: null,
+      latest: null,
+    });
+  });
+});

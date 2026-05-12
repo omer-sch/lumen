@@ -11,9 +11,11 @@ export interface GlobalFilters {
   from: Date;
   /** Inclusive end of the active window (UTC midnight, the "today" anchor). */
   to: Date;
-  /** Client slug, or "all" when no specific client is selected. */
+  /** Client slug — always a specific live BQ client. */
   client: string;
 }
+
+const DEFAULT_CLIENT = "globalcomix";
 
 export const RANGE_DAYS: Record<Exclude<DateRangePreset, "custom">, number> = {
   "7d": 7,
@@ -22,11 +24,10 @@ export const RANGE_DAYS: Record<Exclude<DateRangePreset, "custom">, number> = {
   "90d": 90,
 };
 
-/** Pinned "today" so the mock data lines up with the seeded dataset. When
- *  Lumen ships against a live DB this becomes `new Date()`. */
-const TODAY_ISO = "2026-04-30";
-
-const todayUTC = () => new Date(`${TODAY_ISO}T00:00:00Z`);
+const todayUTC = () => {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+};
 
 const subDays = (d: Date, n: number) => {
   const out = new Date(d);
@@ -84,7 +85,7 @@ export function useGlobalFilters() {
 
   const filters: GlobalFilters = useMemo(() => {
     const range: DateRangePreset = isPreset(rangeParam) ? rangeParam : "30d";
-    const client = clientParam ?? "all";
+    const client = clientParam ?? DEFAULT_CLIENT;
     const { from, to } = resolveRange(range, fromParam, toParam);
     return { range, from, to, client };
   }, [rangeParam, fromParam, toParam, clientParam]);
@@ -131,7 +132,7 @@ export function useGlobalFilters() {
   const setClient = useCallback(
     (client: string) => {
       replaceWith((sp) => {
-        if (!client || client === "all") sp.delete("client");
+        if (!client || client === DEFAULT_CLIENT) sp.delete("client");
         else sp.set("client", client);
       });
     },

@@ -1,3 +1,5 @@
+import type { AgentId } from "@/lib/agents/identity";
+
 export type FeedSeverity = "highlight" | "spike" | "drop" | "info";
 
 export type FeedItem = {
@@ -8,6 +10,8 @@ export type FeedItem = {
   metric: string;
   delta: string;
   timeAgo: string;
+  /** Which agent produced this signal — drives the byline on the card. */
+  agentId: AgentId;
   /** 14-day primary-metric trace shown in the drill-in chart. */
   chart: { date: string; value: number }[];
   /** Campaigns the AI tied to this signal — surfaced in the drill-in. */
@@ -43,6 +47,7 @@ export const MOCK_FEED: FeedItem[] = [
     metric: "ROAS D7",
     delta: "+5.7%",
     timeAgo: "12m ago",
+    agentId: "max",
     chart: series(1.34, "flat-then-up"),
     campaigns: [
       { name: "Meta_Promo_Q2",     channel: "Meta",   delta: "+18%" },
@@ -59,6 +64,7 @@ export const MOCK_FEED: FeedItem[] = [
     metric: "Installs",
     delta: "+34%",
     timeAgo: "1h ago",
+    agentId: "max",
     chart: series(420, "rising"),
     campaigns: [
       { name: "TT_SparkAds_Beauty", channel: "TikTok", delta: "+41%" },
@@ -74,6 +80,7 @@ export const MOCK_FEED: FeedItem[] = [
     metric: "CPI",
     delta: "+11%",
     timeAgo: "3h ago",
+    agentId: "max",
     chart: series(3.95, "rising"),
     campaigns: [
       { name: "G_UAC_Search",  channel: "Google", delta: "+14%" },
@@ -89,6 +96,7 @@ export const MOCK_FEED: FeedItem[] = [
     metric: "Conversion rate",
     delta: "+114%",
     timeAgo: "5h ago",
+    agentId: "max",
     chart: series(0.046, "rising"),
     campaigns: [
       { name: "Meta_LookalikeUS", channel: "Meta", delta: "+121%" },

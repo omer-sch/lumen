@@ -1,3 +1,5 @@
+import type { AgentId } from "@/lib/agents/identity";
+
 /** Section IDs are stable so a saved report keeps the right structure even
  *  if the user rearranges section labels. */
 export type SectionId =
@@ -45,11 +47,15 @@ export type Report = {
   updatedAt: number;
   /** Free-text prompt the user gave when generating. */
   prompt: string;
-  /** "UA weekly summary for Lumi Runner" — derived from the prompt + filter. */
+  /** "UA weekly summary for GlobalComix" — derived from the prompt + filter. */
   title: string;
   /** Period the report covers, e.g. "Apr 1 – Apr 30, 2026". */
   period: string;
-  /** Display label for the client; "All clients" when global. */
+  /** Display label for the active client (e.g. "GlobalComix"). */
   clientLabel: string;
+  /** Which agent drafted the report — drives the byline under the title.
+   *  Nova is the report writer; legacy reports persisted before this field
+   *  existed default to her in the UI. */
+  authoredBy?: AgentId;
   sections: ReportSection[];
 };

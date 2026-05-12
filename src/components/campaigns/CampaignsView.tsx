@@ -42,7 +42,7 @@ function CampaignsInner() {
             }}
           >
             <LivePulse accent="mint" size={8} />
-            UA · {c.slug === "all" ? "All clients" : c.name} · last {days} days
+            UA · {c.name} · last {days} days
           </span>
           <h2 className="font-display text-2xl font-extrabold leading-tight tracking-tight text-cloud-white sm:text-3xl">
             Campaigns

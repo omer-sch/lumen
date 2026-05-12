@@ -4,16 +4,20 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "prebuild": "node ./scripts/check-prod-env.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:unit:cov": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test": "npm run test:unit && npm run test:e2e"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.2.8",
     "@clerk/themes": "^2.4.57",
-    "@fal-ai/client": "^1.10.1",
     "@google-cloud/bigquery": "^8.3.0",
     "@sentry/nextjs": "^10.51.0",
     "@supabase/supabase-js": "^2.105.4",
@@ -30,14 +34,20 @@
   "devDependencies": {
     "@clerk/testing": "^2.0.24",
     "@playwright/test": "^1.59.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.6",
     "autoprefixer": "^10.5.0",
     "eslint": "^9",
     "eslint-config-next": "^15.5.15",
+    "jsdom": "^29.1.1",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.6"
   }
 }

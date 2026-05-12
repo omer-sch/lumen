@@ -1,4 +1,4 @@
-import type { Channel, KpiId } from "@/lib/mock/dashboard";
+import type { Channel, KpiId } from "@/types/dashboard";
 
 /**
  * The AI Dashboard tile pool. Each tile is a small "the AI noticed this"

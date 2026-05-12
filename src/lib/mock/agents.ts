@@ -19,7 +19,7 @@ export type ImageOutput = {
   palette: { from: string; to: string };
   /** One-line description of what the agent built. */
   composition: string;
-  /** Real fal.ai URL. Absent on mock/legacy runs. */
+  /** Real Hugging Face FLUX.1-schnell render URL. Absent on mock/legacy runs. */
   imageUrl?: string;
 };
 
@@ -74,6 +74,22 @@ export type AgentLiveRun = {
   step: string;
 };
 
+/** One tool the agent leans on, surfaced in the toolkit panel as a pill. */
+export type AgentTool = {
+  /** Human-readable name, e.g. "BigQuery", "Virality predictor". */
+  name: string;
+  /** Lucide icon name resolved by AgentToolkit's icon map. */
+  icon: string;
+};
+
+/** Toolkit copy + tool pills for the per-agent workspace page. */
+export type AgentToolkit = {
+  /** One-paragraph plain-language description of what the agent does. */
+  sentence: string;
+  /** Connected tools / services rendered as pills under the paragraph. */
+  tools: AgentTool[];
+};
+
 export type Agent = {
   id: string;
   /** Friendly first name — used as the headline on the card. */
@@ -99,6 +115,72 @@ export type Agent = {
   liveRun?: AgentLiveRun;
   /** When true, the agent is paused — schedule is suspended until resumed. */
   paused?: boolean;
+  /** Static placeholder for the playground stats line. */
+  costThisWeek: string;
+  /** Voice-of-agent speech bubble copy. `**token**` substring gets the yellow accent. */
+  greeting: string;
+  /** Toolkit panel copy + tool pills. */
+  toolkit: AgentToolkit;
+};
+
+/**
+ * Static per-agent playground config — greeting, weekly cost placeholder,
+ * and toolkit. These fields are required on `Agent` but don't live in the
+ * database yet; both the mock and the Postgres loader pull them from here
+ * so the shape stays consistent.
+ *
+ * `**token**` substrings inside `greeting` get the yellow accent in the
+ * speech bubble; only the key number should be marked.
+ */
+export const AGENT_PLAYGROUND: Record<
+  "aria" | "max" | "nova",
+  { costThisWeek: string; greeting: string; toolkit: AgentToolkit }
+> = {
+  aria: {
+    costThisWeek: "$1.40",
+    greeting:
+      "Today's hero is ready. Virality predictor scored it **87**, that's people-will-love-this territory. Want to ship it, or should I try another angle?",
+    toolkit: {
+      sentence:
+        "I check the daily Lumen feed at 10:00, write a hero prompt from your latest memory notes, send it through Hugging Face's FLUX.1-schnell pipeline, score it with the virality predictor, then queue the best result for your review.",
+      tools: [
+        { name: "FLUX.1 (Hugging Face)", icon: "Sparkles" },
+        { name: "Virality predictor", icon: "TrendingUp" },
+        { name: "Memory", icon: "Brain" },
+        { name: "Lumen feed", icon: "Rss" },
+      ],
+    },
+  },
+  max: {
+    costThisWeek: "$0.28",
+    greeting:
+      "Hey Omer. I scanned BigQuery at 08:00 and found **3** things worth your attention this morning. The biggest one is iOS CPI on Meta. Want me to walk you through it?",
+    toolkit: {
+      sentence:
+        "I scan BigQuery every morning at 08:00 across all UA campaigns you run, compare today against the last 7 days, suppress noise you've thumbsed-down before, and send anything that survives to Feed and your notifications.",
+      tools: [
+        { name: "BigQuery", icon: "Database" },
+        { name: "Memory", icon: "Brain" },
+        { name: "Feed", icon: "Rss" },
+        { name: "Notifications", icon: "Bell" },
+      ],
+    },
+  },
+  nova: {
+    costThisWeek: "$0.62",
+    greeting:
+      "Your weekly UA summary is **80%** drafted. I led with ROAS this week since that was the big mover. Want to review, or have me try a different angle?",
+    toolkit: {
+      sentence:
+        "Every Friday at 09:00 I pull the week's UA numbers, pick the metric that moved most, draft an executive summary in your voice, and assemble the full weekly report with charts and a recommendation.",
+      tools: [
+        { name: "BigQuery", icon: "Database" },
+        { name: "Reports", icon: "FileText" },
+        { name: "Memory", icon: "Brain" },
+        { name: "Voice", icon: "MessageCircle" },
+      ],
+    },
+  },
 };
 
 export const AGENTS: Agent[] = [
@@ -114,6 +196,9 @@ export const AGENTS: Agent[] = [
     keyMetric: { label: "Last virality", value: "81" },
     lastRun: "Running now · today 10:00am",
     liveRun: { progress: 62, step: "Rendering composition · pass 2 of 3" },
+    costThisWeek: AGENT_PLAYGROUND.aria.costThisWeek,
+    greeting: AGENT_PLAYGROUND.aria.greeting,
+    toolkit: AGENT_PLAYGROUND.aria.toolkit,
     memory: [
       {
         id: "aria-mem-1",
@@ -193,6 +278,9 @@ export const AGENTS: Agent[] = [
     totalRuns: 89,
     keyMetric: { label: "Found today", value: "3" },
     lastRun: "Completed · today 08:04am · sent to Feed",
+    costThisWeek: AGENT_PLAYGROUND.max.costThisWeek,
+    greeting: AGENT_PLAYGROUND.max.greeting,
+    toolkit: AGENT_PLAYGROUND.max.toolkit,
     memory: [
       {
         id: "max-mem-1",
@@ -278,6 +366,9 @@ export const AGENTS: Agent[] = [
     totalRuns: 26,
     keyMetric: { label: "Avg rating", value: "4.8" },
     lastRun: "Next run · Fri 09:00",
+    costThisWeek: AGENT_PLAYGROUND.nova.costThisWeek,
+    greeting: AGENT_PLAYGROUND.nova.greeting,
+    toolkit: AGENT_PLAYGROUND.nova.toolkit,
     memory: [
       {
         id: "nova-mem-1",

@@ -8,7 +8,15 @@ import {
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassIcon } from "@/components/ui/GlassIcon";
 import { LivePulse } from "@/components/ui/LivePulse";
+import { AgentByline } from "@/components/agents/AgentByline";
 import type { FeedItem, FeedSeverity } from "@/lib/mock/feed";
+
+const SEVERITY_PREFIX: Record<FeedSeverity, string> = {
+  highlight: "Found by",
+  spike: "Found by",
+  drop: "Found by",
+  info: "Surfaced by",
+};
 
 const SEVERITY_ICON: Record<FeedSeverity, LucideIcon> = {
   highlight: Sparkles,
@@ -109,6 +117,12 @@ export function FeedCard({ item, enterIndex, onSelect }: FeedCardProps) {
           {item.timeAgo}
         </span>
       </div>
+
+      <AgentByline
+        agentId={item.agentId}
+        prefix={SEVERITY_PREFIX[item.severity]}
+        size="sm"
+      />
 
       <h3
         className={

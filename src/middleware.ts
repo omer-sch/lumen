@@ -18,8 +18,19 @@ const isPublicRoute = createRouteMatcher([
   "/monitoring(.*)",
 ]);
 
+// Routes that must stay behind Clerk even in PREVIEW mode:
+//  - /api/bq/(.*)             — touch real client data in BigQuery.
+//  - /api/agents/aria/generate — burns paid HF_TOKEN budget per call.
+// Preview is for UI work against mock data, not for handing out customer
+// revenue numbers or unauthenticated access to paid third-party APIs.
+const isPreviewProtectedRoute = createRouteMatcher([
+  "/api/bq/(.*)",
+  "/api/agents/aria/generate",
+]);
+
 export default clerkMiddleware(async (auth, req) => {
-  if (PREVIEW || isPublicRoute(req)) return;
+  if (isPublicRoute(req)) return;
+  if (PREVIEW && !isPreviewProtectedRoute(req)) return;
   await auth.protect({
     unauthenticatedUrl: new URL("/sign-in", req.url).toString(),
   });

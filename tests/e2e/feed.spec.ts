@@ -34,6 +34,24 @@ test.describe("feed page", () => {
     await expect(cards).toHaveCount(4);
   });
 
+  test("each card carries an agent byline with the producing agent's name", async ({
+    page,
+  }) => {
+    await page.goto(FEED_PATH);
+
+    // The byline primitive renders one element per card with a stable
+    // data-testid; mocks attribute every Feed item today to Max, so every
+    // card should expose `agent-byline-max`.
+    const bylines = page.locator('[data-testid="agent-byline-max"]');
+    await expect(bylines).toHaveCount(4);
+
+    // Spot-check the surfaced name + prefix on the first card so a future
+    // tweak to the byline copy can't silently drop attribution.
+    const firstCard = page.locator('[data-testid^="feed-card-"]').first();
+    await expect(firstCard.getByText(/found by/i)).toBeVisible();
+    await expect(firstCard.getByText("Max", { exact: true })).toBeVisible();
+  });
+
   test("severity types are visually distinguished", async ({ page }) => {
     await page.goto(FEED_PATH);
 

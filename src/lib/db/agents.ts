@@ -2,12 +2,13 @@ import "server-only";
 
 import { supabaseAdmin } from "./client";
 import type { AgentId } from "@/lib/agents/identity";
-import type {
-  Agent,
-  AgentMemory,
-  AgentRun,
-  AgentStatus,
-  RunOutput,
+import {
+  AGENT_PLAYGROUND,
+  type Agent,
+  type AgentMemory,
+  type AgentRun,
+  type AgentStatus,
+  type RunOutput,
 } from "@/lib/mock/agents";
 
 const HISTORY_PER_AGENT = 3;
@@ -136,6 +137,7 @@ export async function loadAgentsForPage(): Promise<Agent[]> {
           }
         : undefined;
 
+      const pg = AGENT_PLAYGROUND[a.id as AgentId];
       return {
         id: a.id,
         name: a.name,
@@ -150,6 +152,9 @@ export async function loadAgentsForPage(): Promise<Agent[]> {
         memory: memoryByAgent.get(a.id) ?? [],
         liveRun,
         paused: a.paused,
+        costThisWeek: pg.costThisWeek,
+        greeting: pg.greeting,
+        toolkit: pg.toolkit,
       } satisfies Agent;
     });
 }

@@ -65,6 +65,21 @@ test.describe("reports page — generated document", () => {
     await expect(doc.getByRole("heading", { name: /recommendations/i })).toBeVisible();
   });
 
+  test("the report header shows the Nova byline directly under the title", async ({
+    page,
+  }) => {
+    await page.goto("/reports");
+    await generateReport(page, "Weekly UA performance summary for GlobalComix");
+
+    const doc = page.locator("article[data-report-doc]");
+    // Mock generator stamps `authoredBy: "nova"` on every report — the
+    // byline primitive renders a stable data-testid we can pin on.
+    const byline = doc.locator('[data-testid="agent-byline-nova"]');
+    await expect(byline).toBeVisible();
+    await expect(byline.getByText(/drafted by/i)).toBeVisible();
+    await expect(byline.getByText("Nova", { exact: true })).toBeVisible();
+  });
+
   test("each section title and body is editable in place", async ({ page }) => {
     await page.goto("/reports");
     await generateReport(page, "Top 5 campaigns this period and what to do next");

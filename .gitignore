@@ -41,3 +41,6 @@ next-env.d.ts
 
 # local agent memory (file-based MVP store)
 /data/
+
+# Local BQ schema-discovery dumps — exploration artifacts, not source.
+/tmp/

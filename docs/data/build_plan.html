@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lumen Phase 1 Build Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy-base: #0A1428;
+    --navy-card: #0D1B35;
+    --navy-card-2: #11214000;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.15);
+    --text: #FAFAFA;
+    --text-body: rgba(255,255,255,0.75);
+    --text-muted: rgba(255,255,255,0.45);
+    --mint: #54F0A3;
+    --mint-soft: rgba(84, 240, 163, 0.12);
+    --mint-border: rgba(84, 240, 163, 0.35);
+    --yellow: #FFDD0C;
+    --yellow-soft: rgba(255, 221, 12, 0.12);
+    --coral: #F88673;
+    --violet: #926FDE;
+    --bricolage: 'Bricolage Grotesque', system-ui, -apple-system, sans-serif;
+    --mont: 'Montserrat', system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--navy-base); color: var(--text); font-family: var(--mont); -webkit-font-smoothing: antialiased; }
+  body {
+    background:
+      radial-gradient(circle at 0% 0%, rgba(84, 240, 163, 0.04) 0%, transparent 35%),
+      radial-gradient(circle at 100% 100%, rgba(255, 221, 12, 0.03) 0%, transparent 30%),
+      var(--navy-base);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 48px 32px 80px; }
+  /* HEADER */
+  .header { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; padding-bottom: 32px; border-bottom: 1px solid var(--border); margin-bottom: 48px; }
+  .header h1 { font-family: var(--bricolage); font-weight: 800; font-size: 44px; line-height: 1.05; letter-spacing: -0.02em; }
+  .header .subtitle { color: var(--text-muted); font-size: 14px; margin-top: 12px; font-weight: 500; }
+  .header .badge-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge { padding: 6px 12px; background: var(--mint-soft); color: var(--mint); border: 1px solid var(--mint-border); border-radius: 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+  .badge.yellow { background: var(--yellow-soft); color: var(--yellow); border-color: rgba(255, 221, 12, 0.35); }
+  .badge.muted { background: rgba(255,255,255,0.05); color: var(--text-muted); border-color: var(--border); text-transform: none; letter-spacing: 0; }
+
+  /* SECTION HEADERS */
+  .section { margin-top: 56px; }
+  .section-title { font-family: var(--bricolage); font-weight: 700; font-size: 24px; letter-spacing: -0.01em; margin-bottom: 6px; }
+  .section-sub { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+
+  /* STATS ROW */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 8px; }
+  .stat-card { background: var(--navy-card); border: 1px solid var(--border); border-radius: 14px; padding: 20px 24px; }
+  .stat-label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 8px; }
+  .stat-value { font-family: var(--bricolage); font-weight: 800; font-size: 32px; line-height: 1; }
+  .stat-value.mint { color: var(--mint); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-foot { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
+
+  /* SIDE BY SIDE */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .panel { background: var(--navy-card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; position: relative; overflow: hidden; }
+  .panel.mint::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--mint); }
+  .panel.muted::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: rgba(255,255,255,0.2); }
+  .panel-eyebrow { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .panel-eyebrow .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: var(--text-muted); }
+  .panel-eyebrow .pill { padding: 4px 10px; border-radius: 12px; background: var(--mint-soft); color: var(--mint); font-size: 11px; font-weight: 600; }
+  .panel.muted .panel-eyebrow .pill { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+  .panel h3 { font-family: var(--bricolage); font-weight: 700; font-size: 22px; margin-bottom: 20px; letter-spacing: -0.01em; }
+  .panel ul { list-style: none; }
+  .panel li { padding: 12px 0; border-top: 1px solid var(--border); font-size: 14px; color: var(--text-body); display: flex; align-items: flex-start; gap: 10px; }
+  .panel li:first-of-type { border-top: none; }
+  .panel li .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); margin-top: 8px; flex-shrink: 0; }
+  .panel.mint li .dot { background: var(--mint); }
+  .panel li code { font-family: 'SF Mono', Menlo, monospace; font-size: 12px; color: var(--text); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; }
+
+  /* ARCHITECTURE FLOW */
+  .arch { background: var(--navy-card); border: 1px solid var(--border); border-radius: 16px; padding: 32px; }
+  .arch-flow { display: grid; grid-template-columns: 1fr 1fr 2fr 1fr; gap: 16px; align-items: stretch; margin-top: 8px; }
+  .arch-node { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; justify-content: center; }
+  .arch-node.input { border-color: var(--mint-border); background: var(--mint-soft); }
+  .arch-node-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; margin-bottom: 6px; }
+  .arch-node-name { font-family: var(--bricolage); font-weight: 700; font-size: 16px; line-height: 1.2; }
+  .arch-node-foot { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+  .arch-strategies { display: flex; flex-direction: column; gap: 8px; }
+  .strat { padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+  .strat.new { background: var(--mint-soft); border-color: var(--mint-border); color: var(--mint); font-weight: 600; }
+  .strat.legacy { color: var(--text-muted); background: rgba(255,255,255,0.03); }
+  .strat .tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; opacity: 0.7; }
+
+  /* BUILD SEQUENCE */
+  .timeline { margin-top: 24px; display: flex; flex-direction: column; gap: 0; }
+  .step { display: grid; grid-template-columns: 64px 1fr auto; gap: 20px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border); position: relative; }
+  .step:last-child { border-bottom: none; }
+  .step-num { font-family: var(--bricolage); font-weight: 800; font-size: 28px; color: var(--mint); width: 64px; text-align: center; }
+  .step-num.legacy { color: var(--text-muted); }
+  .step-body { display: flex; flex-direction: column; gap: 4px; }
+  .step-title { font-family: var(--bricolage); font-weight: 700; font-size: 17px; color: var(--text); }
+  .step-detail { font-size: 13px; color: var(--text-body); }
+  .step-detail code { font-family: 'SF Mono', Menlo, monospace; font-size: 12px; color: var(--text); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; }
+  .step-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .step-hours { font-family: var(--bricolage); font-weight: 700; font-size: 14px; color: var(--mint); padding: 4px 10px; background: var(--mint-soft); border-radius: 6px; }
+
+  /* DECISIONS GRID */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .decision-list { background: var(--navy-card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
+  .decision { padding: 14px 0; border-top: 1px solid var(--border); display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: flex-start; }
+  .decision:first-of-type { border-top: none; padding-top: 0; }
+  .decision-num { font-family: var(--bricolage); font-weight: 800; font-size: 14px; color: var(--mint); padding-top: 2px; }
+  .decision-title { font-family: var(--bricolage); font-weight: 700; font-size: 14px; color: var(--text); margin-bottom: 4px; }
+  .decision-detail { font-size: 13px; color: var(--text-body); line-height: 1.5; }
+  .decision-detail code { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: var(--text); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; }
+
+  .deferred-list { background: var(--navy-card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
+  .deferred { padding: 12px 0; border-top: 1px solid var(--border); display: flex; gap: 12px; align-items: flex-start; }
+  .deferred:first-of-type { border-top: none; padding-top: 0; }
+  .deferred-when { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; padding: 3px 8px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--text-muted); flex-shrink: 0; margin-top: 2px; min-width: 75px; text-align: center; }
+  .deferred-when.phase15 { background: var(--yellow-soft); color: var(--yellow); }
+  .deferred-when.phase2 { background: rgba(146, 111, 222, 0.12); color: var(--violet); }
+  .deferred-when.never { background: rgba(255,255,255,0.04); color: var(--text-muted); }
+  .deferred-text { font-size: 13px; color: var(--text-body); line-height: 1.5; padding-top: 2px; }
+
+  /* SMOKE TESTS */
+  .smoke { background: var(--navy-card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-top: 24px; }
+  .smoke-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 32px; margin-top: 16px; }
+  .smoke-item { display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: flex-start; padding: 8px 0; }
+  .smoke-num { font-family: var(--bricolage); font-weight: 700; font-size: 13px; color: var(--mint); width: 24px; }
+  .smoke-text { font-size: 13px; color: var(--text-body); line-height: 1.5; }
+  .smoke-foot { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-muted); }
+  .smoke-foot strong { color: var(--yellow); font-weight: 700; }
+
+  /* RISKS */
+  .risks { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .risk { background: var(--navy-card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; border-left: 3px solid var(--coral); }
+  .risk-title { font-family: var(--bricolage); font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  .risk-mit { font-size: 13px; color: var(--text-body); line-height: 1.5; }
+  .risk-mit strong { color: var(--mint); font-weight: 600; }
+
+  /* DONE BANNER */
+  .done { margin-top: 56px; padding: 32px; background: linear-gradient(135deg, rgba(84, 240, 163, 0.12), rgba(255, 221, 12, 0.06)); border: 1px solid var(--mint-border); border-radius: 16px; }
+  .done-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: var(--mint); margin-bottom: 12px; }
+  .done-text { font-family: var(--bricolage); font-weight: 700; font-size: 22px; line-height: 1.4; }
+
+  /* RESPONSIVE */
+  @media (max-width: 900px) {
+    .compare, .grid-2, .stats-row, .arch-flow, .smoke-grid, .risks { grid-template-columns: 1fr; }
+    .header { flex-direction: column; align-items: flex-start; }
+    .header h1 { font-size: 32px; }
+  }
+
+  /* SR ONLY */
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+</style>
+</head>
+<body>
+<h2 class="sr-only">Lumen Phase 1 BigQuery build plan: a structured view of what exists, what to add, and the 11-step build sequence.</h2>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <h1>Lumen Phase 1 BigQuery Build</h1>
+      <div class="subtitle">2026-05-11 · UA-only scope · No external dependencies · Decisions are final, fix forward if wrong</div>
+    </div>
+    <div class="badge-row">
+      <span class="badge">11 steps</span>
+      <span class="badge">~20 hours</span>
+      <span class="badge yellow">Just us</span>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Active UA clients</div>
+      <div class="stat-value mint">8</div>
+      <div class="stat-foot">From the sales roster</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Platforms in union</div>
+      <div class="stat-value mint">4</div>
+      <div class="stat-foot">Meta, Meta iOS14, Apple, Google</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">New query strategy</div>
+      <div class="stat-value">1</div>
+      <div class="stat-foot">management-dashboard</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Decisions baked in</div>
+      <div class="stat-value yellow">11</div>
+      <div class="stat-foot">No more open questions</div>
+    </div>
+  </div>
+
+  <!-- WHAT WE HAVE vs WHAT WE'LL ADD -->
+  <div class="section">
+    <div class="section-title">Existing scaffold vs new in Phase 1</div>
+    <div class="section-sub">Most of the data layer is already built. The work is additive, not a rewrite.</div>
+    <div class="compare">
+
+      <!-- WHAT WE HAVE -->
+      <div class="panel muted">
+        <div class="panel-eyebrow">
+          <span class="label">Already built</span>
+          <span class="pill">Working today</span>
+        </div>
+        <h3>What's in the repo right now</h3>
+        <ul>
+          <li><span class="dot"></span><div><strong>BQ client.</strong> Singleton, ADC + service-account JSON. <code>src/lib/bq.ts</code></div></li>
+          <li><span class="dot"></span><div><strong>Security layer.</strong> Allowlist via env, per-client schema map, two query strategies. <code>src/lib/bq-security.ts</code></div></li>
+          <li><span class="dot"></span><div><strong>Query helpers.</strong> KPIs, trend, channel mix, campaigns, freshness, data bounds, all parameterized and cached at 30 min. <code>src/lib/bq-queries.ts</code></div></li>
+          <li><span class="dot"></span><div><strong>API routes.</strong> Full set under <code>/api/bq/*</code> plus per-client variants under <code>/api/bq/100play/*</code></div></li>
+          <li><span class="dot"></span><div><strong>UI components.</strong> KpiCard, TrendChart, ChannelMix, CampaignsTable, ClientSelector, DataFreshnessBar — all built and rendering</div></li>
+          <li><span class="dot"></span><div><strong>3 clients served:</strong> GlobalComix, Playw3, 100play (legacy strategies)</div></li>
+        </ul>
+      </div>
+
+      <!-- WHAT WE'LL ADD -->
+      <div class="panel mint">
+        <div class="panel-eyebrow">
+          <span class="label">New in Phase 1</span>
+          <span class="pill">~20 hours</span>
+        </div>
+        <h3>What we're adding</h3>
+        <ul>
+          <li><span class="dot"></span><div><strong>Third query strategy:</strong> <code>management-dashboard</code> joins the 4-platform union</div></li>
+          <li><span class="dot"></span><div><strong>Roster integration.</strong> <code>pre_sales_updated_clients_tracking</code> drives the active client list with team, budget, account manager</div></li>
+          <li><span class="dot"></span><div><strong>UNION-ALL helper.</strong> One TS function emits the 4-table union for every query. <code>src/lib/bq-union.ts</code></div></li>
+          <li><span class="dot"></span><div><strong>MD query module.</strong> Mirror of bq-queries.ts for the union case. <code>src/lib/bq-queries-md.ts</code></div></li>
+          <li><span class="dot"></span><div><strong>Per-platform freshness.</strong> Direct MAX(date) from the 4 tables, not Rivery telemetry</div></li>
+          <li><span class="dot"></span><div><strong>Roster-driven picker.</strong> <code>ClientSelector</code> fetches <code>/api/bq/roster</code> and renders all 8 active UA clients</div></li>
+          <li><span class="dot"></span><div><strong>Apple unattributed footnote.</strong> Surfaces the NULL master_account percentage honestly</div></li>
+          <li><span class="dot"></span><div><strong>Service account.</strong> <code>lumen-app</code> identity so audit logs can distinguish Lumen from ETL</div></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARCHITECTURE FLOW -->
+  <div class="section">
+    <div class="section-title">Data flow</div>
+    <div class="section-sub">Roster drives the picker. The picker hands a slug to the router. The router picks one of three strategies. All three feed the same UI.</div>
+    <div class="arch">
+      <div class="arch-flow">
+        <div class="arch-node input">
+          <div class="arch-node-label">Source</div>
+          <div class="arch-node-name">pre_sales_<wbr>updated_<wbr>clients_<wbr>tracking</div>
+          <div class="arch-node-foot">UA team filter, active End_Date</div>
+        </div>
+        <div class="arch-node">
+          <div class="arch-node-label">UI</div>
+          <div class="arch-node-name">Client Selector</div>
+          <div class="arch-node-foot">Roster API → picker dropdown</div>
+        </div>
+        <div class="arch-strategies">
+          <div class="strat new"><span>management-dashboard <span class="tag">new</span></span><span>5 active clients</span></div>
+          <div class="strat legacy"><span>agent <span class="tag">legacy</span></span><span>GlobalComix, Playw3</span></div>
+          <div class="strat legacy"><span>lumen-union <span class="tag">legacy</span></span><span>100play</span></div>
+        </div>
+        <div class="arch-node">
+          <div class="arch-node-label">Output</div>
+          <div class="arch-node-name">Same UI<br/>components</div>
+          <div class="arch-node-foot">No UI rebuild</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BUILD SEQUENCE -->
+  <div class="section">
+    <div class="section-title">11-step build sequence</div>
+    <div class="section-sub">Each step is independently shippable. Step 1 is the gate, run it before anything else.</div>
+    <div class="timeline">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <div class="step-title">Slug derivation, one-shot</div>
+          <div class="step-detail">Run a single BQ query against <code>pre_sales_updated_clients_tracking</code>. Confirm Team values, validate the 8-client active list. Eyeball before committing.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">30 min</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-body">
+          <div class="step-title">Service account + env</div>
+          <div class="step-detail">Create <code>lumen-app</code> SA with dataViewer + jobUser roles. Base64 the JSON, set in <code>.env.local</code> and Vercel. Update <code>ALLOWED_CLIENTS</code>.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">1 hr</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-body">
+          <div class="step-title">Add management-dashboard strategy</div>
+          <div class="step-detail">Edit <code>bq-security.ts</code>: extend <code>QueryStrategy</code> union, add <code>MANAGEMENT_DASHBOARD_SCHEMA</code>, default to it for any allowlisted client without an override.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">2 hrs</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <div class="step-body">
+          <div class="step-title">Build the union helper</div>
+          <div class="step-detail">New file <code>src/lib/bq-union.ts</code>. Pure SQL builder, returns the 4-platform UNION ALL with parameterized date window. Easy to dry_run-test.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">1 hr</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">05</div>
+        <div class="step-body">
+          <div class="step-title">MD query module</div>
+          <div class="step-detail">New file <code>src/lib/bq-queries-md.ts</code>. Implements KPIs, trend, channel mix, campaigns, data bounds for the union case. Same return types as <code>bq-queries.ts</code>.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">4 hrs</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">06</div>
+        <div class="step-body">
+          <div class="step-title">Roster query + API route</div>
+          <div class="step-detail">New file <code>src/lib/bq-roster.ts</code>. Joins roster with spend recency. New route <code>/api/bq/roster</code>. 24h cache.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">3 hrs</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">07</div>
+        <div class="step-body">
+          <div class="step-title">Route handler dispatch</div>
+          <div class="step-detail">Update each existing <code>/api/bq/*</code> route to dispatch on <code>getSchemaForClient(client).strategy</code>. Three branches: management-dashboard, agent, lumen-union.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">2 hrs</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">08</div>
+        <div class="step-body">
+          <div class="step-title">Per-platform freshness</div>
+          <div class="step-detail">Replace Rivery-based freshness with direct MAX(date) per platform. <code>DataFreshnessBar</code> shows worst-case headline + per-platform breakdown.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">2 hrs</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">09</div>
+        <div class="step-body">
+          <div class="step-title">Roster-driven client selector</div>
+          <div class="step-detail"><code>ClientSelector</code> fetches <code>/api/bq/roster</code>, renders display name + 30-day spend, navigates to <code>/dashboard?client=&lt;slug&gt;</code>.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">3 hrs</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">10</div>
+        <div class="step-body">
+          <div class="step-title">Apple unattributed footnote</div>
+          <div class="step-detail">Tiny component shown on multi-platform views including Apple. Single line: "X% of Apple spend unattributed and excluded."</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">1 hr</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">11</div>
+        <div class="step-body">
+          <div class="step-title">Smoke pilot + cut over</div>
+          <div class="step-detail">Walk through 3 active clients (Smart Sleep Coach multi-platform, Stardust Casino Google-only, Keno Meta-only). Update CLAUDE.md. Tag the release.</div>
+        </div>
+        <div class="step-meta"><div class="step-hours">90 min</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DECISIONS + DEFERRED -->
+  <div class="section">
+    <div class="section-title">Decisions baked in vs deliberately deferred</div>
+    <div class="section-sub">Left side: 11 calls already made, no more revisiting. Right side: explicitly out of Phase 1 scope.</div>
+    <div class="grid-2">
+
+      <div class="decision-list">
+        <div class="decision">
+          <div class="decision-num">1</div>
+          <div>
+            <div class="decision-title">Source = 4-platform UNION ALL</div>
+            <div class="decision-detail"><code>fb2</code> + <code>fb_ios14</code> + <code>apple</code> + <code>google</code>. TikTok and LinkedIn excluded.</div>
+          </div>
+        </div>
+        <div class="decision">
+          <div class="decision-num">2</div>
+          <div>
+            <div class="decision-title">Roster is the truth</div>
+            <div class="decision-detail"><code>pre_sales_updated_clients_tracking</code> filtered to UA + active End_Date.</div>
+          </div>
+        </div>
+        <div class="decision">
+          <div class="decision-num">3</div>
+          <div>
+            <div class="decision-title">Identity key</div>
+            <div class="decision-detail"><code>LOWER(TRIM(master_account))</code>. Never <code>master_account_id</code>.</div>
+          </div>
+        </div>
+        <div class="decision">
+          <div class="decision-num">4</div>
+          <div>
+            <div class="decision-title">Apple NULL rows: filter + footnote</div>
+            <div class="decision-detail">Filtered at query time, surfaced honestly in UI.</div>
+          </div>
+        </div>
+        <div class="decision">
+          <div class="decision-num">5</div>
+          <div>
+            <div class="decision-title">No BQ-side view in Phase 1</div>
+            <div class="decision-detail">Union in TypeScript. Migrate to BQ view only if it becomes painful.</div>
+          </div>
+        </div>
+        <div class="decision">
+          <div class="decision-num">6</div>
+          <div>
+            <div class="decision-title">Superbloom = Phase 1.5</div>
+            <div class="decision-detail">Singular + cohort routing deferred. Not blocking.</div>
+          </div>
+        </div>
+        <div class="decision">
+          <div class="decision-num">7</div>
+          <div>
+            <div class="decision-title">Ignore dwh_management_dashboard_new</div>
+            <div class="decision-detail">Use the stable 4 tables. If they break, migrate fast.</div>
+          </div>
+        </div>
+        <div class="decision">
+          <div class="decision-num">8</div>
+          <div>
+            <div class="decision-title">Service account: lumen-app</div>
+            <div class="decision-detail">Named identity. Audit logs can distinguish Lumen from ETL.</div>
+          </div>
+        </div>
+        <div class="decision">
+          <div class="decision-num">9</div>
+          <div>
+            <div class="decision-title">Freshness from MD tables directly</div>
+            <div class="decision-detail">MAX(date) per platform. Drop the Rivery-based signal.</div>
+          </div>
+        </div>
+        <div class="decision">
+          <div class="decision-num">10</div>
+          <div>
+            <div class="decision-title">Caching: keep existing pattern</div>
+            <div class="decision-detail">30 min for KPIs, 24h for roster, 10 min for freshness.</div>
+          </div>
+        </div>
+        <div class="decision">
+          <div class="decision-num">11</div>
+          <div>
+            <div class="decision-title">Legacy strategies stay</div>
+            <div class="decision-detail">GlobalComix and Playw3 keep <code>agent</code>. 100play keeps <code>lumen-union</code>. Additive only.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="deferred-list">
+        <div class="deferred">
+          <div class="deferred-when phase15">Phase 1.5</div>
+          <div class="deferred-text"><strong>Superbloom Games clients via yh_singular + pw_yh_cohort_*.</strong> Venue, aTable, Highrise, Obsidian Knight, Kingdom Maker, Mundo Slots.</div>
+        </div>
+        <div class="deferred">
+          <div class="deferred-when phase2">Phase 2</div>
+          <div class="deferred-text"><strong>Feed page wired to ml_superbloom_*.</strong> Find the owner first, do not block Phase 1 on partnership.</div>
+        </div>
+        <div class="deferred">
+          <div class="deferred-when phase2">Phase 2</div>
+          <div class="deferred-text"><strong>Ask page deep-tier (NL queries against dwh_* and uni_*).</strong> Two-tier routing layer.</div>
+        </div>
+        <div class="deferred">
+          <div class="deferred-when phase2">Phase 2</div>
+          <div class="deferred-text"><strong>Reports / sharing / export.</strong> Lumen-generated PDFs, shareable links.</div>
+        </div>
+        <div class="deferred">
+          <div class="deferred-when phase2">Phase 2+</div>
+          <div class="deferred-text"><strong>Cross-team views.</strong> Organic, Creative, CSM. Requires data sourcing investment first (the warehouse does not have this data today).</div>
+        </div>
+        <div class="deferred">
+          <div class="deferred-when never">Skip</div>
+          <div class="deferred-text"><strong>TikTok + LinkedIn data.</strong> Tables stale 15+ months. Not Lumen's job to wait for upstream.</div>
+        </div>
+        <div class="deferred">
+          <div class="deferred-when never">Skip</div>
+          <div class="deferred-text"><strong>Coordination with BI team.</strong> It's just us. We design around what's there.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SMOKE TESTS -->
+  <div class="section">
+    <div class="section-title">Smoke test criteria</div>
+    <div class="section-sub">10 specific assertions. If 7 of 10 pass, ship. If fewer than 7, fix before shipping.</div>
+    <div class="smoke">
+      <div class="smoke-grid">
+        <div class="smoke-item"><div class="smoke-num">01</div><div class="smoke-text">Roster query returns 8 UA-active clients (or whatever the real count is from Step 1).</div></div>
+        <div class="smoke-item"><div class="smoke-num">02</div><div class="smoke-text">Smart Sleep Coach dashboard shows non-zero spend on both Meta and Apple, trailing 30 days.</div></div>
+        <div class="smoke-item"><div class="smoke-num">03</div><div class="smoke-text">Stardust Casino dashboard shows non-zero Google, zero on others, no errors.</div></div>
+        <div class="smoke-item"><div class="smoke-num">04</div><div class="smoke-text">Keno dashboard shows non-zero on Meta + Meta iOS14, zero on Apple + Google.</div></div>
+        <div class="smoke-item"><div class="smoke-num">05</div><div class="smoke-text">KPI period-over-period delta works for any 30-day window.</div></div>
+        <div class="smoke-item"><div class="smoke-num">06</div><div class="smoke-text">Campaign table shows campaigns with expected naming convention from underlying tables.</div></div>
+        <div class="smoke-item"><div class="smoke-num">07</div><div class="smoke-text">Per-platform freshness shows all 4 platforms within 24 hours.</div></div>
+        <div class="smoke-item"><div class="smoke-num">08</div><div class="smoke-text">Apple footnote shows a percentage between 1% and 20%.</div></div>
+        <div class="smoke-item"><div class="smoke-num">09</div><div class="smoke-text">GlobalComix dashboard still works (legacy <code>agent</code> strategy not broken).</div></div>
+        <div class="smoke-item"><div class="smoke-num">10</div><div class="smoke-text">100play dashboard still works (legacy <code>lumen-union</code> strategy not broken).</div></div>
+      </div>
+      <div class="smoke-foot"><strong>Pass rate ≥ 70% = ship.</strong> Anything broken below that gets fixed before release tag.</div>
+    </div>
+  </div>
+
+  <!-- RISKS -->
+  <div class="section">
+    <div class="section-title">Risks and mitigations</div>
+    <div class="section-sub">What could break and how we handle it without external dependencies.</div>
+    <div class="risks">
+      <div class="risk">
+        <div class="risk-title">BI silently renames a column</div>
+        <div class="risk-mit"><strong>Mitigation:</strong> Explicit column names in the union helper. Daily synthetic query (Vercel cron) hits every route, alerts on failure. Recovery is one-file change.</div>
+      </div>
+      <div class="risk">
+        <div class="risk-title">"new" dashboard layer takes over</div>
+        <div class="risk-mit"><strong>Mitigation:</strong> Union helper is one file, one place. Migration is 30 minutes, not a rewrite. We'll see it in the synthetic monitor first.</div>
+      </div>
+      <div class="risk">
+        <div class="risk-title">Roster name casing changes</div>
+        <div class="risk-mit"><strong>Mitigation:</strong> Slug derived case-insensitively. Cache key is the slug, so casing changes do not invalidate data.</div>
+      </div>
+      <div class="risk">
+        <div class="risk-title">Cost spike from naive queries</div>
+        <div class="risk-mit"><strong>Mitigation:</strong> Date filters everywhere, 30-min cache, hard <code>maximumBytesBilled</code> = 1 GB so runaway queries fail fast.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DONE BANNER -->
+  <div class="done">
+    <div class="done-eyebrow">Done means</div>
+    <div class="done-text">A new yellowHEAD UA team member signs in, sees all active UA clients, drills into Smart Sleep Coach or Keno or Stardust Casino, and trusts the numbers. Shippable in 18-22 hours of focused engineering work.</div>
+  </div>
+
+</div>
+</body>
+</html>

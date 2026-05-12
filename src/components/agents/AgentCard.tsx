@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { ChevronDown, Pause } from "lucide-react";
+import { ChevronRight, Pause } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassBulb } from "@/components/ui/GlassBulb";
@@ -12,150 +13,138 @@ type AgentCardProps = {
   agent: Agent;
   /** 1-based grid position — drives staggered card-enter animation. */
   enterIndex?: number;
-  expanded: boolean;
-  onToggle: (id: string) => void;
 };
 
 type DisplayStatus = "running" | "completed" | "scheduled" | "paused";
 
-export function AgentCard({ agent, enterIndex, expanded, onToggle }: AgentCardProps) {
+export function AgentCard({ agent, enterIndex }: AgentCardProps) {
   const display: DisplayStatus = agent.paused ? "paused" : agent.status;
   const isRunning = display === "running";
   const isPaused = display === "paused";
   const [avatarFailed, setAvatarFailed] = useState(false);
 
   return (
-    <GlassCard
-      glow="ua"
-      enterIndex={enterIndex}
-      interactive
-      onClick={() => onToggle(agent.id)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onToggle(agent.id);
-        }
-      }}
-      role="button"
-      tabIndex={0}
-      aria-expanded={expanded}
-      aria-controls={`agent-detail-${agent.id}`}
+    <Link
+      href={`/agents/${agent.id}`}
+      aria-label={`Open ${agent.name}'s workspace`}
       data-testid={`agent-card-${agent.id}`}
-      className={cn(
-        "flex h-full flex-col gap-4 p-5",
-        expanded && "ring-1 ring-[color:var(--color-ua)]/40",
-        isPaused && "opacity-90",
-      )}
+      className="block rounded-lg focus-mint focus-visible:outline-none"
     >
-      {/* Header — avatar (placeholder) + status pill */}
-      <div className="flex items-start gap-4">
-        {avatarFailed ? (
-          <div
-            className="relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full"
-            style={{
-              background: isRunning
-                ? "color-mix(in oklab, var(--color-ua) 12%, var(--surface-icon-bg))"
-                : "var(--surface-icon-bg)",
-              border: "1px solid var(--border-glass)",
-              boxShadow: isRunning
-                ? "var(--shadow-mint), inset 0 1px 0 rgba(255,255,255,0.06)"
-                : "inset 0 1px 0 rgba(255,255,255,0.04)",
-            }}
-          >
-            <GlassBulb
-              size={40}
-              accent="mint"
-              float={isRunning}
+      <GlassCard
+        glow="ua"
+        enterIndex={enterIndex}
+        className={cn(
+          "flex h-full flex-col gap-4 p-5 transition-[transform,box-shadow,border-color] duration-280 ease-out-quart cursor-pointer active:scale-[0.985]",
+          isPaused && "opacity-90",
+        )}
+      >
+        {/* Header — avatar + status pill */}
+        <div className="flex items-start gap-4">
+          {avatarFailed ? (
+            <div
+              className="relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full"
               style={{
-                opacity: isRunning ? 1 : isPaused ? 0.4 : 0.6,
-                filter: isRunning
-                  ? undefined
-                  : "saturate(0.7) drop-shadow(0 8px 16px rgba(0,0,0,0.3))",
+                background: isRunning
+                  ? "color-mix(in oklab, var(--color-ua) 12%, var(--surface-icon-bg))"
+                  : "var(--surface-icon-bg)",
+                border: "1px solid var(--border-glass)",
+                boxShadow: isRunning
+                  ? "var(--shadow-mint), inset 0 1px 0 rgba(255,255,255,0.06)"
+                  : "inset 0 1px 0 rgba(255,255,255,0.04)",
+              }}
+            >
+              <GlassBulb
+                size={40}
+                accent="mint"
+                float={isRunning}
+                style={{
+                  opacity: isRunning ? 1 : isPaused ? 0.4 : 0.6,
+                  filter: isRunning
+                    ? undefined
+                    : "saturate(0.7) drop-shadow(0 8px 16px rgba(0,0,0,0.3))",
+                }}
+              />
+            </div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`/avatars/${agent.id}.png`}
+              alt={`${agent.name} avatar`}
+              onError={() => setAvatarFailed(true)}
+              className={cn(
+                "h-16 w-16 shrink-0 rounded-full object-cover",
+                isRunning && "ring-2 ring-[#54F0A3]/60",
+                isPaused && "opacity-60 grayscale",
+              )}
+              style={{
+                background: "var(--surface-icon-bg)",
+                border: "1px solid var(--border-glass)",
               }}
             />
+          )}
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="font-display text-lg font-extrabold leading-tight tracking-tight text-cloud-white">
+                  {agent.name}
+                </h3>
+                <p className="font-body text-xs uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                  {agent.role}
+                </p>
+              </div>
+              <StatusPill status={display} />
+            </div>
           </div>
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={`/avatars/${agent.id}.svg`}
-            alt={`${agent.name} avatar`}
-            onError={() => setAvatarFailed(true)}
-            className={cn(
-              "h-16 w-16 shrink-0 rounded-full object-cover",
-              isRunning && "ring-2 ring-[#54F0A3]/60",
-              isPaused && "opacity-60 grayscale",
-            )}
-            style={{
-              background: "var(--surface-icon-bg)",
-              border: "1px solid var(--border-glass)",
-            }}
+        </div>
+
+        {/* Description */}
+        <p className="font-body text-sm leading-relaxed text-[color:var(--text-secondary)]">
+          {agent.description}
+        </p>
+
+        {/* Stats row */}
+        <div
+          className="grid grid-cols-3 gap-px overflow-hidden rounded-md"
+          style={{
+            background: "var(--border-glass)",
+            border: "1px solid var(--border-glass)",
+          }}
+        >
+          <Stat
+            label={agent.keyMetric.label}
+            value={agent.keyMetric.value}
+            accent="yellow"
+          />
+          <Stat label="Total runs" value={String(agent.totalRuns)} />
+          <Stat
+            label="Schedule"
+            value={agent.schedule.split(" · ")[0]}
+            hint={agent.schedule.split(" · ")[1]}
+            dimmed={isPaused}
+          />
+        </div>
+
+        {/* Live progress — present while running and not paused */}
+        {isRunning && agent.liveRun && (
+          <LiveProgress
+            progress={agent.liveRun.progress}
+            step={agent.liveRun.step}
           />
         )}
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="font-display text-lg font-extrabold leading-tight tracking-tight text-cloud-white">
-                {agent.name}
-              </h3>
-              <p className="font-body text-xs uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
-                {agent.role}
-              </p>
-            </div>
-            <StatusPill status={display} />
-          </div>
+        {/* Footer */}
+        <div className="mt-auto flex items-center justify-between gap-3 pt-1">
+          <span className="font-body text-xs text-[color:var(--text-muted)]">
+            {isPaused ? "Paused — schedule suspended" : agent.lastRun}
+          </span>
+          <ChevronRight
+            className="h-4 w-4 shrink-0 text-[color:var(--text-muted)]"
+            strokeWidth={2}
+          />
         </div>
-      </div>
-
-      {/* Description */}
-      <p className="font-body text-sm leading-relaxed text-[color:var(--text-secondary)]">
-        {agent.description}
-      </p>
-
-      {/* Stats row */}
-      <div
-        className="grid grid-cols-3 gap-px overflow-hidden rounded-md"
-        style={{
-          background: "var(--border-glass)",
-          border: "1px solid var(--border-glass)",
-        }}
-      >
-        <Stat
-          label={agent.keyMetric.label}
-          value={agent.keyMetric.value}
-          accent="yellow"
-        />
-        <Stat label="Total runs" value={String(agent.totalRuns)} />
-        <Stat
-          label="Schedule"
-          value={agent.schedule.split(" · ")[0]}
-          hint={agent.schedule.split(" · ")[1]}
-          dimmed={isPaused}
-        />
-      </div>
-
-      {/* Live progress — present while running and not paused */}
-      {isRunning && agent.liveRun && (
-        <LiveProgress
-          progress={agent.liveRun.progress}
-          step={agent.liveRun.step}
-        />
-      )}
-
-      {/* Footer */}
-      <div className="mt-auto flex items-center justify-between gap-3 pt-1">
-        <span className="font-body text-xs text-[color:var(--text-muted)]">
-          {isPaused ? "Paused — schedule suspended" : agent.lastRun}
-        </span>
-        <ChevronDown
-          className={cn(
-            "h-4 w-4 shrink-0 text-[color:var(--text-muted)] transition-transform duration-280 ease-out-quart",
-            expanded && "rotate-180 text-[color:var(--color-ua)]",
-          )}
-          strokeWidth={2}
-        />
-      </div>
-    </GlassCard>
+      </GlassCard>
+    </Link>
   );
 }
 

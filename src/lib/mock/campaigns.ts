@@ -1,4 +1,4 @@
-import type { Channel, KpiId } from "@/lib/mock/dashboard";
+import type { Channel, KpiId } from "@/types/dashboard";
 
 export type CampaignStatus = "active" | "paused";
 

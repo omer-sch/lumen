@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { RowSparkline } from "./RowSparkline";
 import type { CampaignRow } from "@/lib/mock/campaigns";
-import type { Channel } from "@/lib/mock/dashboard";
+import type { Channel } from "@/types/dashboard";
 
 type SortKey =
   | "name"

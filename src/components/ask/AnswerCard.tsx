@@ -3,6 +3,7 @@
 import { Pin, PinOff, Sparkles } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { PinnedRenderer } from "./visualizations/Pinned";
+import { AgentByline } from "@/components/agents/AgentByline";
 import type { Answer } from "@/lib/ask/types";
 
 type AnswerCardProps = {
@@ -44,14 +45,22 @@ export function AnswerCard({
             <Sparkles className="h-4 w-4" strokeWidth={2.25} />
           </span>
           <div className="min-w-0">
-            <p className="font-body text-xs uppercase tracking-wider text-[color:var(--text-muted)]">
-              {pinnedLabel ?? "Lumen says"}
-            </p>
+            {pinnedLabel ? (
+              <p className="font-body text-xs uppercase tracking-wider text-[color:var(--text-muted)]">
+                {pinnedLabel}
+              </p>
+            ) : (
+              <AgentByline
+                agentId={answer.answeredBy ?? "aria"}
+                prefix="Built by"
+                size="sm"
+              />
+            )}
             <p
               className={
                 size === "lg"
-                  ? "font-display text-md font-bold leading-snug text-cloud-white sm:text-lg"
-                  : "font-display text-sm font-bold leading-snug text-cloud-white"
+                  ? "mt-1.5 font-display text-md font-bold leading-snug text-cloud-white sm:text-lg"
+                  : "mt-1.5 font-display text-sm font-bold leading-snug text-cloud-white"
               }
             >
               {answer.narration}

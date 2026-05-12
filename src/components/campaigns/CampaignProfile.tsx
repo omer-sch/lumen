@@ -19,7 +19,7 @@ import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import { findClient } from "@/lib/mock/clients";
 import { getCampaignDetail } from "@/lib/mock/campaigns";
 import type { CampaignDetail } from "@/lib/mock/campaigns";
-import type { Channel } from "@/lib/mock/dashboard";
+import type { Channel } from "@/types/dashboard";
 
 const CHANNEL_TINT: Record<Channel, { bg: string; fg: string }> = {
   Meta:      { bg: "var(--tint-ua-soft)",       fg: "var(--color-ua)" },
@@ -163,7 +163,7 @@ function Inner({ id }: { id: string }) {
               {detail.status}
             </span>
             <span className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
-              {c.slug === "all" ? "All clients" : c.name} · last {days} days
+              {c.name} · last {days} days
             </span>
           </div>
           <h2 className="font-display text-2xl font-extrabold leading-tight tracking-tight text-cloud-white sm:text-3xl">

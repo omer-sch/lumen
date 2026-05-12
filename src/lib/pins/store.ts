@@ -3,14 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { PinnedTile } from "./types";
 
-/**
- * @deprecated The hook now resolves the owner server-side from the
- * Clerk session (or PREVIEW_USER_ID in preview mode). Passing a userId
- * argument is ignored. Kept as an export so existing imports don't
- * break during the cutover; remove in a follow-up.
- */
-export const MOCK_USER_ID = "mock-user-1";
-
 const MAX_PINS = 24;
 
 /**

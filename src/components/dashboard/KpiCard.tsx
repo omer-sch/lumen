@@ -13,14 +13,16 @@ import {
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { CountUpNumber } from "@/components/ui/CountUpNumber";
-import type { KpiDirection, KpiId } from "@/lib/mock/dashboard";
+import type { KpiDirection, KpiId } from "@/types/dashboard";
 
 type KpiCardProps = {
   /** Stable identifier — surfaces as `data-testid="kpi-{id}"` when set. */
   id?: string;
   label: string;
   value: string;
-  delta: number;
+  /** Period-over-period percent change. `null` renders as "—" — used when
+   *  the previous period had no data, so "0%" would be misleading. */
+  delta: number | null;
   hint?: string;
   highlight?: boolean;
   direction?: KpiDirection;
@@ -108,8 +110,18 @@ export function KpiCard({
   series,
   swap,
 }: KpiCardProps) {
-  const positive = direction === "higher-better" ? delta >= 0 : delta <= 0;
-  const { numeric, prefix, suffix, decimals } = parseKpiValue(value);
+  const hasDelta = delta != null;
+  const positive = hasDelta
+    ? direction === "higher-better"
+      ? delta >= 0
+      : delta <= 0
+    : true;
+  // "—" is the placeholder for "no value yet" (live-fetch loading). Skip
+  // the count-up parsing so we don't render a stray "0" next to the dash.
+  const isPlaceholder = value.trim() === "—";
+  const { numeric, prefix, suffix, decimals } = isPlaceholder
+    ? { numeric: 0, prefix: undefined, suffix: undefined, decimals: 0 }
+    : parseKpiValue(value);
   const isHero = size === "hero";
   const hasSeries = series && series.length > 1;
   const stroke = highlight ? "var(--color-yellow)" : "var(--color-ua)";
@@ -154,30 +166,49 @@ export function KpiCard({
             textShadow: highlight ? "var(--shadow-yellow)" : undefined,
           }}
         >
-          <CountUpNumber
-            value={numeric}
-            decimals={decimals}
-            prefix={prefix}
-            suffix={suffix}
-            duration={isHero ? 1400 : 1100}
-          />
-        </span>
-        <span
-          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-body text-xs font-semibold tabular-nums transition-transform duration-280 ease-out-quart group-hover:-translate-y-px"
-          style={{
-            background: positive
-              ? "var(--tint-success-soft)"
-              : "var(--tint-danger-soft)",
-            color: positive ? "var(--color-ua)" : "var(--color-creative)",
-          }}
-        >
-          {delta >= 0 ? (
-            <ArrowUpRight className="h-3 w-3" strokeWidth={2.25} />
+          {isPlaceholder ? (
+            <span aria-label="no value yet">—</span>
           ) : (
-            <ArrowDownRight className="h-3 w-3" strokeWidth={2.25} />
+            <CountUpNumber
+              value={numeric}
+              decimals={decimals}
+              prefix={prefix}
+              suffix={suffix}
+              duration={isHero ? 1400 : 1100}
+            />
           )}
-          {Math.abs(delta).toFixed(1)}%
         </span>
+        {hasDelta ? (
+          <span
+            data-testid={id ? `kpi-${id}-delta` : undefined}
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-body text-xs font-semibold tabular-nums transition-transform duration-280 ease-out-quart group-hover:-translate-y-px"
+            style={{
+              background: positive
+                ? "var(--tint-success-soft)"
+                : "var(--tint-danger-soft)",
+              color: positive ? "var(--color-ua)" : "var(--color-creative)",
+            }}
+          >
+            {delta >= 0 ? (
+              <ArrowUpRight className="h-3 w-3" strokeWidth={2.25} />
+            ) : (
+              <ArrowDownRight className="h-3 w-3" strokeWidth={2.25} />
+            )}
+            {Math.abs(delta).toFixed(1)}%
+          </span>
+        ) : (
+          // No prior-period baseline (e.g. new client). Render an em-dash
+          // chip in muted styling so the tile reads "no change to compare"
+          // rather than "+0.0%" — which would silently miscommunicate.
+          <span
+            data-testid={id ? `kpi-${id}-delta` : undefined}
+            title="No prior-period baseline"
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-body text-xs font-semibold tabular-nums text-[color:var(--text-muted)]"
+            style={{ background: "var(--surface-input)" }}
+          >
+            —
+          </span>
+        )}
       </div>
 
       {hint && !isHero && (

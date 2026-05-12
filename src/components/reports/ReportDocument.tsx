@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { EditableText } from "./EditableText";
+import { AgentByline } from "@/components/agents/AgentByline";
 import type { Report, ReportSection } from "@/lib/reports/types";
 
 type ReportDocumentProps = {
@@ -78,6 +79,30 @@ export function ReportDocument({ report, onChange, readOnly }: ReportDocumentPro
             className="font-display text-3xl font-extrabold leading-tight tracking-tight text-[color:var(--text-light-primary)] sm:text-4xl"
           />
         )}
+        <AgentByline
+          agentId={report.authoredBy ?? "nova"}
+          prefix="Drafted by"
+          size="md"
+          tone="light"
+          className="pt-1"
+        />
+        {/* Phase-1 disclosure: the Reports generator runs against mock
+            campaign data, not BigQuery. Banner sits inside the document
+            so a print-to-PDF export still carries it — see M5 in
+            security-scan-2026-05-12-v2.md. Remove once
+            src/lib/reports/generate.ts is wired to BQ. */}
+        <p
+          role="note"
+          className="mt-2 rounded-md px-3 py-2 font-body text-xs font-semibold uppercase tracking-wider"
+          style={{
+            background: "color-mix(in oklab, var(--color-yellow) 18%, transparent)",
+            color: "var(--text-light-primary)",
+            border:
+              "1px solid color-mix(in oklab, var(--color-yellow) 45%, transparent)",
+          }}
+        >
+          Sample report — figures shown are illustrative, not live BigQuery data.
+        </p>
       </header>
 
       {report.sections.map((section) => (
