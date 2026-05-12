@@ -1,50 +1,57 @@
 import { NextResponse } from "next/server";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 
-type MemoryEntry = {
-  runId: string;
-  thumbs: "up" | "down" | null;
-  note: string;
-  score: number;
-  date: string;
-  savedAt: string;
-};
+import {
+  addFeedback,
+  listFeedbackForAgent,
+  type IncomingFeedback,
+} from "@/lib/db/agent-feedback";
+import { getUserId } from "@/lib/db/user";
+import { isSupabaseConfigured } from "@/lib/env.server";
+import type { AgentId } from "@/lib/agents/identity";
 
 type RouteContext = { params: Promise<{ agentId: string }> };
 
-function memoryPath(agentId: string): string {
-  return path.join(process.cwd(), "data/agents", agentId, "memory.json");
-}
+const KNOWN: readonly AgentId[] = ["aria", "max", "nova"];
 
-async function readEntries(file: string): Promise<MemoryEntry[]> {
-  try {
-    const raw = await readFile(file, "utf8");
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as MemoryEntry[]) : [];
-  } catch {
-    return [];
-  }
+function isKnownAgent(id: string): id is AgentId {
+  return (KNOWN as readonly string[]).includes(id);
 }
 
 export async function GET(_req: Request, ctx: RouteContext) {
   const { agentId } = await ctx.params;
-  const entries = await readEntries(memoryPath(agentId));
+  if (!isKnownAgent(agentId)) {
+    return NextResponse.json({ entries: [] });
+  }
+  // Preview-only design checkouts run without Supabase env. Return an
+  // empty list so the panel renders the static memory chips without
+  // surfacing a backend error.
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({ entries: [] });
+  }
+
+  const userId = await getUserId();
+  const entries = await listFeedbackForAgent(agentId, userId);
   return NextResponse.json({ entries });
 }
 
 export async function POST(req: Request, ctx: RouteContext) {
   const { agentId } = await ctx.params;
-  const file = memoryPath(agentId);
+  if (!isKnownAgent(agentId)) {
+    return NextResponse.json({ error: "unknown agent" }, { status: 404 });
+  }
 
-  const incoming = (await req.json()) as Omit<MemoryEntry, "savedAt">;
-  const entry: MemoryEntry = { ...incoming, savedAt: new Date().toISOString() };
+  const incoming = (await req.json()) as IncomingFeedback;
+  if (!incoming?.runId || typeof incoming.runId !== "string") {
+    return NextResponse.json({ error: "runId required" }, { status: 400 });
+  }
+  // No DB in preview — accept the save so the panel can show its
+  // "Saved" affordance, but don't persist.
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({ ok: true, persisted: false });
+  }
 
-  const entries = await readEntries(file);
-  entries.push(entry);
+  const userId = await getUserId();
+  await addFeedback(incoming, userId);
 
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, JSON.stringify(entries, null, 2), "utf8");
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, persisted: true });
 }

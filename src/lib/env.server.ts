@@ -80,15 +80,29 @@ export const serverEnv = {
     return read("NEXT_PUBLIC_SUPABASE_ANON_KEY", { optional: true });
   },
   /**
-   * Required when accessed. The service-role key bypasses RLS — never
-   * expose to the client, never log, never commit. Read only from server
-   * routes that need to write to the dev DB. Throws when missing so a
-   * misconfigured env fails closed rather than silently no-op.
+   * Optional at read-time. The service-role key bypasses RLS — never
+   * expose to the client, never log, never commit. When unset, the
+   * Supabase-backed surfaces fall back to mock data (used for the
+   * LUMEN_PREVIEW design-only mode). `isSupabaseConfigured()` is the
+   * branch a route should use to decide DB vs mock.
    */
   get SUPABASE_SERVICE_ROLE_KEY() {
-    return read("SUPABASE_SERVICE_ROLE_KEY");
+    return read("SUPABASE_SERVICE_ROLE_KEY", { optional: true });
   },
 } as const;
+
+/**
+ * True when both the project URL and the service-role key are set.
+ * Server routes that have a mock fallback consult this; routes that
+ * cannot meaningfully run without the DB (e.g. /api/agents/.../memory)
+ * should let supabaseAdmin() throw the loud error instead.
+ */
+export function isSupabaseConfigured(): boolean {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
+}
 
 /** Call from a server-only entry (e.g. a startup hook) to fail fast. */
 export function assertServerEnv(): void {

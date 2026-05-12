@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
-import { AGENTS, type Agent, type AgentRun } from "@/lib/mock/agents";
+import { type Agent, type AgentRun } from "@/lib/mock/agents";
 import { LivePulse } from "@/components/ui/LivePulse";
 import { AgentCard } from "@/components/agents/AgentCard";
 import { AgentDetailPanel } from "@/components/agents/AgentDetailPanel";
@@ -48,8 +48,15 @@ function buildAriaPrompt(
   return `${base} Recent feedback: ${feedback}`;
 }
 
-export function AgentsView() {
-  const [agents, setAgents] = useState<Agent[]>(AGENTS);
+type AgentsViewProps = {
+  /** Hydrated by the page server component from Postgres. The client
+   *  state mirrors this and then evolves locally (progress tick, pause,
+   *  Run-now) without further server roundtrips for the demo. */
+  initialAgents: Agent[];
+};
+
+export function AgentsView({ initialAgents }: AgentsViewProps) {
+  const [agents, setAgents] = useState<Agent[]>(initialAgents);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Tick effect — advance any running, unpaused agent's progress. When a run
