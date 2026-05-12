@@ -1,0 +1,50 @@
+# Post-deploy smoke check.
+#
+# Fires when Vercel reports a production deployment succeeded. Catches
+# the case where the build is green and the deploy "succeeds" but the
+# live URL serves a 500 or a blank page. Three-attempt retry covers
+# cold starts. No secrets needed.
+
+name: Post-deploy smoke
+
+on:
+  deployment_status:
+
+jobs:
+  smoke:
+    name: Smoke check production URL
+    if: github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'production'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit deployed URL and verify brand string
+        env:
+          URL: ${{ github.event.deployment_status.target_url }}
+        run: |
+          set -euo pipefail
+          if [ -z "${URL}" ]; then
+            echo "No target_url on deployment_status event; nothing to check."
+            exit 1
+          fi
+          echo "Smoking: ${URL}"
+
+          attempt=1
+          max_attempts=3
+          while [ "$attempt" -le "$max_attempts" ]; do
+            echo "Attempt ${attempt}/${max_attempts}..."
+            if curl --fail --show-error --silent --location --max-time 30 \
+                 -o /tmp/smoke.html -w "HTTP %{http_code}\n" "${URL}/" \
+               && grep -q "Lumen" /tmp/smoke.html; then
+              echo "Smoke check passed."
+              exit 0
+            fi
+            echo "Attempt ${attempt} failed."
+            attempt=$((attempt + 1))
+            if [ "$attempt" -le "$max_attempts" ]; then
+              sleep 10
+            fi
+          done
+
+          echo "Smoke check failed after ${max_attempts} attempts."
+          echo "Last response body (first 500 bytes):"
+          head -c 500 /tmp/smoke.html || true
+          exit 1

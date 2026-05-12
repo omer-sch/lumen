@@ -12,6 +12,20 @@
 # (vercel.json's "github.enabled": true alone is not sufficient on newer
 #  Vercel; the dashboard toggle is the authoritative gate.)
 #
+# ─── Stages ───────────────────────────────────────────────────────────
+#   Stage 1: lint-and-typecheck   (fast fail on ESLint + tsc)
+#   Stage 2: security-audit       (npm audit, parallel to Stage 1)
+#   Stage 3: unit-tests           (Vitest with coverage thresholds)
+#   Stage 4: build                (needs Stage 1 + Stage 3; produces .next/)
+#   Stage 5: e2e-tests            (Playwright against the built artifact)
+#
+# Coverage thresholds for the unit-tests stage are declared in
+# vitest.config.ts (lines/branches/functions/statements). The job runs
+# `npm run test:unit:cov`, which invokes Vitest with --coverage; if any
+# threshold regresses, vitest exits non-zero and the job fails. The
+# coverage/ directory is uploaded as an artifact (always, even on
+# failure) so the drop can be inspected without re-running locally.
+#
 # ─── Required GitHub repo secrets ─────────────────────────────────────
 # Set in Settings → Secrets and variables → Actions:
 #
@@ -104,12 +118,45 @@ jobs:
         run: npm audit --audit-level=high
 
   # ─── Stage 3 ──────────────────────────────────────────────────────
+  # Unit tests with coverage. Vitest enforces the thresholds declared in
+  # vitest.config.ts (lines/branches/functions/statements); a regression
+  # below those floors fails the job. The coverage/ directory is uploaded
+  # as an artifact on every run (success or failure) so drops can be
+  # inspected without re-running locally.
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Vitest (with coverage)
+        run: npm run test:unit:cov
+
+      # Always upload — we want to see coverage even when the job fails
+      # below threshold, so the regression is diagnosable from the PR.
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-coverage
+          path: coverage
+          retention-days: 7
+
+  # ─── Stage 4 ──────────────────────────────────────────────────────
   # Production build. Validates that next build succeeds with the same
   # env wiring Vercel uses. Caches .next/cache so incremental builds
   # speed up subsequent runs.
   build:
     name: Build
-    needs: lint-and-typecheck
+    needs: [lint-and-typecheck, unit-tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -158,7 +205,7 @@ jobs:
             !.next/cache
           retention-days: 1
 
-  # ─── Stage 4 ──────────────────────────────────────────────────────
+  # ─── Stage 5 ──────────────────────────────────────────────────────
   # E2E suite against the production build. Provisions the Clerk test
   # user idempotently, then lets playwright start `next start` itself
   # (per the CI branch in playwright.config.ts:webServer).
