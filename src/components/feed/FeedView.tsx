@@ -1,5 +1,10 @@
 "use client";
 
+// TODO(db): cut Feed over to Postgres once the schema can carry the
+// rich shape FeedItem needs — title/body/chart-series/action are
+// hand-authored and don't live on agent_anomalies today. Either extend
+// agent_anomalies, add a feed_items table, or generate the rich fields
+// from the raw anomaly data via templating. Tracked outside this PR.
 import { useState } from "react";
 import { MOCK_FEED, type FeedItem } from "@/lib/mock/feed";
 import { FeedCard } from "@/components/feed/FeedCard";
