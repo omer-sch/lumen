@@ -6,11 +6,11 @@ import { auth } from "@clerk/nextjs/server";
  * The placeholder id used in PREVIEW mode (LUMEN_PREVIEW=1, non-prod
  * only). Per-user rows written from preview sessions are attributed to
  * this id so the agents/feed/ask/pins surfaces can still be exercised
- * without a real Clerk session. Matches the value seeded by
- * supabase/seed.sql so a fresh dev DB already has data attributed to
- * this user.
+ * without a real Clerk session. Matches the user_id seeded by
+ * supabase/seed.sql so a fresh dev DB already has feedback attributed
+ * to this user — preview-mode sessions land with demo state ready.
  */
-export const PREVIEW_USER_ID = "preview_user_dev";
+export const PREVIEW_USER_ID = "seed_user_dev";
 
 const PREVIEW =
   process.env.NODE_ENV !== "production" &&
