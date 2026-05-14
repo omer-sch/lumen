@@ -127,7 +127,7 @@ function DashboardHeader() {
             </>
           ) : (
             <>
-              Paid performance{" "}
+              Performance overview,{" "}
               <span
                 className="block bg-clip-text text-transparent sm:inline"
                 style={{
@@ -135,14 +135,14 @@ function DashboardHeader() {
                     "linear-gradient(120deg, var(--color-ua) 0%, var(--color-ua-glow) 55%, var(--color-yellow) 100%)",
                 }}
               >
-                looking sharp.
+                {c.name}.
               </span>
             </>
           )}
         </h2>
         <p className="max-w-xl font-body text-sm text-[color:var(--text-secondary)]">
           {mode === "ai"
-            ? "Lumen rebuilt this view from scratch — each tile is something the brain decided to surface, with a one-line read on why. Step back into My Dashboard for the curated view."
+            ? "Lumen rebuilt this view from scratch. Each tile is something the brain decided to surface, with a one-line read on why. Step back into My Dashboard for the curated view."
             : "Your paid performance snapshot for the selected period."}
         </p>
       </div>
