@@ -11,12 +11,31 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Cap local parallelism so the dev server + BigQuery aren't overwhelmed;
+  // CI still serializes to 1 worker. Default (unset) is ~50% of CPU cores,
+  // which on a 16-core machine means 8 workers all hitting Turbopack at
+  // once and starving the dashboard load past expect timeouts.
+  workers: process.env.CI ? 1 : 4,
   reporter: process.env.CI ? "github" : "list",
+  // Per-test timeout: the default 30s is too tight for spec.beforeEach + a
+  // /dashboard navigation that fans out to BigQuery + Anthropic under
+  // parallel load. Bump to 90s globally; the security/anonymous specs
+  // finish well under 5s so this only matters for the heavy authed paths.
+  timeout: 90_000,
+  expect: {
+    // Mirror actionTimeout. Default 5s is too tight under parallel BQ
+    // fetches; 15s lets a slow but-otherwise-healthy paint converge.
+    timeout: 15_000,
+  },
   use: {
     baseURL: BASE_URL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
+    // Default 5s expect timeout starves under parallel turbopack +
+    // BigQuery load. 15s keeps assertions responsive on healthy pages
+    // and gives the dashboard a fair window to mount.
+    actionTimeout: 15_000,
+    navigationTimeout: 30_000,
   },
   projects: [
     // Unauthenticated suite — security, CSP, headers, auth-redirect probes.
@@ -32,6 +51,26 @@ export default defineConfig({
         "**/dashboard.spec.ts",
         "**/bq-dashboard.spec.ts",
         "**/agents-aria-playground.spec.ts",
+        // Product surfaces that sit behind the Clerk gate. The "chromium"
+        // project stays anonymous on purpose, so these live in
+        // "chromium-authed" instead.
+        "**/ask.spec.ts",
+        "**/campaigns.spec.ts",
+        "**/campaign-profile.spec.ts",
+        "**/feed.spec.ts",
+        "**/reports.spec.ts",
+        "**/knowledge.spec.ts",
+        "**/global-filter.spec.ts",
+        // New authed lifecycle specs (Step 4 of the test-coverage push).
+        "**/pin-lifecycle.spec.ts",
+        "**/report-end-to-end.spec.ts",
+        "**/notifications.spec.ts",
+        "**/agents-memory-persist.spec.ts",
+        "**/ai-mode.spec.ts",
+        "**/sign-out.spec.ts",
+        // api-auth-matrix.spec.ts is intentionally NOT ignored — it runs
+        // in the anonymous chromium project to prove every /api/bq/*
+        // route is gated when there is no session.
       ],
     },
 
@@ -57,6 +96,20 @@ export default defineConfig({
         "**/dashboard.spec.ts",
         "**/bq-dashboard.spec.ts",
         "**/agents-aria-playground.spec.ts",
+        "**/ask.spec.ts",
+        "**/campaigns.spec.ts",
+        "**/campaign-profile.spec.ts",
+        "**/feed.spec.ts",
+        "**/reports.spec.ts",
+        "**/knowledge.spec.ts",
+        "**/global-filter.spec.ts",
+        // New authed lifecycle specs (Step 4 of the test-coverage push).
+        "**/pin-lifecycle.spec.ts",
+        "**/report-end-to-end.spec.ts",
+        "**/notifications.spec.ts",
+        "**/agents-memory-persist.spec.ts",
+        "**/ai-mode.spec.ts",
+        "**/sign-out.spec.ts",
       ],
     },
 
