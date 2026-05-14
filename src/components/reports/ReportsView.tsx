@@ -64,14 +64,16 @@ function ReportsInner() {
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("carousel");
+  const [viewMode, setViewMode] = useState<ViewMode>("document");
   const [activeSlide, setActiveSlide] = useState(0);
   const [exporting, setExporting] = useState<null | "pdf" | "pptx">(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [deckMounted, setDeckMounted] = useState(false);
 
-  // Restore view mode for the session only. Carousel is the default for
-  // a fresh load so a shared link opens in deck view.
+  // Restore view mode for the session only. Document is the default
+  // for a fresh load — Carousel clips the campaign commentary and the
+  // CPA-D7 column in its 16:9 frame, so it's an opt-in via the toggle.
+  // A user who picks Carousel and reloads still gets Carousel.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = window.sessionStorage.getItem(VIEW_STORAGE_KEY);

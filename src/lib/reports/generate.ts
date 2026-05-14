@@ -35,6 +35,19 @@ const fmtMoney = (n: number) =>
   n >= 1000 ? `$${Math.round(n).toLocaleString()}` : `$${n.toFixed(2)}`;
 const fmtCount = (n: number) => Math.round(n).toLocaleString();
 
+// Title seed for both generators. The first line of the prompt is the
+// natural title. We only trim when it would render unwieldy in the
+// sidebar list, and we trim on a word boundary so the result never ends
+// mid-word like "and recommenda".
+const TITLE_SOFT_LIMIT = 90;
+function deriveTitleSeed(prompt: string): string {
+  const firstLine = prompt.trim().split("\n")[0] ?? "";
+  if (firstLine.length <= TITLE_SOFT_LIMIT) return firstLine;
+  const head = firstLine.slice(0, TITLE_SOFT_LIMIT);
+  const cut = head.lastIndexOf(" ");
+  return cut > 0 ? head.slice(0, cut) : head;
+}
+
 // =============================================================================
 // Public entry point — routes to the new yellowHEAD generator by default.
 // The legacy 5-section generator is kept and exported so saved reports and
@@ -73,7 +86,7 @@ export function generateYellowHeadReport({
   const period = `${fmtDay(from)} – ${fmtDay(to)}`;
   const week = isoWeek(to);
 
-  const titleSeed = prompt.trim().split("\n")[0].slice(0, 80);
+  const titleSeed = deriveTitleSeed(prompt);
   const title =
     titleSeed.length > 6
       ? titleSeed
@@ -421,7 +434,7 @@ export function generateLegacyReport({
   const period = `${fmtDay(from)} – ${fmtDay(to)}`;
   const clientLabel = c.name;
 
-  const titleSeed = prompt.trim().split("\n")[0].slice(0, 80);
+  const titleSeed = deriveTitleSeed(prompt);
   const title =
     titleSeed.length > 6
       ? titleSeed

@@ -50,7 +50,7 @@ test.describe("reports page — builder input", () => {
 });
 
 test.describe("reports page — generated document", () => {
-  test("renders the four structured sections after generation", async ({ page }) => {
+  test("renders the yellowHEAD platform + channel sections after generation", async ({ page }) => {
     await page.goto("/reports");
     await generateReport(
       page,
@@ -58,11 +58,19 @@ test.describe("reports page — generated document", () => {
     );
 
     const doc = page.locator("article[data-report-doc]");
-    // Per spec: every report has executive summary, KPIs, channel breakdown, recommendations.
-    await expect(doc.getByRole("heading", { name: /executive summary/i })).toBeVisible();
-    await expect(doc.getByRole("heading", { name: /key metrics/i })).toBeVisible();
-    await expect(doc.getByRole("heading", { name: /channel breakdown/i })).toBeVisible();
-    await expect(doc.getByRole("heading", { name: /recommendations/i })).toBeVisible();
+    // yellowHEAD format renders three SectionDividers: Android (overall),
+    // Meta (weekly breakdown), Meta (campaign breakdown). The divider is
+    // role=separator with a stable aria-label, which is more reliable
+    // than scraping the visual h2 (two of them carry the same text).
+    await expect(
+      doc.getByRole("separator", { name: /android/i }),
+    ).toBeVisible();
+    await expect(
+      doc.getByRole("separator", { name: /meta.*weekly breakdown/i }),
+    ).toHaveCount(1);
+    await expect(
+      doc.getByRole("separator", { name: /meta.*campaign breakdown/i }),
+    ).toHaveCount(1);
   });
 
   test("the report header shows the Nova byline directly under the title", async ({
@@ -80,15 +88,15 @@ test.describe("reports page — generated document", () => {
     await expect(byline.getByText("Nova", { exact: true })).toBeVisible();
   });
 
-  test("each section title and body is editable in place", async ({ page }) => {
+  test("title and action-item commentary are editable in place", async ({ page }) => {
     await page.goto("/reports");
     await generateReport(page, "Top 5 campaigns this period and what to do next");
 
-    // EditableText renders contentEditable divs with role=textbox. There
-    // should be at least: title + (title+body)*4 sections + recommendation
-    // bullets — many editable surfaces on the page.
+    // yellowHEAD format renders editable surfaces for: the cover title +
+    // one action-item textbox per commentary group (three groups in the
+    // Meta campaign section). Four total.
     const editables = page.locator("article[data-report-doc] [role='textbox']");
-    expect(await editables.count()).toBeGreaterThanOrEqual(5);
+    expect(await editables.count()).toBeGreaterThanOrEqual(4);
 
     // The report title is contentEditable — verify a real edit lands in the DOM.
     const titleBox = page.getByRole("textbox", { name: /report title/i });
@@ -98,18 +106,17 @@ test.describe("reports page — generated document", () => {
     await expect(titleBox).toHaveText(/my edited report title/i);
   });
 
-  test("exposes a share link affordance and an export PDF affordance", async ({ page }) => {
+  test("exposes a share link affordance and PDF + PPTX export affordances", async ({ page }) => {
     await page.goto("/reports");
     await generateReport(page, "Channel-level read with creative recommendations");
 
-    // Action bar only mounts once a report is active — these are the two
-    // share-and-distribute buttons the spec calls out.
+    // The action bar only mounts once a report is active. Accessible
+    // names match the visible button text (no aria-label).
     await expect(
-      page.getByRole("button", { name: /copy share link/i }),
+      page.getByRole("button", { name: /share link/i }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /export pdf/i }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /^pdf$/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^pptx$/i })).toBeVisible();
   });
 
   test("clicking the share button copies a /reports?id=… deep link", async ({ page, context }) => {
@@ -117,13 +124,34 @@ test.describe("reports page — generated document", () => {
     await page.goto("/reports");
     await generateReport(page, "Weekly UA summary");
 
-    await page.getByRole("button", { name: /copy share link/i }).click();
+    await page.getByRole("button", { name: /share link/i }).click();
     // The button swaps to "Copied" once the clipboard write resolves —
     // that's the user-visible confirmation the share link was produced.
     await expect(page.getByRole("button", { name: /copied/i })).toBeVisible();
 
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     expect(copied).toMatch(/\/reports\?id=rpt_/);
+  });
+
+  test("a long prompt produces a title trimmed on a word boundary, not mid-word", async ({
+    page,
+  }) => {
+    await page.goto("/reports");
+    // 90+ chars, deliberately chosen so the legacy 80-char slice would
+    // have cut "recommendations" into "recommenda".
+    await generateReport(
+      page,
+      "Weekly UA performance summary for GlobalComix with top campaigns and recommendations across every channel",
+    );
+
+    const titleBox = page.getByRole("textbox", { name: /report title/i });
+    const text = (await titleBox.textContent())?.trim() ?? "";
+    // The legacy 80-char slice produced "...and recommenda". A
+    // word-boundary trim never lands there.
+    expect(text).not.toMatch(/recommenda$/);
+    expect(text.endsWith(" ")).toBe(false);
+    // The title still leads with the prompt's first words.
+    expect(text.toLowerCase()).toMatch(/^weekly ua performance summary/);
   });
 
   // The "Export PDF" affordance currently calls window.print() rather than
