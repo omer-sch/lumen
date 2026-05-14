@@ -83,7 +83,7 @@ describe("bq-queries: client allowlist", () => {
 });
 
 describe("bq-queries: SQL shape (queryDashboardKPIs)", () => {
-  it("builds the GlobalComix KPI query with cost_usd, rev_gross_d7_usd, and no dedupe", async () => {
+  it("builds the GlobalComix KPI query as a UNION of the four dwh_*_adjust tables with No Breakdown dedupe and cohort-side D7 revenue", async () => {
     queryFn.mockResolvedValue([
       [{ spend: 1, installs: 2, cpi: 0.5, roas: 1.1 }],
     ]);
@@ -91,10 +91,22 @@ describe("bq-queries: SQL shape (queryDashboardKPIs)", () => {
     await queryDashboardKPIs("globalcomix", "2026-05-01", "2026-05-12");
     expect(queryFn).toHaveBeenCalledTimes(1);
     const opts = queryFn.mock.calls[0][0] as { query: string; params: object };
+    // All four per-network warehouse tables are present in the UNION
+    expect(opts.query).toContain("dwh_fb2_globalcomix_adjust");
+    expect(opts.query).toContain("dwh_google_ads_globalcomix_adjust");
+    expect(opts.query).toContain("dwh_tik_tok_globalcomix_adjust");
+    expect(opts.query).toContain("dwh_apple_globalcomix_adjust");
+    // No legacy agent view
+    expect(opts.query).not.toContain("v_agent_globalcomix");
+    // Spend aggregation reads from cost_usd
     expect(opts.query).toContain("SUM(cost_usd)");
-    expect(opts.query).toContain("SUM(rev_gross_d7_usd)");
-    expect(opts.query).toContain("`test-project.test_dataset.v_agent_globalcomix`");
-    expect(opts.query).not.toContain("breakdown_type");
+    // Breakdown dedupe collapses the 3x fan-out
+    expect(opts.query).toContain("breakdown_type = 'No Breakdown'");
+    // Cohort table is joined for D7 ROAS revenue
+    expect(opts.query).toContain("uni_adjust_cohort_report_globalcomix");
+    expect(opts.query).toContain("_7D_Revenue_Total");
+    // Google iOS attribution-gap exclusion
+    expect(opts.query).toContain("_OS_name = 'ios'");
     expect(opts.params).toEqual({ from: "2026-05-01", to: "2026-05-12" });
   });
 
@@ -176,42 +188,58 @@ describe("bq-queries: numeric coercion (queryDashboardKPIs)", () => {
 });
 
 describe("bq-queries: queryTrend / queryChannelMix / queryCampaigns", () => {
-  it("queryTrend orders ascending and groups by date", async () => {
+  it("queryTrend orders ascending by date (Playw3 agent path)", async () => {
     queryFn.mockResolvedValue([[]]);
     const { queryTrend } = await import("@/lib/bq-queries");
-    await queryTrend("globalcomix", "2026-05-01", "2026-05-12");
+    await queryTrend("playw3", "2026-05-01", "2026-05-12");
     const opts = queryFn.mock.calls[0][0] as { query: string };
     expect(opts.query).toContain("GROUP BY 1");
     expect(opts.query).toMatch(/ORDER BY 1 ASC/);
   });
 
-  it("queryChannelMix joins against a totals CTE and orders by spend desc", async () => {
+  it("queryTrend on globalcomix groups by date and orders ascending across the UNION", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryTrend } = await import("@/lib/bq-queries");
+    await queryTrend("globalcomix", "2026-05-01", "2026-05-12");
+    const opts = queryFn.mock.calls[0][0] as { query: string };
+    // Multi-source trend groups by date in a CTE and joins cohort revenue
+    expect(opts.query).toContain("GROUP BY date");
+    expect(opts.query).toMatch(/ORDER BY date ASC/);
+    // Cohort revenue is joined per day for daily ROAS
+    expect(opts.query).toContain("uni_adjust_cohort_report_globalcomix");
+  });
+
+  it("queryChannelMix on Playw3 joins against a totals CTE and orders by spend desc", async () => {
     queryFn.mockResolvedValue([[]]);
     const { queryChannelMix } = await import("@/lib/bq-queries");
-    await queryChannelMix("globalcomix", "2026-05-01", "2026-05-12");
+    await queryChannelMix("playw3", "2026-05-01", "2026-05-12");
     const opts = queryFn.mock.calls[0][0] as { query: string };
     expect(opts.query).toContain("WITH totals AS");
     expect(opts.query).toContain("ORDER BY spend DESC");
   });
 
-  it("queryChannelMix normalizes network labels: facebook -> Meta, googleads -> Google", async () => {
+  it("queryChannelMix on globalcomix groups the UNION by network and orders by spend desc", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryChannelMix } = await import("@/lib/bq-queries");
+    await queryChannelMix("globalcomix", "2026-05-01", "2026-05-12");
+    const opts = queryFn.mock.calls[0][0] as { query: string };
+    expect(opts.query).toContain("GROUP BY network");
+    expect(opts.query).toContain("ORDER BY p.spend DESC");
+  });
+
+  it("queryChannelMix normalizes Playw3 network labels: facebook -> Meta, x -> Twitter", async () => {
     queryFn.mockResolvedValue([
       [
         { network: "facebook", spend: 10, share: 0.5 },
-        { network: "googleads", spend: 5, share: 0.25 },
         { network: "x", spend: 5, share: 0.25 },
       ],
     ]);
     const { queryChannelMix } = await import("@/lib/bq-queries");
-    const out = await queryChannelMix(
-      "globalcomix",
-      "2026-05-01",
-      "2026-05-12",
-    );
-    expect(out.map((r) => r.network)).toEqual(["Meta", "Google", "Twitter"]);
+    const out = await queryChannelMix("playw3", "2026-05-01", "2026-05-12");
+    expect(out.map((r) => r.network)).toEqual(["Meta", "Twitter"]);
   });
 
-  it("queryCampaigns caps at 100 rows and orders by current-period spend desc", async () => {
+  it("queryCampaigns caps at 100 rows and orders by current-period spend desc (globalcomix multi-source)", async () => {
     queryFn.mockResolvedValue([[]]);
     const { queryCampaigns } = await import("@/lib/bq-queries");
     await queryCampaigns("globalcomix", "2026-05-01", "2026-05-12");

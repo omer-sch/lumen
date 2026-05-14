@@ -2,8 +2,22 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 import { getBigQueryClient } from "@/lib/bq";
+import { toBounds } from "@/lib/bq-coerce";
+// Re-export so `@/lib/bq-queries` remains the canonical surface for the
+// helper — `bq-queries-100play.ts` and the unit tests import it from here.
+export { toBounds } from "@/lib/bq-coerce";
 import { getSchemaForClient, getTableForClient } from "@/lib/bq-security";
 import { serverEnv } from "@/lib/env.server";
+import {
+  queryGlobalComixCampaigns,
+  queryGlobalComixChannelMix,
+  queryGlobalComixDataAsOf,
+  queryGlobalComixDataBounds,
+  queryGlobalComixKPIs,
+  queryGlobalComixNetworkBreakdown,
+  queryGlobalComixPayback,
+  queryGlobalComixTrend,
+} from "@/lib/globalcomix-queries";
 import type {
   KPIData,
   BQTrendPoint,
@@ -11,6 +25,8 @@ import type {
   CampaignRow,
   FreshnessData,
   DataBounds,
+  NetworkRow,
+  PaybackPoint,
 } from "@/types/dashboard";
 
 /** Reject anything that isn't a YYYY-MM-DD date before it touches SQL. */
@@ -46,6 +62,14 @@ async function _queryDashboardKPIs(
 ): Promise<KPIData> {
   assertIsoDate(from, "from");
   assertIsoDate(to, "to");
+  // Multi-source clients (e.g. globalcomix) don't have a single table to
+  // FROM — they UNION across per-network warehouse tables and join a
+  // cohort for ROAS. The dispatch happens here so the cached export
+  // surface stays a single function and the API routes don't have to
+  // branch on client strategy.
+  if (getSchemaForClient(client).strategy === "multi-source") {
+    return queryGlobalComixKPIs(client, from, to);
+  }
   const table = getTableForClient(client);
   const { spendCol, revenueCol } = getSchemaForClient(client);
   const dedupe = dedupeAnd(client);
@@ -114,6 +138,9 @@ async function _queryTrend(
 ): Promise<BQTrendPoint[]> {
   assertIsoDate(from, "from");
   assertIsoDate(to, "to");
+  if (getSchemaForClient(client).strategy === "multi-source") {
+    return queryGlobalComixTrend(client, from, to);
+  }
   const table = getTableForClient(client);
   const { spendCol, revenueCol } = getSchemaForClient(client);
   const dedupe = dedupeAnd(client);
@@ -155,6 +182,9 @@ async function _queryChannelMix(
 ): Promise<ChannelBreakdown[]> {
   assertIsoDate(from, "from");
   assertIsoDate(to, "to");
+  if (getSchemaForClient(client).strategy === "multi-source") {
+    return queryGlobalComixChannelMix(client, from, to);
+  }
   const table = getTableForClient(client);
   const { spendCol } = getSchemaForClient(client);
   const dedupe = dedupeAnd(client);
@@ -222,6 +252,9 @@ async function _queryCampaigns(
 ): Promise<CampaignRow[]> {
   assertIsoDate(from, "from");
   assertIsoDate(to, "to");
+  if (getSchemaForClient(client).strategy === "multi-source") {
+    return queryGlobalComixCampaigns(client, from, to);
+  }
   const table = getTableForClient(client);
   const { spendCol, revenueCol } = getSchemaForClient(client);
   const dedupe = dedupeAnd(client);
@@ -284,11 +317,45 @@ async function _queryCampaigns(
   }));
 }
 
+// ── Per-network full performance row ───────────────────────────────────────
+// Multi-source only. Agent-strategy clients return an empty array — they
+// don't have the click/impression/multi-window-revenue fields the
+// network-breakdown table renders.
+async function _queryNetworkBreakdown(
+  client: string,
+  from: string,
+  to: string,
+): Promise<NetworkRow[]> {
+  assertIsoDate(from, "from");
+  assertIsoDate(to, "to");
+  if (getSchemaForClient(client).strategy !== "multi-source") {
+    return [];
+  }
+  return queryGlobalComixNetworkBreakdown(client, from, to);
+}
+
+// ── Cohort payback curve (D0 → D90) ────────────────────────────────────────
+async function _queryPayback(
+  client: string,
+  from: string,
+  to: string,
+): Promise<PaybackPoint[]> {
+  assertIsoDate(from, "from");
+  assertIsoDate(to, "to");
+  if (getSchemaForClient(client).strategy !== "multi-source") {
+    return [];
+  }
+  return queryGlobalComixPayback(client, from, to);
+}
+
 // ── Earliest/latest dates with spend > 0 for a client ──────────────────────
 // Used by the dashboard to auto-snap the active window when the user is
 // looking at a date range with no data at all. Bounds change slowly, so the
 // cache TTL is long (24h) vs the per-window KPI cache (30 min).
 async function _queryDataBounds(client: string): Promise<DataBounds> {
+  if (getSchemaForClient(client).strategy === "multi-source") {
+    return queryGlobalComixDataBounds(client);
+  }
   const table = getTableForClient(client);
   const { spendCol } = getSchemaForClient(client);
   const dedupe = dedupeAnd(client);
@@ -305,27 +372,8 @@ async function _queryDataBounds(client: string): Promise<DataBounds> {
   return toBounds(rows[0]);
 }
 
-/** Coerce a BQ row's {earliest, latest} columns to plain string|null.
- *  BigQuery's STRING columns come back as `string`; FORMAT_DATE results come
- *  back as `string` too. Kept defensive in case the SDK changes shape. */
-export function toBounds(r: Record<string, unknown> | undefined): DataBounds {
-  const coerce = (v: unknown): string | null => {
-    if (v == null) return null;
-    if (typeof v === "string") return v;
-    if (typeof v === "object" && v && "value" in v) {
-      const val = (v as { value: unknown }).value;
-      return typeof val === "string" ? val : null;
-    }
-    return null;
-  };
-  return {
-    earliest: coerce(r?.earliest),
-    latest: coerce(r?.latest),
-  };
-}
-
 // ── Data freshness from Rivery telemetry ────────────────────────────────────
-async function _queryFreshness(): Promise<FreshnessData> {
+async function _queryFreshness(client?: string): Promise<FreshnessData> {
   const bq = getBigQueryClient();
 
   // Note the dataset is literally `rivery_activity_anlytics` (typo upstream
@@ -337,8 +385,26 @@ async function _queryFreshness(): Promise<FreshnessData> {
     WHERE date IS NOT NULL
   `;
 
+  // Per-client `dataAsOf`: MAX(date) across the warehouse tables that back
+  // this client. Runs in parallel with the Rivery query. Errors are
+  // swallowed and surface as `null` in the response — the UI degrades to
+  // hiding the date label, the dot still shows the Rivery signal.
+  const dataAsOfPromise: Promise<string | null> =
+    client && getSchemaForClient(client).strategy === "multi-source"
+      ? queryGlobalComixDataAsOf(client).catch((err) => {
+          console.error(
+            "[bq:freshness:data-as-of]",
+            err instanceof Error ? err.message : err,
+          );
+          return null;
+        })
+      : Promise.resolve(null);
+
   try {
-    const [rows] = await bq.query({ query, location: BQ_LOCATION });
+    const [[rows], dataAsOf] = await Promise.all([
+      bq.query({ query, location: BQ_LOCATION }),
+      dataAsOfPromise,
+    ]);
     const raw = rows[0]?.last_updated;
     // BQ DATE columns come back as `{ value: "YYYY-MM-DD" }`.
     const dateStr =
@@ -351,12 +417,18 @@ async function _queryFreshness(): Promise<FreshnessData> {
     if (!Number.isFinite(ts)) throw new Error("invalid date");
     const lastUpdated = new Date(ts).toISOString();
     const hoursAgo = Math.max(0, Math.round((Date.now() - ts) / 3_600_000));
-    return { lastUpdated, hoursAgo };
+    return { lastUpdated, hoursAgo, dataAsOf };
   } catch (err) {
     // Don't crash the dashboard if freshness fails; surface -1 for the UI
-    // gray-dot state, log server-side for debugging.
+    // gray-dot state, log server-side for debugging. `dataAsOf` may still
+    // resolve, so we surface whatever the per-client query returned.
     console.error("[bq:freshness]", err instanceof Error ? err.message : err);
-    return { lastUpdated: new Date().toISOString(), hoursAgo: -1 };
+    const dataAsOf = await dataAsOfPromise.catch(() => null);
+    return {
+      lastUpdated: new Date().toISOString(),
+      hoursAgo: -1,
+      dataAsOf,
+    };
   }
 }
 
@@ -402,11 +474,40 @@ export const queryCampaigns = (
     tags: ["bq", `bq:${client}`],
   })(client, from, to);
 
-export const queryFreshness = () =>
-  unstable_cache(_queryFreshness, ["bq:freshness"], {
-    revalidate: 600,
-    tags: ["bq", "bq:freshness"],
-  })();
+export const queryNetworkBreakdown = (
+  client: string,
+  from: string,
+  to: string,
+) =>
+  unstable_cache(
+    _queryNetworkBreakdown,
+    ["bq:network-breakdown", client, from, to],
+    { revalidate: REVALIDATE_SECONDS, tags: ["bq", `bq:${client}`] },
+  )(client, from, to);
+
+export const queryPayback = (
+  client: string,
+  from: string,
+  to: string,
+) =>
+  unstable_cache(
+    _queryPayback,
+    ["bq:payback", client, from, to],
+    { revalidate: REVALIDATE_SECONDS, tags: ["bq", `bq:${client}`] },
+  )(client, from, to);
+
+// `client` is part of the cache key so each client gets its own dataAsOf;
+// when undefined (e.g. a generic freshness ping with no active client),
+// the cache key still differs from the per-client entries.
+export const queryFreshness = (client?: string) =>
+  unstable_cache(
+    _queryFreshness,
+    ["bq:freshness", client ?? "_anon"],
+    {
+      revalidate: 600,
+      tags: ["bq", "bq:freshness"],
+    },
+  )(client);
 
 export const queryDataBounds = (client: string) =>
   unstable_cache(_queryDataBounds, ["bq:data-bounds", client], {

@@ -6,14 +6,24 @@ import { cn } from "@/lib/utils";
 import type { DashboardData, Kpi, KpiId } from "@/types/dashboard";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import { useDashboardMode } from "@/lib/filters/use-dashboard-mode";
-import { findClient, getClientCoverage, type ClientCoverage } from "@/lib/mock/clients";
+import {
+  findClient,
+  getClientCoverage,
+  getSupportedKpis,
+  type ClientCoverage,
+} from "@/lib/mock/clients";
 import { useDashboardData } from "@/lib/dashboard/use-dashboard-data";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { ChannelMix } from "@/components/dashboard/ChannelMix";
+import { NetworkBreakdown } from "@/components/dashboard/NetworkBreakdown";
+import { PaybackCurve } from "@/components/dashboard/PaybackCurve";
 import { PinnedSection } from "@/components/dashboard/PinnedSection";
 import { AIModeView } from "@/components/dashboard/AIModeView";
+import { InfoCallout } from "@/components/ui/InfoCallout";
 import { LivePulse } from "@/components/ui/LivePulse";
+import { SectionError } from "@/components/ui/SectionError";
+import type { SectionErrors } from "@/lib/dashboard/use-dashboard-data";
 import {
   KpiCardSkeleton,
   Skeleton,
@@ -31,12 +41,10 @@ export function DashboardView() {
 function DashboardInner() {
   const { from, to, client, setCustomRange } = useGlobalFilters();
   const { mode } = useDashboardMode();
-  const { data, loading, error, bounds, windowEmpty } = useDashboardData({
-    from,
-    to,
-    client,
-  });
+  const { data, loading, errors, bounds, windowEmpty, refetch } =
+    useDashboardData({ from, to, client });
   const coverage = getClientCoverage(client);
+  const supportedKpis = getSupportedKpis(client);
 
   // Auto-snap: if the active window has zero spend AND the client has data
   // outside that window, jump the global filter to the most recent 30 days
@@ -71,25 +79,17 @@ function DashboardInner() {
   return (
     <div className="flex flex-col gap-4 md:gap-5">
       <DashboardHeader />
-      {error && (
-        <div
-          role="alert"
-          data-testid="dashboard-error"
-          className="rounded-md px-3 py-2 font-body text-xs"
-          style={{
-            background: "var(--tint-danger-soft)",
-            color: "var(--color-creative)",
-            border:
-              "1px solid color-mix(in oklab, var(--color-creative) 30%, transparent)",
-          }}
-        >
-          Couldn&rsquo;t load live data: {error}.
-        </div>
-      )}
       {mode === "ai" ? (
         <AIModeView />
       ) : (
-        <MyDashboard data={data} loading={loading} coverage={coverage} />
+        <MyDashboard
+          data={data}
+          loading={loading}
+          coverage={coverage}
+          supportedKpis={supportedKpis}
+          errors={errors}
+          onRetry={refetch}
+        />
       )}
       <PinnedSection />
     </div>
@@ -244,12 +244,24 @@ function MyDashboard({
   data,
   loading,
   coverage,
+  supportedKpis,
+  errors,
+  onRetry,
 }: {
-  /** `null` while the first fetch is in flight or on error — the surrounding
-   *  view renders an error banner on top of this subtree when relevant. */
+  /** `null` while the first fetch is in flight, or when the KPI fetch
+   *  failed structurally. Trend / channel-mix failures show up as section
+   *  errors inline instead of a null data object. */
   data: DashboardData | null;
   loading: boolean;
   coverage: ClientCoverage;
+  /** KPI ids this client can actually populate. Drives swap options +
+   *  visibility filtering so the user is never offered a tile that
+   *  would just read 0. */
+  supportedKpis: KpiId[];
+  errors: SectionErrors;
+  /** Refetch all four BQ-backed sections in parallel. Wired to the
+   *  per-section Retry buttons. */
+  onRetry: () => void;
 }) {
   // Per-slot active metric. Each tile is independently swappable — pick
   // any of the 4 metrics in any slot. Yellow follows ROAS wherever it
@@ -301,15 +313,33 @@ function MyDashboard({
     );
   }
 
-  // Not loading but no data → the error banner above is the user-facing
-  // surface. We intentionally render nothing here so the charts don't
-  // appear in a degraded state.
-  if (!data) return null;
+  // Not loading and no data → the KPI fetch failed (structural). The
+  // dashboard story rests on the KPI tiles, so render a single
+  // section-error tile in their place and stop. The trend + channel mix
+  // would have no anchor to attach to without KPIs.
+  if (!data) {
+    return (
+      <div className="flex flex-col gap-3 md:gap-4">
+        <section className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${gridCols}`}>
+          <div className="sm:col-span-2 lg:col-span-4">
+            <SectionError
+              section="the KPI tiles"
+              shape="min-h-[7rem]"
+              onRetry={onRetry}
+              data-testid="kpi-section-error"
+            />
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   // The swap options for each tile are limited to the metrics this client
-  // actually has — same filter as `slotsForCoverage` — so a user can't pick
-  // "Installs" on a client where that tile would just read zero.
+  // actually populates. `supportedKpis` is the canonical list (legacy four
+  // for agent-strategy clients, full extended set for multi-source).
+  const supportedSet = new Set<KpiId>(supportedKpis);
   const visibleKpis = data.kpis.filter((k) => {
+    if (!supportedSet.has(k.id)) return false;
     if (k.id === "installs") return coverage.hasInstalls;
     if (k.id === "cpi") return coverage.hasCpi;
     return true;
@@ -326,9 +356,12 @@ function MyDashboard({
       <section className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${gridCols}`}>
         {slots.map((activeId, i) => {
           const kpi = kpiById(activeId);
+          // Extended metrics are optional on TrendPoint; coerce undefined
+          // to 0 so the sparkline still renders for clients whose source
+          // doesn't populate the field.
           const series = data.trend.map((p) => ({
             date: p.date,
-            value: p[activeId],
+            value: p[activeId] ?? 0,
           }));
           return (
             <KpiCard
@@ -353,6 +386,15 @@ function MyDashboard({
         })}
       </section>
 
+      {coverage.qualityCallout && (
+        <InfoCallout
+          data-testid="dashboard-quality-callout"
+          title={coverage.qualityCallout.title}
+          body={coverage.qualityCallout.body}
+          dismissKey={coverage.qualityCallout.dismissKey}
+        />
+      )}
+
       {coverage.coverageNote && (
         <p
           data-testid="client-coverage-footnote"
@@ -362,13 +404,47 @@ function MyDashboard({
         </p>
       )}
 
-      {/* Trend + Channel mix */}
+      {/* Trend chart + companion. The companion is the new per-network
+          performance table when the client has multi-source data;
+          otherwise we fall back to the original ChannelMix bar list so
+          agent-strategy clients (Playw3, 100play) still get a
+          right-hand panel. Each can fail independently — surface a
+          per-section error inline instead of nuking the page. */}
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4">
         <div className="lg:col-span-2">
-          <TrendChart trend={data.trend} enterIndex={5} />
+          {errors.trend ? (
+            <SectionError
+              section="the trend chart"
+              shape="min-h-[14rem]"
+              onRetry={onRetry}
+              data-testid="trend-section-error"
+            />
+          ) : (
+            <TrendChart trend={data.trend} enterIndex={5} />
+          )}
         </div>
-        <ChannelMix data={data.channelMix} enterIndex={6} />
+        {errors.channelMix ? (
+          <SectionError
+            section="the channel mix"
+            shape="min-h-[14rem]"
+            onRetry={onRetry}
+            data-testid="channel-mix-section-error"
+          />
+        ) : data.networkBreakdown.length > 0 ? (
+          <NetworkBreakdown rows={data.networkBreakdown} enterIndex={6} />
+        ) : (
+          <ChannelMix data={data.channelMix} enterIndex={6} />
+        )}
       </section>
+
+      {/* Payback curve — only mounted when the client populates the
+          cohort table (multi-source). Renders nothing for agent-strategy
+          clients so the page doesn't reserve empty space. */}
+      {data.payback.length > 0 && (
+        <section>
+          <PaybackCurve points={data.payback} enterIndex={7} />
+        </section>
+      )}
     </div>
   );
 }

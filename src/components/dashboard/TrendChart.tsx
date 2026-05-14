@@ -39,12 +39,29 @@ const fmtCount = (n: number) =>
   n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
 const fmtRatio = (n: number) => `${n.toFixed(2)}x`;
 const fmtCpi = (n: number) => `$${n.toFixed(2)}`;
+const fmtPct = (n: number) => `${(n * 100).toFixed(2)}%`;
+const fmtMoneyCents = (n: number) =>
+  n >= 1000 ? `$${(n / 1000).toFixed(2)}k` : `$${n.toFixed(2)}`;
 
+// Every dwh metric is selectable. The tab row wraps on narrow viewports.
 const METRICS: MetricSpec[] = [
-  { id: "spend",    label: "Spend",    format: fmtMoneyShort },
-  { id: "installs", label: "Installs", format: fmtCount      },
-  { id: "cpi",      label: "CPI",      format: fmtCpi        },
-  { id: "roas",     label: "ROAS",     format: fmtRatio      },
+  { id: "spend",       label: "Spend",       format: fmtMoneyShort },
+  { id: "installs",    label: "Installs",    format: fmtCount      },
+  { id: "clicks",      label: "Clicks",      format: fmtCount      },
+  { id: "impressions", label: "Impressions", format: fmtCount      },
+  { id: "cpi",         label: "CPI",         format: fmtCpi        },
+  { id: "ctr",         label: "CTR",         format: fmtPct        },
+  { id: "cpm",         label: "CPM",         format: fmtMoneyCents },
+  { id: "cpc",         label: "CPC",         format: fmtMoneyCents },
+  { id: "revD7",       label: "Revenue D7",  format: fmtMoneyShort },
+  { id: "revD30",      label: "Revenue D30", format: fmtMoneyShort },
+  { id: "roas",        label: "ROAS D7",     format: fmtRatio      },
+  { id: "roasD14",     label: "ROAS D14",    format: fmtRatio      },
+  { id: "roasD30",     label: "ROAS D30",    format: fmtRatio      },
+  { id: "roasD90",     label: "ROAS D90",    format: fmtRatio      },
+  { id: "retD7",       label: "Retention D7", format: fmtPct       },
+  { id: "payersD7",    label: "Payers D7",   format: fmtCount      },
+  { id: "ftdD7",       label: "FTD D7",      format: fmtCount      },
 ];
 
 export function TrendChart({

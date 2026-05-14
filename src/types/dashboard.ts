@@ -20,7 +20,31 @@ export type DateRange = {
 
 export type KpiDirection = "higher-better" | "lower-better";
 
-export type KpiId = "spend" | "installs" | "cpi" | "roas";
+/**
+ * Every metric the dashboard can plot or pin to a tile. The set grew when
+ * GlobalComix moved to the per-network warehouse tables — those tables
+ * carry clicks/impressions and the cohort table carries multi-window
+ * revenue + retention + payer counts. Agent-strategy clients (Playw3,
+ * 100play) only populate the original four; the others read as 0 / null.
+ */
+export type KpiId =
+  | "spend"
+  | "installs"
+  | "clicks"
+  | "impressions"
+  | "cpi"
+  | "roas"
+  | "ctr"
+  | "cpm"
+  | "cpc"
+  | "revD7"
+  | "revD30"
+  | "roasD14"
+  | "roasD30"
+  | "roasD90"
+  | "retD7"
+  | "payersD7"
+  | "ftdD7";
 
 export type Kpi = {
   id: KpiId;
@@ -40,6 +64,21 @@ export type TrendPoint = {
   installs: number;
   cpi: number;
   roas: number;
+  // Optional fields — populated for multi-source clients (globalcomix);
+  // agent-strategy clients leave these as 0 so the chart renders flat.
+  clicks?: number;
+  impressions?: number;
+  ftdD7?: number;
+  ctr?: number;
+  cpm?: number;
+  cpc?: number;
+  revD7?: number;
+  revD30?: number;
+  roasD14?: number;
+  roasD30?: number;
+  roasD90?: number;
+  retD7?: number;
+  payersD7?: number;
 };
 
 /** Canonical channel labels. Real-data networks (e.g. "Twitter") flow
@@ -53,6 +92,11 @@ export type DashboardData = {
   /** `channel` is a free-form network label so real-data networks like
    *  "Twitter" / "AppLovin" round-trip without a type error. */
   channelMix: { channel: string; spend: number; pct: number }[];
+  /** Per-network full performance table. Empty array when the active
+   *  client doesn't have multi-source data. */
+  networkBreakdown: NetworkRow[];
+  /** Cohort payback curve (D0 → D90). Empty when not applicable. */
+  payback: PaybackPoint[];
 };
 
 // ── BQ wire shapes ────────────────────────────────────────────────────────
@@ -70,6 +114,47 @@ export type KPIData = {
   installsDelta: number | null;
   cpiDelta: number | null;
   roasDelta: number | null;
+  // ── Extended dwh-table metrics (multi-source clients) ──
+  /** Raw click volume across all networks. */
+  clicks?: number;
+  /** Raw impression volume across all networks. */
+  impressions?: number;
+  /** First-time deposits at D7 (paying conversion proxy, summed across
+   *  the per-network `num_ftd7` columns). */
+  ftdD7?: number;
+  /** Click-through rate (0..1). 0 if impressions are missing. */
+  ctr?: number;
+  /** Cost per mille — dollars per 1,000 impressions. */
+  cpm?: number;
+  /** Cost per click — dollars per click. */
+  cpc?: number;
+  /** Cohort-attributed revenue at D7 / D30 (raw dollars; the ROAS tiles
+   *  are these divided by spend). */
+  revD7?: number;
+  revD30?: number;
+  /** Cohort-attributed ROAS at D14 / D30 / D90 (D7 is on the main `roas`). */
+  roasD14?: number;
+  roasD30?: number;
+  roasD90?: number;
+  /** D7 retention rate (0..1). */
+  retD7?: number;
+  /** Distinct paying users in the cohort by D7. */
+  payersD7?: number;
+  /** Optional deltas for the extended metrics. Missing entries render
+   *  as "—" the same way the headline deltas do. */
+  clicksDelta?: number | null;
+  impressionsDelta?: number | null;
+  ftdD7Delta?: number | null;
+  ctrDelta?: number | null;
+  cpmDelta?: number | null;
+  cpcDelta?: number | null;
+  revD7Delta?: number | null;
+  revD30Delta?: number | null;
+  roasD14Delta?: number | null;
+  roasD30Delta?: number | null;
+  roasD90Delta?: number | null;
+  retD7Delta?: number | null;
+  payersD7Delta?: number | null;
 };
 
 export type BQTrendPoint = {
@@ -79,6 +164,62 @@ export type BQTrendPoint = {
   installs: number;
   cpi: number;
   roas: number;
+  // ── Extended dwh-table metrics (multi-source clients) ──
+  clicks?: number;
+  impressions?: number;
+  ftdD7?: number;
+  ctr?: number;
+  cpm?: number;
+  cpc?: number;
+  revD7?: number;
+  revD30?: number;
+  roasD14?: number;
+  roasD30?: number;
+  roasD90?: number;
+  retD7?: number;
+  payersD7?: number;
+};
+
+/**
+ * Per-network row for the dashboard's "Network performance" table. Each
+ * field maps to a column in the UI — keep the shape narrow because adding
+ * a field means widening the table.
+ */
+export type NetworkRow = {
+  network: string;
+  spend: number;
+  /** Share of total spend (0..1) — keeps the leading row's progress bar. */
+  share: number;
+  installs: number;
+  /** Raw click + impression counts. The KPI strip shows the period totals;
+   *  these are the per-network split for the same period. */
+  clicks: number;
+  impressions: number;
+  cpi: number;
+  /** Click-through rate (0..1). 0 when impressions are 0. */
+  ctr: number;
+  cpm: number;
+  cpc: number;
+  /** D7 / D14 / D30 / D90 ROAS for this network (cohort-attributed). */
+  roasD7: number;
+  roasD14: number;
+  roasD30: number;
+  roasD90: number;
+  /** First-time deposits at D7 (proxy for paying conversions in the spend
+   *  table) and the cohort-side D7 payer / retention counts. */
+  ftdD7: number;
+  payersD7: number;
+  retD7: number;
+};
+
+/**
+ * One point on the payback curve. `day` is the cohort window
+ * (0/7/14/30/90); `roas` is cohort revenue / period spend.
+ */
+export type PaybackPoint = {
+  day: number;
+  roas: number;
+  revenue: number;
 };
 
 export type ChannelBreakdown = {
@@ -105,6 +246,14 @@ export type FreshnessData = {
   lastUpdated: string;
   /** Hours since `lastUpdated`. `-1` signals an unreadable freshness source. */
   hoursAgo: number;
+  /**
+   * Most recent date (YYYY-MM-DD) with non-NULL data across the per-network
+   * warehouse tables that back the active client. This is the date users
+   * read on the dashboard ("Data as of May 13, 2026"). Stays `null` when
+   * the freshness query can be answered by Rivery telemetry but the
+   * per-client query failed (rare; surfaces as a missing label).
+   */
+  dataAsOf: string | null;
 };
 
 /**
