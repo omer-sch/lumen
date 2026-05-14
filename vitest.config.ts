@@ -37,14 +37,15 @@ export default defineConfig({
       // Floor matches the current P0 lib pass. The target is 70/70/70/70 once
       // the P0 route-handler suite (Step 3) and P1 component suite (Step 4)
       // land. Raise this as each tier completes; never lower it.
-      // 2026-05-12: branches dropped from 30 → 29 to seat the CI unit-test
-      // gate; current branches coverage is 29.73%. Raise back to 30 (and
-      // beyond) as the route-handler suite lands.
+      // 2026-05-14: tier-1 (11 new lib unit tests) landed; current coverage is
+      // 51.4 stmts / 35.82 branches / 58.4 funcs / 52.04 lines. Thresholds
+      // bumped to tier-1 targets (50/35/55/50). Next tier (route handlers,
+      // Step 3) will push past 65/55/70/65.
       thresholds: {
-        lines: 40,
-        branches: 29,
-        functions: 45,
-        statements: 40,
+        lines: 50,
+        branches: 35,
+        functions: 55,
+        statements: 50,
       },
     },
   },
