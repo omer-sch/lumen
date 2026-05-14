@@ -291,17 +291,16 @@ function ReportsInner() {
                 <button
                   type="button"
                   onClick={handleCopyShare}
-                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 font-body text-xs font-semibold uppercase tracking-wider text-[color:var(--text-secondary)] transition-[transform,background-color,color] duration-280 ease-out-quart hover:-translate-y-px hover:bg-[color:var(--surface-hover)] hover:text-cloud-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
-                  style={{ border: "1px solid var(--border-default)" }}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-yellow px-3 py-2 font-body text-xs font-semibold uppercase tracking-wider text-navy shadow-yellow transition-[transform,box-shadow] duration-280 ease-out-quart hover:-translate-y-px active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
                 >
                   {copied ? (
                     <>
-                      <Check className="h-3.5 w-3.5 text-ua" strokeWidth={2.5} />
+                      <Check className="h-3.5 w-3.5 text-navy" strokeWidth={2.5} />
                       Copied
                     </>
                   ) : (
                     <>
-                      <Copy className="h-3.5 w-3.5" strokeWidth={2} />
+                      <Copy className="h-3.5 w-3.5" strokeWidth={2.5} />
                       Share link
                     </>
                   )}
@@ -320,9 +319,10 @@ function ReportsInner() {
                   type="button"
                   onClick={handleExportPptx}
                   disabled={exporting !== null}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-yellow px-3 py-2 font-body text-xs font-semibold uppercase tracking-wider text-navy shadow-yellow transition-[transform,box-shadow] duration-280 ease-out-quart hover:-translate-y-px active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 font-body text-xs font-semibold uppercase tracking-wider text-[color:var(--text-secondary)] transition-[transform,background-color,color] duration-280 ease-out-quart hover:-translate-y-px hover:bg-[color:var(--surface-hover)] hover:text-cloud-white active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+                  style={{ border: "1px solid var(--border-default)" }}
                 >
-                  <Presentation className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  <Presentation className="h-3.5 w-3.5" strokeWidth={2} />
                   {exporting === "pptx" ? "Generating..." : "PPTX"}
                 </button>
               </div>
@@ -436,24 +436,24 @@ function BuilderInput({
 }) {
   const sections: { Icon: typeof BarChart3; label: string; body: string }[] = [
     {
-      Icon: FileText,
-      label: "Executive summary",
-      body: "Two paragraphs that frame the period and the headline movement.",
-    },
-    {
       Icon: BarChart3,
-      label: "Key metrics",
-      body: "Spend, Installs, CPI, ROAS, with delta vs the prior comparable window.",
+      label: "Per-platform overview",
+      body: "Spend, SubStart, CPA D0 and CPA D7 by platform, with deltas vs the prior comparable week.",
     },
     {
       Icon: Table,
-      label: "Channel breakdown",
-      body: "Spend share and ROAS per channel. Top campaigns called out below.",
+      label: "Channel weekly read",
+      body: "Week-over-week breakdown per channel (Meta, Google, TikTok) with current-week and recent-history rows.",
+    },
+    {
+      Icon: Layers,
+      label: "Campaign movers",
+      body: "Top movers by spend and CPA, with the yellowHEAD secret-sauce CPA-D7 callout column.",
     },
     {
       Icon: ListChecks,
-      label: "Recommendations",
-      body: "Three plays Lumen suggests, each a hypothesis the team can test.",
+      label: "Action items",
+      body: "Per-section recommendations the team can act on this week, tagged 'AI:'.",
     },
   ];
 
