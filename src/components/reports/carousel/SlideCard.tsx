@@ -3,10 +3,10 @@
 import { useCallback } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { EditableText } from "../EditableText";
+import { ReportCoverHeader } from "../ReportCoverHeader";
 import { SectionDivider } from "../sections/SectionDivider";
 import { WeeklyBreakdown } from "../sections/WeeklyBreakdown";
 import { CampaignBreakdown } from "../sections/CampaignBreakdown";
-import { AgentByline } from "@/components/agents/AgentByline";
 import { REPORT_BRAND } from "@/lib/reports/brand";
 import type {
   Report,
@@ -49,7 +49,13 @@ const CHANNEL_TITLE = {
  */
 export function SlideCard({ slide, report, readOnly, capture, onChange }: SlideCardProps) {
   if (slide.kind === "cover") {
-    return <CoverCard report={report} />;
+    return (
+      <CoverCard
+        report={report}
+        readOnly={readOnly || capture}
+        onChange={onChange}
+      />
+    );
   }
   return (
     <SectionCard
@@ -61,7 +67,19 @@ export function SlideCard({ slide, report, readOnly, capture, onChange }: SlideC
   );
 }
 
-function CoverCard({ report }: { report: Report }) {
+function CoverCard({
+  report,
+  readOnly,
+  onChange,
+}: {
+  report: Report;
+  readOnly?: boolean;
+  onChange?: (next: Report) => void;
+}) {
+  const onTitleChange =
+    onChange && !readOnly
+      ? (title: string) => onChange({ ...report, title })
+      : undefined;
   return (
     <div
       className="flex h-full w-full flex-col justify-between p-12"
@@ -70,56 +88,12 @@ function CoverCard({ report }: { report: Report }) {
         color: REPORT_BRAND.white,
       }}
     >
-      <div className="flex items-center gap-3">
-        <span
-          aria-hidden
-          className="grid h-10 w-10 place-items-center rounded-md font-display text-xl font-extrabold"
-          style={{
-            background: `linear-gradient(135deg, ${REPORT_BRAND.yellow} 0%, ${REPORT_BRAND.yellowLight} 100%)`,
-            color: REPORT_BRAND.navy,
-            boxShadow: "0 0 24px rgba(255,221,12,0.25)",
-          }}
-        >
-          L
-        </span>
-        <div className="flex flex-col leading-none">
-          <span className="font-display text-base font-bold tracking-tight">
-            Lumen
-          </span>
-          <span className="text-[10px] uppercase tracking-[0.2em] text-white/60">
-            yellowHEAD AI
-          </span>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <span
-          className="inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 font-body text-xs font-semibold uppercase tracking-[0.18em]"
-          style={{
-            background: "rgba(255,221,12,0.12)",
-            color: REPORT_BRAND.yellow,
-            border: "1px solid rgba(255,221,12,0.3)",
-          }}
-        >
-          Weekly review
-        </span>
-        <h1
-          className="font-display text-5xl font-extrabold leading-[1.05] tracking-tight"
-          style={{ color: REPORT_BRAND.white }}
-        >
-          {report.title}
-        </h1>
-        <p className="font-body text-lg font-semibold" style={{ color: REPORT_BRAND.yellow }}>
-          {report.clientLabel} · {report.period}
-        </p>
-        <AgentByline
-          agentId={report.authoredBy ?? "nova"}
-          prefix="Drafted by"
-          size="md"
-          tone="dark"
-          className="mt-2"
-        />
-      </div>
+      <ReportCoverHeader
+        report={report}
+        viewMode="carousel"
+        readOnly={readOnly}
+        onTitleChange={onTitleChange}
+      />
 
       <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-white/55">
         <span>Lumen Reports</span>

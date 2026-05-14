@@ -142,6 +142,25 @@ function buildCoverSlide(pres: Pptx, report: Report) {
     color: hex(REPORT_BRAND.yellow),
   });
 
+  // Sample-data disclosure. Mirrors the on-screen banner so a PPTX
+  // export carries the same disclosure as the shared link and the PDF.
+  slide.addText(
+    "SAMPLE REPORT: FIGURES SHOWN ARE ILLUSTRATIVE, NOT LIVE BIGQUERY DATA.",
+    {
+      x: 0.6,
+      y: 6.0,
+      w: 12,
+      h: 0.35,
+      fontFace: REPORT_BRAND.fontBody,
+      fontSize: 9,
+      bold: true,
+      color: hex(REPORT_BRAND.yellow),
+      charSpacing: 4,
+      fill: { color: "33270C" },
+      margin: 0.08,
+    },
+  );
+
   // Footer
   slide.addText("Lumen Reports", {
     x: 0.6,

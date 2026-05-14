@@ -9,6 +9,9 @@ type EditableTextProps = {
   multiline?: boolean;
   className?: string;
   ariaLabel?: string;
+  /** Picks hover/focus tint that matches the underlying surface.
+   *  "light" = light report card (default). "dark" = navy cover gradient. */
+  tone?: "light" | "dark";
 };
 
 /**
@@ -23,6 +26,7 @@ export function EditableText({
   multiline = false,
   className,
   ariaLabel,
+  tone = "light",
 }: EditableTextProps) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -33,6 +37,15 @@ export function EditableText({
       el.innerText = value;
     }
   }, [value]);
+
+  // Hover/focus tints differ per surface. On light report cards we lean
+  // on the standard surface-hover token; on the dark navy cover we use a
+  // translucent white wash so the affordance is visible without blowing
+  // out the gradient.
+  const toneClasses =
+    tone === "dark"
+      ? "focus:bg-white/10 focus:ring-2 focus:ring-ua/40 hover:bg-white/10"
+      : "focus:bg-[color:var(--surface-hover)] focus:ring-2 focus:ring-ua/40 hover:bg-[color:var(--surface-hover)]";
 
   return (
     <div
@@ -50,9 +63,8 @@ export function EditableText({
         }
       }}
       className={cn(
-        "rounded px-1 -mx-1 transition-colors duration-280 ease-out-quart",
-        "outline-none focus:bg-[color:var(--surface-hover)] focus:ring-2 focus:ring-ua/40",
-        "hover:bg-[color:var(--surface-hover)]",
+        "rounded px-1 -mx-1 transition-colors duration-280 ease-out-quart outline-none",
+        toneClasses,
         className,
       )}
     />

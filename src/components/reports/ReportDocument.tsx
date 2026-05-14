@@ -1,13 +1,12 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { EditableText } from "./EditableText";
-import { AgentByline } from "@/components/agents/AgentByline";
+import { ReportCoverHeader } from "./ReportCoverHeader";
 import { SectionDivider } from "./sections/SectionDivider";
 import { WeeklyBreakdown } from "./sections/WeeklyBreakdown";
 import { CampaignBreakdown } from "./sections/CampaignBreakdown";
-import { formatWeekRange, isoWeek } from "@/lib/reports/week";
 import type { Report, ReportSection } from "@/lib/reports/types";
 
 type ReportDocumentProps = {
@@ -60,20 +59,6 @@ export function ReportDocument({ report, onChange, readOnly }: ReportDocumentPro
 
   const setTitle = (title: string) => onChange({ ...report, title });
 
-  /** Best-effort week + date range for the cover. We parse the persisted
-   *  period back out so a saved report still renders sensibly even if the
-   *  raw Date values aren't on the report anymore. */
-  const cover = useMemo(() => {
-    const created = new Date(report.createdAt);
-    const week = isoWeek(created);
-    // Derive a week-style title prefix unless the user has already edited
-    // the title to something custom.
-    const subtitleRange = report.period.includes(" – ")
-      ? report.period
-      : formatWeekRange(new Date(report.createdAt - 6 * 86400000), created);
-    return { week, subtitleRange };
-  }, [report.createdAt, report.period]);
-
   return (
     <article
       data-report-doc
@@ -85,72 +70,16 @@ export function ReportDocument({ report, onChange, readOnly }: ReportDocumentPro
         boxShadow: "var(--shadow-card)",
       }}
     >
-      {/* Cover */}
-      <header className="flex flex-col gap-3 border-b pb-6" style={{ borderColor: "var(--surface-light-line)" }}>
-        <div className="flex items-center gap-3">
-          <span
-            aria-hidden
-            className="grid h-9 w-9 place-items-center rounded-md font-display text-lg font-extrabold text-navy"
-            style={{
-              background:
-                "linear-gradient(135deg, var(--color-yellow) 0%, var(--color-yellow-light) 100%)",
-              boxShadow:
-                "0 0 18px color-mix(in oklab, var(--color-yellow) 40%, transparent)",
-            }}
-          >
-            L
-          </span>
-          <div className="flex flex-col leading-none">
-            <span className="font-display text-sm font-bold tracking-tight text-[color:var(--text-light-primary)]">
-              Lumen
-            </span>
-            <span className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-light-muted)]">
-              yellowHEAD AI
-            </span>
-          </div>
-          <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-light-muted)]">
-            {report.clientLabel} · Week {cover.week}
-          </span>
-        </div>
-        {readOnly ? (
-          <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight text-[color:var(--text-light-primary)] sm:text-4xl">
-            {report.title}
-          </h1>
-        ) : (
-          <EditableText
-            value={report.title}
-            onChange={setTitle}
-            ariaLabel="Report title"
-            className="font-display text-3xl font-extrabold leading-tight tracking-tight text-[color:var(--text-light-primary)] sm:text-4xl"
-          />
-        )}
-        <p className="font-body text-sm text-[color:var(--text-light-secondary)]">
-          {cover.subtitleRange}
-        </p>
-        <AgentByline
-          agentId={report.authoredBy ?? "nova"}
-          prefix="Drafted by"
-          size="md"
-          tone="light"
-          className="pt-1"
+      <header
+        className="border-b pb-6"
+        style={{ borderColor: "var(--surface-light-line)" }}
+      >
+        <ReportCoverHeader
+          report={report}
+          viewMode="document"
+          readOnly={readOnly}
+          onTitleChange={readOnly ? undefined : setTitle}
         />
-        {/* Phase-1 disclosure: the Reports generator runs against mock
-            campaign data, not BigQuery. Banner sits inside the document
-            so a print-to-PDF export still carries it — see M5 in
-            security-scan-2026-05-12-v2.md. Remove once
-            src/lib/reports/generate.ts is wired to BQ. */}
-        <p
-          role="note"
-          className="mt-2 rounded-md px-3 py-2 font-body text-xs font-semibold uppercase tracking-wider"
-          style={{
-            background: "color-mix(in oklab, var(--color-yellow) 18%, transparent)",
-            color: "var(--text-light-primary)",
-            border:
-              "1px solid color-mix(in oklab, var(--color-yellow) 45%, transparent)",
-          }}
-        >
-          Sample report — figures shown are illustrative, not live BigQuery data.
-        </p>
       </header>
 
       {report.sections.map((section, idx) => (
