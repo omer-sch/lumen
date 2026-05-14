@@ -1,7 +1,15 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { formatKpi } from "@/lib/format";
+import {
+  STATUS_COLOR_VAR,
+  STATUS_LABEL,
+  statusFromCpaD7,
+  type CpaStatus,
+} from "@/lib/dashboard/status";
 import type { NetworkRow } from "@/types/dashboard";
 
 type Props = {
@@ -11,183 +19,209 @@ type Props = {
 };
 
 /**
- * Per-network performance table. Each row is one network the client is
- * actively spending on; columns cover spend / share / volume / efficiency /
- * payback. ROAS D7 → ROAS D30 are shown side by side so the analyst can
- * see how the cohort matures.
- *
- * Replaces the old single-metric ChannelMix bar list. ChannelMix is
- * still used for clients that don't populate the extended dwh metrics
- * (Playw3, 100play), this is the multi-source variant.
+ * Per-network performance list — compact stack of network cards
+ * designed for the narrow 1/3-width column on the dashboard. Each row
+ * shows the spend-share bar, the hero metric (CPA D7), a status pill,
+ * and a few key counts. The "Show more" toggle reveals secondary KPIs
+ * inside each row instead of adding columns to a wide table.
  */
 export function NetworkBreakdown({ rows, enterIndex }: Props) {
+  const router = useRouter();
+  const [showMore, setShowMore] = useState(false);
+
   if (rows.length === 0) return null;
+
+  // Sort by spend descending so the biggest network leads.
+  const sorted = [...rows].sort((a, b) => b.spend - a.spend);
 
   return (
     <GlassCard
       glow="ua"
       feature
       enterIndex={enterIndex}
-      className="flex flex-col gap-3 p-4"
+      className="flex h-full flex-col gap-3 p-3"
       data-testid="network-breakdown"
     >
-      <div>
-        <h2 className="font-display text-md font-bold leading-none text-cloud-white">
-          Network performance
-        </h2>
-        <p className="mt-1 font-body text-xs text-[color:var(--text-muted)]">
-          Spend, volume, efficiency, and cohort payback per source.
-        </p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="font-display text-md font-bold leading-none text-cloud-white">
+            Network performance
+          </h2>
+          <p className="mt-0.5 font-body text-[11px] text-[color:var(--text-muted)]">
+            Status compares CPA D7 to the trailing 30-day average.
+          </p>
+        </div>
+        <button
+          type="button"
+          data-testid="network-show-more"
+          onClick={() => setShowMore((s) => !s)}
+          aria-expanded={showMore}
+          className="shrink-0 rounded-sm px-2 py-1 font-body text-[10px] font-semibold uppercase tracking-wider text-[color:var(--text-muted)] transition-colors hover:text-cloud-white"
+          style={{
+            border: "1px solid var(--border-subtle)",
+            background: "var(--surface-input)",
+          }}
+        >
+          {showMore ? "Less" : "More"}
+        </button>
       </div>
 
-      <div className="-mx-1 overflow-x-auto">
-        <table
-          className="w-full min-w-[1100px] table-auto border-separate font-body text-sm"
-          style={{ borderSpacing: 0 }}
-        >
-          <thead>
-            <tr className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-              <Th align="left">Network</Th>
-              <Th align="right">Spend</Th>
-              <Th align="right">Installs</Th>
-              <Th align="right">Clicks</Th>
-              <Th align="right">Impr.</Th>
-              <Th align="right">CPI</Th>
-              <Th align="right">CTR</Th>
-              <Th align="right">CPM</Th>
-              <Th align="right">CPC</Th>
-              <Th align="right">ROAS D7</Th>
-              <Th align="right">ROAS D14</Th>
-              <Th align="right">ROAS D30</Th>
-              <Th align="right">ROAS D90</Th>
-              <Th align="right">Ret. D7</Th>
-              <Th align="right">Payers D7</Th>
-              <Th align="right">FTD D7</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr
-                key={r.network}
-                data-testid={`network-row-${r.network}`}
-                className="transition-colors duration-200 hover:bg-[color:var(--surface-hover)]"
-              >
-                <Td align="left">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-semibold text-cloud-white">
+      <ul className="flex flex-col gap-1.5">
+        {sorted.map((r) => {
+          const status: CpaStatus = statusFromCpaD7(r.cpaD7, r.trailingCpaD7Avg);
+          const sharePct = Math.max(0, Math.min(1, r.share)) * 100;
+          const dot = networkDot(r.network);
+          return (
+            <li
+              key={r.network}
+              data-testid={`network-row-${r.network}`}
+              data-clickable="true"
+              onClick={() =>
+                router.push(
+                  `/campaigns?network=${encodeURIComponent(r.network)}`,
+                )
+              }
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  router.push(
+                    `/campaigns?network=${encodeURIComponent(r.network)}`,
+                  );
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              className="relative cursor-pointer overflow-hidden rounded-md p-2.5 transition-colors duration-200 hover:bg-[color:var(--surface-hover)]"
+              style={{
+                background: "var(--surface-input)",
+                border: "1px solid var(--border-subtle)",
+              }}
+            >
+              {/* Spend-share fill behind the row — subtle, network-tinted. */}
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 left-0"
+                style={{
+                  width: `${sharePct}%`,
+                  background: `linear-gradient(90deg, color-mix(in oklab, ${dot} 16%, transparent), color-mix(in oklab, ${dot} 2%, transparent))`,
+                }}
+              />
+
+              <div className="relative z-10 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="inline-block h-2 w-2 shrink-0 rounded-full"
+                      style={{
+                        background: dot,
+                        boxShadow: `0 0 6px ${dot}`,
+                      }}
+                    />
+                    <span className="truncate font-display text-sm font-bold text-cloud-white">
                       {r.network}
                     </span>
-                    <SpendShareBar share={r.share} isTop={i === 0} />
-                  </div>
-                </Td>
-                <Td align="right" mono>
-                  {formatKpi.money(r.spend)}
-                  <span className="ml-2 text-[10px] text-[color:var(--text-muted)]">
-                    {(r.share * 100).toFixed(0)}%
+                    <span className="font-body text-[10px] tabular-nums text-[color:var(--text-muted)]">
+                      {sharePct.toFixed(0)}%
+                    </span>
                   </span>
-                </Td>
-                <Td align="right" mono>{formatKpi.count(r.installs)}</Td>
-                <Td align="right" mono>{formatKpi.count(r.clicks)}</Td>
-                <Td align="right" mono>{formatKpi.count(r.impressions)}</Td>
-                <Td align="right" mono>{formatKpi.cpi(r.cpi)}</Td>
-                <Td align="right" mono>{formatKpi.percent(r.ctr)}</Td>
-                <Td align="right" mono>{formatKpi.moneyCents(r.cpm)}</Td>
-                <Td align="right" mono>{formatKpi.moneyCents(r.cpc)}</Td>
-                <Td align="right" mono highlight={r.roasD7 >= 1}>
-                  {formatKpi.ratio(r.roasD7)}
-                </Td>
-                <Td align="right" mono highlight={r.roasD14 >= 1}>
-                  {formatKpi.ratio(r.roasD14)}
-                </Td>
-                <Td align="right" mono highlight={r.roasD30 >= 1}>
-                  {formatKpi.ratio(r.roasD30)}
-                </Td>
-                <Td align="right" mono highlight={r.roasD90 >= 1}>
-                  {formatKpi.ratio(r.roasD90)}
-                </Td>
-                <Td align="right" mono>{formatKpi.percent(r.retD7)}</Td>
-                <Td align="right" mono>{formatKpi.count(r.payersD7)}</Td>
-                <Td align="right" mono>{formatKpi.count(r.ftdD7)}</Td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  <StatusPill status={status} />
+                </div>
+
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 font-body text-[11px]">
+                  <Metric label="Spend" value={formatKpi.money(r.spend)} />
+                  <Metric
+                    label="CPA D7"
+                    value={formatKpi.cpi(r.cpaD7)}
+                    accent
+                  />
+                  <Metric label="Installs" value={formatKpi.count(r.installs)} />
+                </div>
+
+                {showMore && (
+                  <div
+                    className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 border-t pt-1.5 font-body text-[11px] sm:grid-cols-3"
+                    style={{ borderColor: "var(--border-subtle)" }}
+                  >
+                    <Metric label="Impr." value={formatKpi.count(r.impressions)} />
+                    <Metric label="Clicks" value={formatKpi.count(r.clicks)} />
+                    <Metric label="CTR" value={formatKpi.percent(r.ctr)} />
+                    <Metric label="CPI" value={formatKpi.cpi(r.cpi)} />
+                    <Metric label="CPM" value={formatKpi.moneyCents(r.cpm)} />
+                    <Metric label="CPC" value={formatKpi.moneyCents(r.cpc)} />
+                    <Metric label="Sub starts" value={formatKpi.count(r.subStart)} />
+                    <Metric label="Sub D7" value={formatKpi.count(r.subD7)} />
+                    <Metric label="Ret. D7" value={formatKpi.percent(r.retD7)} />
+                    <Metric label="ROAS D7" value={formatKpi.ratio(r.roasD7)} />
+                    <Metric label="ROAS D30" value={formatKpi.ratio(r.roasD30)} />
+                    <Metric label="ROAS D90" value={formatKpi.ratio(r.roasD90)} />
+                  </div>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </GlassCard>
   );
 }
 
-function Th({
-  children,
-  align,
+function Metric({
+  label,
+  value,
+  accent,
 }: {
-  children: React.ReactNode;
-  align: "left" | "right";
+  label: string;
+  value: string;
+  /** Accent applies brand mint — used for the hero column (CPA D7). */
+  accent?: boolean;
 }) {
   return (
-    <th
-      className={`px-2 pb-2 ${align === "right" ? "text-right" : "text-left"}`}
-      style={{ borderBottom: "1px solid var(--border-subtle)" }}
-    >
-      {children}
-    </th>
+    <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
+      <span className="text-[9.5px] font-semibold uppercase tracking-[0.1em] text-[color:var(--text-muted)]">
+        {label}
+      </span>
+      <span
+        className="tabular-nums"
+        style={{
+          color: accent ? "var(--color-ua)" : "var(--text-primary)",
+          fontWeight: accent ? 700 : 600,
+        }}
+      >
+        {value}
+      </span>
+    </span>
   );
 }
 
-function Td({
-  children,
-  align,
-  mono,
-  highlight,
-}: {
-  children: React.ReactNode;
-  align: "left" | "right";
-  mono?: boolean;
-  /** Apply mint accent — used when a value crosses a meaningful threshold
-   *  (e.g. ROAS reaches 1.0x and the network is profitable on its own). */
-  highlight?: boolean;
-}) {
+function StatusPill({ status }: { status: CpaStatus }) {
+  const color = STATUS_COLOR_VAR[status];
   return (
-    <td
-      className={`px-2 py-2.5 ${align === "right" ? "text-right" : "text-left"} ${
-        mono ? "tabular-nums" : ""
-      }`}
+    <span
+      data-testid={`network-status-${status}`}
+      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-body text-[9.5px] font-semibold uppercase tracking-wider"
       style={{
-        color: highlight ? "var(--color-ua)" : "var(--text-primary)",
-        fontWeight: highlight ? 600 : undefined,
-        borderBottom: "1px solid var(--border-subtle)",
+        color,
+        background: `color-mix(in oklab, ${color} 14%, transparent)`,
+        border: `1px solid color-mix(in oklab, ${color} 35%, transparent)`,
       }}
     >
-      {children}
-    </td>
+      <span
+        className="inline-block h-1.5 w-1.5 rounded-full"
+        style={{ background: color, boxShadow: `0 0 6px ${color}` }}
+      />
+      {STATUS_LABEL[status]}
+    </span>
   );
 }
 
-/**
- * Inline progress bar under the network name showing relative spend share.
- * Mint for the leading network, muted UA for the rest — same accent
- * vocabulary as the old ChannelMix component so the visual language
- * stays consistent.
- */
-function SpendShareBar({ share, isTop }: { share: number; isTop: boolean }) {
-  const pct = Math.min(Math.max(share, 0), 1) * 100;
-  return (
-    <div
-      className="relative h-1 w-32 overflow-hidden rounded-full"
-      style={{ background: "var(--surface-track)" }}
-    >
-      <div
-        className="absolute inset-y-0 left-0 rounded-full"
-        style={{
-          width: `${pct}%`,
-          background: isTop
-            ? "linear-gradient(90deg, var(--color-ua), var(--color-ua-glow))"
-            : "var(--color-ua)",
-          boxShadow: isTop
-            ? "0 0 8px color-mix(in oklab, var(--color-ua-glow) 60%, transparent)"
-            : undefined,
-        }}
-      />
-    </div>
-  );
+/** Color dot next to the network name — matches the trend chart's line
+ *  color so the same visual identity carries between chart and table. */
+function networkDot(network: string): string {
+  const map: Record<string, string> = {
+    Google: "#54F0A3",
+    Meta: "#926FDE",
+    TikTok: "#F88673",
+    "Apple Search Ads": "#9CA9C5",
+  };
+  return map[network] ?? "#9CA9C5";
 }

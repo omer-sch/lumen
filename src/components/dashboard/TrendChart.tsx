@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import {
-  Area,
-  AreaChart,
   CartesianGrid,
+  ComposedChart,
+  Line,
+  ReferenceArea,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -12,21 +14,41 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { LivePulse } from "@/components/ui/LivePulse";
+import {
+  networkColor,
+  networkLineDashed,
+} from "@/lib/dashboard/network-colors";
 import type { KpiId, TrendPoint } from "@/types/dashboard";
 
+type TrendByNetwork = { network: string; points: TrendPoint[] };
+
 type TrendChartProps = {
+  /** Aggregate series. Used when `trendByNetwork` is empty (legacy
+   *  agent-strategy clients) or when the chart falls back to a single
+   *  line for the campaign profile. Carries every metric per date. */
   trend: TrendPoint[];
+  /** Per-network series. When present and non-empty, the chart renders
+   *  one colored line per network instead of the legacy aggregate. */
+  trendByNetwork?: TrendByNetwork[];
   /** Stagger position in the page (1-based). */
   enterIndex?: number;
-  /** Optional initial metric — defaults to "spend". */
+  /** Optional initial metric — defaults to "cpaD7" for multi-source
+   *  consumers (the new hero metric), `spend` for legacy. */
   initialMetric?: KpiId;
 };
 
 type MetricSpec = {
   id: KpiId;
   label: string;
+  /** y-axis / tooltip formatter. */
   format: (n: number) => string;
+  /**
+   * Cohort-based metrics depend on follow-up windows that mature over
+   * time. Marking them as cohort=true does two things: it adds a "tail"
+   * indicator pill to the tab, and it fades the chart's right edge by
+   * the metric's maturity window when this metric is active.
+   */
+  cohort?: number; // days of maturity (e.g. 7, 30, 90)
 };
 
 const fmtMoneyShort = (n: number) =>
@@ -38,39 +60,115 @@ const fmtMoneyShort = (n: number) =>
 const fmtCount = (n: number) =>
   n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
 const fmtRatio = (n: number) => `${n.toFixed(2)}x`;
-const fmtCpi = (n: number) => `$${n.toFixed(2)}`;
-const fmtPct = (n: number) => `${(n * 100).toFixed(2)}%`;
 const fmtMoneyCents = (n: number) =>
   n >= 1000 ? `$${(n / 1000).toFixed(2)}k` : `$${n.toFixed(2)}`;
+const fmtPct = (n: number) => `${(n * 100).toFixed(2)}%`;
 
-// Every dwh metric is selectable. The tab row wraps on narrow viewports.
-const METRICS: MetricSpec[] = [
-  { id: "spend",       label: "Spend",       format: fmtMoneyShort },
-  { id: "installs",    label: "Installs",    format: fmtCount      },
-  { id: "clicks",      label: "Clicks",      format: fmtCount      },
-  { id: "impressions", label: "Impressions", format: fmtCount      },
-  { id: "cpi",         label: "CPI",         format: fmtCpi        },
-  { id: "ctr",         label: "CTR",         format: fmtPct        },
-  { id: "cpm",         label: "CPM",         format: fmtMoneyCents },
-  { id: "cpc",         label: "CPC",         format: fmtMoneyCents },
-  { id: "revD7",       label: "Revenue D7",  format: fmtMoneyShort },
-  { id: "revD30",      label: "Revenue D30", format: fmtMoneyShort },
-  { id: "roas",        label: "ROAS D7",     format: fmtRatio      },
-  { id: "roasD14",     label: "ROAS D14",    format: fmtRatio      },
-  { id: "roasD30",     label: "ROAS D30",    format: fmtRatio      },
-  { id: "roasD90",     label: "ROAS D90",    format: fmtRatio      },
-  { id: "retD7",       label: "Retention D7", format: fmtPct       },
-  { id: "payersD7",    label: "Payers D7",   format: fmtCount      },
-  { id: "ftdD7",       label: "FTD D7",      format: fmtCount      },
+const METRICS: Record<KpiId, MetricSpec> = {
+  spend:       { id: "spend",       label: "Spend",                       format: fmtMoneyShort },
+  impressions: { id: "impressions", label: "Impressions",                 format: fmtCount      },
+  clicks:      { id: "clicks",      label: "Clicks",                      format: fmtCount      },
+  installs:    { id: "installs",    label: "Installs",                    format: fmtCount      },
+  subStart:    { id: "subStart",    label: "Sub starts",                  format: fmtCount      },
+  subD0:       { id: "subD0",       label: "Subscribers · 1 day",         format: fmtCount,     cohort: 1  },
+  subD7:       { id: "subD7",       label: "Subscribers · 1 week",        format: fmtCount,     cohort: 7  },
+  cpi:         { id: "cpi",         label: "Cost per install",            format: fmtMoneyCents },
+  cpSubStart:  { id: "cpSubStart",  label: "Cost per sub start",          format: fmtMoneyCents },
+  cpaD0:       { id: "cpaD0",       label: "Cost per subscriber · 1 day", format: fmtMoneyCents, cohort: 1  },
+  cpaD7:       { id: "cpaD7",       label: "Cost per subscriber · 1 week",format: fmtMoneyCents, cohort: 7  },
+  ctr:         { id: "ctr",         label: "Click rate",                  format: fmtPct        },
+  cpm:         { id: "cpm",         label: "Cost per 1k impr.",           format: fmtMoneyCents },
+  cpc:         { id: "cpc",         label: "Cost per click",              format: fmtMoneyCents },
+  retD7:       { id: "retD7",       label: "Came back · 1 week",          format: fmtPct,       cohort: 7  },
+  revD7:       { id: "revD7",       label: "Revenue · 1 week",            format: fmtMoneyShort, cohort: 7  },
+  revD30:      { id: "revD30",      label: "Revenue · 1 month",           format: fmtMoneyShort, cohort: 30 },
+  roas:        { id: "roas",        label: "Money back · 1 week",         format: fmtRatio,     cohort: 7  },
+  roasD14:     { id: "roasD14",     label: "Money back · 2 weeks",        format: fmtRatio,     cohort: 14 },
+  roasD30:     { id: "roasD30",     label: "Money back · 1 month",        format: fmtRatio,     cohort: 30 },
+  roasD90:     { id: "roasD90",     label: "Money back · 3 months",       format: fmtRatio,     cohort: 90 },
+  payersD7:    { id: "payersD7",    label: "Payers · 1 week",             format: fmtCount,     cohort: 7  },
+  ftdD7:       { id: "ftdD7",       label: "First deposits · 1 week",     format: fmtCount,     cohort: 7  },
+};
+
+type MetricGroup = {
+  label: string;
+  metrics: KpiId[];
+};
+
+const METRIC_GROUPS: MetricGroup[] = [
+  {
+    label: "Volume",
+    metrics: ["spend", "installs", "clicks", "impressions", "subStart", "subD0", "subD7"],
+  },
+  {
+    label: "Efficiency",
+    metrics: ["cpi", "ctr", "cpm", "cpc", "cpSubStart", "cpaD0", "cpaD7"],
+  },
+  {
+    label: "Revenue",
+    metrics: ["revD7", "revD30"],
+  },
+  {
+    label: "Money back",
+    metrics: ["roas", "roasD14", "roasD30", "roasD90"],
+  },
+  {
+    label: "Users",
+    metrics: ["retD7", "payersD7", "ftdD7"],
+  },
 ];
 
 export function TrendChart({
   trend,
+  trendByNetwork,
   enterIndex,
-  initialMetric = "spend",
+  initialMetric = "cpaD7",
 }: TrendChartProps) {
   const [metric, setMetric] = useState<KpiId>(initialMetric);
-  const active = METRICS.find((m) => m.id === metric) ?? METRICS[0];
+  const active = METRICS[metric] ?? METRICS.spend;
+
+  // The visible groups are those that have at least one metric we know
+  // how to render. The active group is the one that owns the current
+  // metric (or the first visible group if the current metric is orphaned).
+  const visibleGroups = METRIC_GROUPS.map((group) => ({
+    ...group,
+    metrics: group.metrics.filter((id) => Boolean(METRICS[id])),
+  })).filter((g) => g.metrics.length > 0);
+  const activeGroup =
+    visibleGroups.find((g) => g.metrics.includes(metric)) ?? visibleGroups[0];
+
+  // Per-network rendering when we have it. Falls back to a single
+  // synthetic "All" series built from the aggregate so legacy callers
+  // (campaign profile) still render.
+  const byNetwork: TrendByNetwork[] =
+    trendByNetwork && trendByNetwork.length > 0
+      ? trendByNetwork
+      : [{ network: "All", points: trend }];
+
+  // Build a row-per-date dataset for recharts. Each row's keys are the
+  // network names so we can render one <Line> per network with
+  // `dataKey={network}`.
+  const dates = uniqueDatesPreservingOrder(byNetwork);
+  const chartData = dates.map((date) => {
+    const row: Record<string, number | string> = { date };
+    for (const series of byNetwork) {
+      const point = series.points.find((p) => p.date === date);
+      const raw = point ? (point[metric] as number | undefined) : undefined;
+      row[series.network] = raw ?? 0;
+    }
+    return row;
+  });
+
+  // Maturity tail — fade the right edge of the chart when a cohort
+  // metric is active. Width is `min(cohort_days, chart_dates)` so the
+  // overlay never exceeds the chart. The faded zone starts at the date
+  // `cohort_days` from the end of the series.
+  const maturityDays = active.cohort ?? 0;
+  const fadeStartDate =
+    maturityDays > 0 && dates.length > 0
+      ? dates[Math.max(0, dates.length - maturityDays)]
+      : null;
+  const showMaturityNote = maturityDays > 0 && fadeStartDate != null;
 
   return (
     <GlassCard
@@ -78,88 +176,154 @@ export function TrendChart({
       feature
       shimmer
       enterIndex={enterIndex}
-      className="flex flex-col p-4"
+      className="flex h-full flex-col p-3"
       data-testid="trend-chart"
       data-metric={metric}
     >
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="font-display text-md font-bold leading-none text-cloud-white">
-            {active.label} over time
-          </h2>
-          <p className="mt-1 font-body text-xs text-[color:var(--text-muted)]">
-            Daily, last {trend.length} days
-          </p>
-        </div>
-        <span
-          className="inline-flex items-center gap-2 rounded-full border px-3 py-1 font-body text-xs font-semibold"
-          style={{
-            borderColor: "color-mix(in oklab, var(--color-ua) 35%, transparent)",
-            background: "color-mix(in oklab, var(--color-ua) 10%, transparent)",
-            color: "var(--color-ua)",
-          }}
-        >
-          <LivePulse accent="mint" size={8} />
-          UA · live
-        </span>
+      <div className="mb-2 min-w-0">
+        <h2 className="font-display text-md font-bold leading-none text-cloud-white">
+          {active.label} over time
+        </h2>
+        <p className="mt-0.5 font-body text-[11px] text-[color:var(--text-muted)]">
+          Daily, last {dates.length} days · split by ad network
+        </p>
       </div>
 
-      {/* Metric switcher */}
+      {/* Group pills — pick a category, then a metric inside it. */}
       <div
-        role="tablist"
-        aria-label="Trend metric"
-        className="mb-3 flex flex-wrap items-center gap-1 rounded-md p-1 self-start"
+        className="mb-2 flex flex-col gap-1.5 rounded-md p-1.5"
         style={{
           background: "var(--surface-input)",
           border: "1px solid var(--border-subtle)",
         }}
       >
-        {METRICS.map((m) => {
-          const isActive = m.id === metric;
-          return (
-            <button
-              key={m.id}
-              type="button"
-              role="tab"
-              data-testid={`trend-metric-${m.id}`}
-              aria-selected={isActive}
-              onClick={() => setMetric(m.id)}
-              className={cn(
-                "rounded-sm px-2.5 py-1 font-body text-xs font-semibold uppercase tracking-wider transition-[transform,background-color,color,box-shadow] duration-280 ease-out-quart hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
-                isActive
-                  ? "text-ua"
-                  : "text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)]",
-              )}
-              style={
-                isActive
-                  ? {
-                      background: "var(--color-ua-dim)",
-                      boxShadow:
-                        "inset 0 0 0 1px color-mix(in oklab, var(--color-ua) 35%, transparent)",
-                    }
-                  : undefined
-              }
-            >
-              {m.label}
-            </button>
-          );
-        })}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {visibleGroups.map((group) => {
+            const isActive = activeGroup?.label === group.label;
+            return (
+              <button
+                key={group.label}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                data-testid={`trend-group-${group.label.toLowerCase().replace(/\s+/g, "-")}`}
+                onClick={() => {
+                  if (!isActive) setMetric(group.metrics[0]);
+                }}
+                className={cn(
+                  "rounded-sm px-2.5 py-1 font-body text-[11px] font-semibold uppercase tracking-[0.12em] transition-[background-color,color,box-shadow] duration-200 ease-out-quart focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
+                  isActive
+                    ? "text-cloud-white"
+                    : "text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)]",
+                )}
+                style={
+                  isActive
+                    ? {
+                        background: "color-mix(in oklab, var(--color-ua) 14%, transparent)",
+                        boxShadow:
+                          "inset 0 0 0 1px color-mix(in oklab, var(--color-ua) 35%, transparent)",
+                      }
+                    : undefined
+                }
+              >
+                {group.label}
+              </button>
+            );
+          })}
+        </div>
+        {activeGroup && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-[color:var(--border-subtle)] pt-1.5">
+            {activeGroup.metrics.map((id) => {
+              const m = METRICS[id];
+              if (!m) return null;
+              const isActive = m.id === metric;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="tab"
+                  data-testid={`trend-metric-${m.id}`}
+                  aria-selected={isActive}
+                  onClick={() => setMetric(m.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-sm px-2.5 py-1 font-body text-xs font-semibold uppercase tracking-wider transition-[transform,background-color,color,box-shadow] duration-280 ease-out-quart hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
+                    isActive
+                      ? "text-ua"
+                      : "text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)]",
+                  )}
+                  style={
+                    isActive
+                      ? {
+                          background: "var(--color-ua-dim)",
+                          boxShadow:
+                            "inset 0 0 0 1px color-mix(in oklab, var(--color-ua) 35%, transparent)",
+                        }
+                      : undefined
+                  }
+                >
+                  {m.label}
+                  {m.cohort && (
+                    <span
+                      className="rounded-full px-1 font-body text-[8px] uppercase tracking-[0.1em]"
+                      style={{
+                        background: "color-mix(in oklab, var(--color-yellow) 18%, transparent)",
+                        color: "var(--color-yellow)",
+                      }}
+                    >
+                      tail
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      <div className="h-52 w-full sm:h-56">
+      <div className="relative w-full flex-1 min-h-[14rem]">
+        {showMaturityNote && (
+          <span
+            data-testid="trend-maturity-note"
+            className="pointer-events-none absolute right-2 top-1 z-10 inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-body text-[9px] font-semibold uppercase tracking-[0.14em]"
+            style={{
+              background: "color-mix(in oklab, var(--color-yellow) 14%, transparent)",
+              color: "var(--color-yellow)",
+              boxShadow:
+                "inset 0 0 0 1px color-mix(in oklab, var(--color-yellow) 35%, transparent)",
+            }}
+            aria-label="Recent days are still maturing and may read lower than the truth"
+          >
+            <span
+              className="inline-block h-1 w-1 rounded-full"
+              style={{ background: "var(--color-yellow)" }}
+            />
+            still maturing
+          </span>
+        )}
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={trend} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
+          <ComposedChart
+            data={chartData}
+            margin={{ top: 8, right: 12, bottom: 8, left: 0 }}
+          >
             <defs>
-              <linearGradient id="trend-grad-ua" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--color-ua)" stopOpacity={0.55} />
-                <stop offset="100%" stopColor="var(--color-ua)" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="trend-grad-stroke" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="var(--color-ua)" />
-                <stop offset="100%" stopColor="var(--color-ua-glow)" />
+              <linearGradient id="trend-maturity-fade" x1="0" y1="0" x2="1" y2="0">
+                <stop
+                  offset="0%"
+                  stopColor="var(--color-yellow)"
+                  stopOpacity={0}
+                />
+                <stop
+                  offset="100%"
+                  stopColor="var(--color-yellow)"
+                  stopOpacity={0.14}
+                />
               </linearGradient>
             </defs>
-            <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" vertical={false} />
+            <CartesianGrid
+              stroke="var(--chart-grid)"
+              strokeDasharray="3 3"
+              vertical={false}
+            />
             <XAxis
               dataKey="date"
               tick={{ fill: "var(--text-muted)", fontSize: 11 }}
@@ -172,8 +336,27 @@ export function TrendChart({
               tickLine={false}
               axisLine={false}
               tickFormatter={active.format}
-              width={48}
+              width={56}
             />
+            {fadeStartDate && dates.length > 1 && (
+              <>
+                <ReferenceArea
+                  x1={fadeStartDate}
+                  x2={dates[dates.length - 1]}
+                  ifOverflow="extendDomain"
+                  fill="url(#trend-maturity-fade)"
+                  stroke="none"
+                />
+                <ReferenceLine
+                  x={fadeStartDate}
+                  stroke="var(--color-yellow)"
+                  strokeOpacity={0.45}
+                  strokeWidth={1}
+                  strokeDasharray="3 4"
+                  ifOverflow="extendDomain"
+                />
+              </>
+            )}
             <Tooltip
               cursor={{ stroke: "var(--color-ua)", strokeOpacity: 0.4, strokeWidth: 1 }}
               contentStyle={{
@@ -186,28 +369,57 @@ export function TrendChart({
                 boxShadow: "var(--shadow-elevated)",
               }}
               labelStyle={{ color: "var(--text-muted)", fontSize: 11 }}
-              formatter={(value) => [
+              formatter={(value, name) => [
                 active.format(typeof value === "number" ? value : Number(value)),
-                active.label,
+                String(name),
               ]}
             />
-            <Area
-              type="monotone"
-              dataKey={metric}
-              stroke="url(#trend-grad-stroke)"
-              strokeWidth={2.5}
-              fill="url(#trend-grad-ua)"
-              dot={false}
-              activeDot={{
-                r: 5,
-                fill: "var(--color-ua)",
-                stroke: "var(--color-ua-glow)",
-                strokeWidth: 2,
-              }}
-            />
-          </AreaChart>
+            {byNetwork.map((series, idx) => {
+              const isAll = series.network === "All";
+              const stroke = isAll
+                ? "var(--color-ua)"
+                : networkColor(series.network);
+              const dashed = !isAll && networkLineDashed(series.network);
+              return (
+                <Line
+                  key={series.network}
+                  type="monotone"
+                  dataKey={series.network}
+                  name={series.network}
+                  stroke={stroke}
+                  strokeWidth={2.5}
+                  strokeDasharray={dashed ? "5 3" : undefined}
+                  strokeOpacity={dashed ? 0.85 : 1}
+                  dot={false}
+                  activeDot={{ r: 4, fill: stroke, strokeWidth: 0 }}
+                  isAnimationActive={idx === 0}
+                />
+              );
+            })}
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </GlassCard>
   );
 }
+
+
+/**
+ * Returns the date list in insertion order. We rely on `Map` to
+ * preserve insertion order (ES2015 guarantee) so the chart's x-axis
+ * walks left → right in the same order BQ returned rows.
+ */
+function uniqueDatesPreservingOrder(byNetwork: TrendByNetwork[]): string[] {
+  const seen = new Set<string>();
+  const dates: string[] = [];
+  for (const series of byNetwork) {
+    for (const point of series.points) {
+      if (!seen.has(point.date)) {
+        seen.add(point.date);
+        dates.push(point.date);
+      }
+    }
+  }
+  return dates;
+}
+

@@ -19,7 +19,7 @@ test.describe("dashboard (authenticated)", () => {
       {
         name: "lumen.welcomed.last",
         value: todayISO,
-        url: "http://localhost:3001",
+        domain: "localhost",
         path: "/",
         sameSite: "Lax",
       },
@@ -29,10 +29,12 @@ test.describe("dashboard (authenticated)", () => {
   });
 
   // KPI strip — four tiles by id (data-testid="kpi-{id}"). The DEFAULT_SLOTS
-  // order in DashboardView is [roas, spend, installs, cpi]. Lose any of
-  // them and the daily-glance promise of the page breaks.
+  // order in DashboardView for the multi-source default client
+  // (globalcomix) is [cpaD7, spend, installs, subD7] — the subscription
+  // funnel reads. Lose any of them and the daily-glance promise of the
+  // page breaks.
   test("renders four KPI tiles with the canonical metrics", async ({ page }) => {
-    for (const id of ["roas", "spend", "installs", "cpi"] as const) {
+    for (const id of ["cpaD7", "spend", "installs", "subD7"] as const) {
       await expect(page.getByTestId(`kpi-${id}`)).toBeVisible();
     }
   });
@@ -41,12 +43,12 @@ test.describe("dashboard (authenticated)", () => {
   // animates from 0 to the final value. By the time the page settles,
   // the rendered text must be a real value, not "0" or empty.
   test("KPI values count up and settle on real numbers", async ({ page }) => {
-    const roas = page.getByTestId("kpi-roas");
-    await expect(roas).toBeVisible();
-    // Mock ROAS values look like "1.42x" — match the brand-formatted shape
-    // rather than a specific number so a tweak in the mock doesn't flip
-    // this test red.
-    await expect(roas).toContainText(/\d+\.\d{2}x/);
+    const cpa = page.getByTestId("kpi-cpaD7");
+    await expect(cpa).toBeVisible();
+    // CPA D7 is rendered via formatKpi.cpi → "$X.XX". Match the brand
+    // shape rather than a specific number so live data drift doesn't
+    // flip this test red.
+    await expect(cpa).toContainText(/\$\d+\.\d{2}/);
 
     const spend = page.getByTestId("kpi-spend");
     await expect(spend).toContainText(/\$\d/);
@@ -54,8 +56,8 @@ test.describe("dashboard (authenticated)", () => {
     const installs = page.getByTestId("kpi-installs");
     await expect(installs).toContainText(/\d/);
 
-    const cpi = page.getByTestId("kpi-cpi");
-    await expect(cpi).toContainText(/\$\d/);
+    const subD7 = page.getByTestId("kpi-subD7");
+    await expect(subD7).toContainText(/\d/);
   });
 
   // Swappable KPI slots — each slot's label is a popover trigger
@@ -63,34 +65,29 @@ test.describe("dashboard (authenticated)", () => {
   // testid updates to the new metric id. This guards the
   // "KPI tiles are now swappable" feature.
   test("a KPI slot can swap to a different metric", async ({ page }) => {
-    // Slot 0 starts as ROAS (DEFAULT_SLOTS[0]) — open its swap popover.
-    // We scope to the first kpi-roas tile in case ROAS appears more than
-    // once after a previous test (it shouldn't on initial render).
-    const roasTile = page.getByTestId("kpi-roas").first();
-    await expect(roasTile).toBeVisible();
+    // Slot 0 starts as CPA D7 (DEFAULT_SLOTS[0]) — open its swap popover.
+    const heroTile = page.getByTestId("kpi-cpaD7").first();
+    await expect(heroTile).toBeVisible();
 
-    await roasTile.getByTestId("kpi-swap-roas").click();
-    // Pick "Spend" from the popover. The option testid is stable.
+    await heroTile.getByTestId("kpi-swap-cpaD7").click();
+    // Pick "Total spend" from the popover. The option testid is stable.
     await page.getByTestId("kpi-swap-option-spend").click();
 
-    // After the swap, slot 0 should now render as kpi-spend, and there
-    // should be at least one ROAS tile gone from its original position
-    // (Spend now occupies slot 0). The simplest stable assertion: there
-    // are now two kpi-spend tiles (the original slot-1 spend + slot-0).
+    // After the swap, slot 0 should now render as kpi-spend, so there
+    // are two kpi-spend tiles (the original slot-1 spend + slot-0).
     await expect(page.getByTestId("kpi-spend")).toHaveCount(2);
   });
 
-  // Trend chart + metric switcher — the chart starts on "spend" and
-  // exposes a `data-metric` attribute that updates when a tab is clicked.
-  // This guards the "one chart, four metrics" pattern called out in
-  // CLAUDE.md.
+  // Trend chart + metric switcher — the chart starts on the hero
+  // metric (cpaD7 for multi-source clients) and exposes a `data-metric`
+  // attribute that updates when a tab is clicked.
   test("trend chart switches metrics", async ({ page }) => {
     const chart = page.getByTestId("trend-chart");
     await expect(chart).toBeVisible();
-    await expect(chart).toHaveAttribute("data-metric", "spend");
+    await expect(chart).toHaveAttribute("data-metric", "cpaD7");
 
-    await page.getByTestId("trend-metric-roas").click();
-    await expect(chart).toHaveAttribute("data-metric", "roas");
+    await page.getByTestId("trend-metric-spend").click();
+    await expect(chart).toHaveAttribute("data-metric", "spend");
 
     await page.getByTestId("trend-metric-installs").click();
     await expect(chart).toHaveAttribute("data-metric", "installs");

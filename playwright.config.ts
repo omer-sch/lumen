@@ -49,6 +49,7 @@ export default defineConfig({
         "**/auth.setup.ts",
         "**/welcome.spec.ts",
         "**/dashboard.spec.ts",
+        "**/dashboard-globalcomix.spec.ts",
         "**/bq-dashboard.spec.ts",
         "**/agents-aria-playground.spec.ts",
         // Product surfaces that sit behind the Clerk gate. The "chromium"
@@ -94,6 +95,7 @@ export default defineConfig({
       testMatch: [
         "**/welcome.spec.ts",
         "**/dashboard.spec.ts",
+        "**/dashboard-globalcomix.spec.ts",
         "**/bq-dashboard.spec.ts",
         "**/agents-aria-playground.spec.ts",
         "**/ask.spec.ts",

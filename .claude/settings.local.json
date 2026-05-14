@@ -252,7 +252,12 @@
       "Bash(pnpm typecheck *)",
       "Bash(kill 48176)",
       "Bash(wait)",
-      "Bash(kill 58715)"
+      "Bash(kill 58715)",
+      "Bash(gcloud --version)",
+      "Bash(awk '/# Page snapshot/,/# Test source/' /Users/omer/Desktop/Lumen/test-results/dashboard-dashboard-authen-4729b--with-the-canonical-metrics-chromium-authed/error-context.md)",
+      "Bash(awk '/- main \\\\[ref=e102\\\\]:/,/# Test source/' /Users/omer/Desktop/Lumen/test-results/dashboard-dashboard-authen-4729b--with-the-canonical-metrics-chromium-authed/error-context.md)",
+      "Bash(lsof -ti:3001)",
+      "Bash(PORT=3001 npx playwright test --project=chromium-authed tests/e2e/dashboard.spec.ts -g \"renders four KPI tiles\")"
     ]
   },
   "enableAllProjectMcpServers": true,

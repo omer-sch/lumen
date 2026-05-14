@@ -21,6 +21,7 @@ import {
 import type {
   KPIData,
   BQTrendPoint,
+  BQTrendPointByNetwork,
   ChannelBreakdown,
   CampaignRow,
   FreshnessData,
@@ -131,11 +132,16 @@ async function _queryDashboardKPIs(
 }
 
 // ── Daily trend series ──────────────────────────────────────────────────────
+// Return type is a union because the multi-source path returns
+// per-(date, network) rows (`BQTrendPointByNetwork[]`) while the agent
+// path stays on the legacy aggregate shape (`BQTrendPoint[]`, no
+// `network` field). The route handler JSON-serializes either; the
+// dashboard hook detects the shape on the client side.
 async function _queryTrend(
   client: string,
   from: string,
   to: string,
-): Promise<BQTrendPoint[]> {
+): Promise<BQTrendPoint[] | BQTrendPointByNetwork[]> {
   assertIsoDate(from, "from");
   assertIsoDate(to, "to");
   if (getSchemaForClient(client).strategy === "multi-source") {
@@ -495,6 +501,7 @@ export const queryPayback = (
     ["bq:payback", client, from, to],
     { revalidate: REVALIDATE_SECONDS, tags: ["bq", `bq:${client}`] },
   )(client, from, to);
+
 
 // `client` is part of the cache key so each client gets its own dataAsOf;
 // when undefined (e.g. a generic freshness ping with no active client),

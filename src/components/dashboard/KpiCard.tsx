@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { CountUpNumber } from "@/components/ui/CountUpNumber";
+import { targetMeterFill } from "@/lib/dashboard/target-meter";
 import type { KpiDirection, KpiId } from "@/types/dashboard";
 
 type KpiCardProps = {
@@ -26,6 +27,17 @@ type KpiCardProps = {
   hint?: string;
   highlight?: boolean;
   direction?: KpiDirection;
+  /**
+   * Optional numeric goal for this metric. When present (and the tile
+   * is the hero), the card renders a small horizontal progress meter
+   * showing distance to target. Phase 1 leaves this unset everywhere
+   * — no agreed CPA D7 target per client yet — but the prop is wired
+   * so a future config drop can light up the meter without a
+   * component change. The renderer also needs the current numeric
+   * `target` and a parsed numeric value; we derive the latter from
+   * `value`'s parsed core.
+   */
+  target?: number;
   /**
    * Bento sizing variant.
    *  - "hero" — wide, taller, larger value typography (the page's single yellow KPI)
@@ -109,6 +121,7 @@ export function KpiCard({
   enterIndex,
   series,
   swap,
+  target,
 }: KpiCardProps) {
   const hasDelta = delta != null;
   const positive = hasDelta
@@ -214,6 +227,19 @@ export function KpiCard({
       {hint && !isHero && (
         <p className="font-body text-xs text-[color:var(--text-muted)]">{hint}</p>
       )}
+
+      {/* Target progress meter — hero hero-style tile only, gated on a
+          configured target. Phase 1 leaves every metric's target
+          undefined; the meter mounts only when a future config drops
+          one in. */}
+      {highlight && target != null && Number.isFinite(target) && target > 0 && (
+        <TargetMeter
+          current={numeric}
+          target={target}
+          direction={direction}
+          formatter={tickFormat}
+        />
+      )}
       {isHero && hint && (
         <p className="font-body text-sm leading-relaxed text-[color:var(--text-secondary)] sm:hidden">
           {hint}
@@ -310,6 +336,60 @@ export function KpiCard({
         </div>
       )}
     </GlassCard>
+  );
+}
+
+function TargetMeter({
+  current,
+  target,
+  direction,
+  formatter,
+}: {
+  current: number;
+  target: number;
+  direction: KpiDirection;
+  formatter: (n: number) => string;
+}) {
+  const fill = targetMeterFill(current, target, direction);
+  const pct = Math.round(fill * 100);
+  return (
+    <div className="mt-1 flex flex-col gap-1" data-testid="kpi-target-meter">
+      <div
+        className="relative h-1.5 w-full overflow-hidden rounded-full"
+        style={{ background: "rgba(255,255,255,0.05)" }}
+      >
+        <div
+          className="absolute inset-y-0 left-0 rounded-full"
+          style={{
+            width: `${fill * 100}%`,
+            background:
+              "linear-gradient(90deg, var(--color-creative), var(--color-yellow))",
+          }}
+          data-testid="kpi-target-meter-fill"
+        />
+        <div
+          className="absolute inset-y-0 right-0 w-0.5"
+          style={{
+            background: "var(--color-yellow)",
+            boxShadow: "0 0 6px var(--color-yellow)",
+          }}
+          aria-hidden
+        />
+      </div>
+      <div className="flex items-center justify-between font-body text-[10px] tabular-nums text-[color:var(--text-muted)]">
+        <span>{formatter(0)}</span>
+        <span>
+          <span
+            className="font-semibold"
+            style={{ color: "var(--color-yellow)" }}
+            data-testid="kpi-target-meter-pct"
+          >
+            {pct}%
+          </span>{" "}
+          of {formatter(target)} goal
+        </span>
+      </div>
+    </div>
   );
 }
 

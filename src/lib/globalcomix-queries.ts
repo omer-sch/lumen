@@ -1,9 +1,10 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
 import { getBigQueryClient } from "@/lib/bq";
 import { getMultiSourceConfig, qualifyTable } from "@/lib/bq-security";
 import type {
-  BQTrendPoint,
+  BQTrendPointByNetwork,
   CampaignRow,
   ChannelBreakdown,
   DataBounds,
@@ -119,6 +120,17 @@ function buildCohortSubquery(client: string): string {
   // rather than the rate — averaging an already-divided rate would weight
   // every day equally regardless of cohort size and silently distort the
   // headline number.
+  //
+  // Subscription-funnel columns: `_0D_Paying_Users` / `_7D_Paying_Users`
+  // become `sub_d0` / `sub_d7` so the dashboard's subscription vocabulary
+  // (Sub D0, Sub D7, CPA D0, CPA D7) reads cleanly. We also surface
+  // `payers_d7` as the existing alias because gaming-vocab consumers
+  // downstream still reference it. NOTE: the cohort table also exposes
+  // `_0D_subscription_start_Events` and `_7D_subscription_start_Events`,
+  // which look like a more authoritative "sub start" source than the
+  // spend tables' `num_ftd7`. Phase 1 keeps `num_ftd7 → sub_start` per
+  // the spec; a follow-up should validate which column the deck actually
+  // refers to and switch the join if needed.
   return `(
     SELECT
       _Day_Date AS date,
@@ -134,6 +146,8 @@ function buildCohortSubquery(client: string): string {
       SUM(COALESCE(_14D_Revenue_Total, 0)) AS rev_d14,
       SUM(COALESCE(_30D_Revenue_Total, 0)) AS rev_d30,
       SUM(COALESCE(_90D_Revenue_Total, 0)) AS rev_d90,
+      SUM(COALESCE(_0D_Paying_Users, 0))   AS sub_d0,
+      SUM(COALESCE(_7D_Paying_Users, 0))   AS sub_d7,
       SUM(COALESCE(_7D_Paying_Users, 0))   AS payers_d7,
       SUM(COALESCE(_7D_Retained_Users, 0)) AS retained_d7,
       SUM(COALESCE(_7D_Cohort_Size, 0))    AS cohort_d7
@@ -146,7 +160,7 @@ function buildCohortSubquery(client: string): string {
 
 // ── KPI totals + period-over-period deltas ─────────────────────────────────
 
-export async function queryGlobalComixKPIs(
+async function _queryGlobalComixKPIs(
   client: string,
   from: string,
   to: string,
@@ -171,7 +185,8 @@ export async function queryGlobalComixKPIs(
         SUM(installs)     AS installs,
         SUM(clicks)       AS clicks,
         SUM(impressions)  AS impressions,
-        SUM(ftd_d7)       AS ftd_d7
+        SUM(ftd_d7)       AS ftd_d7,
+        SUM(ftd_d7)       AS sub_start
       FROM ${spendSub} s
       WHERE date BETWEEN ${FROM} AND ${TO}
     ),
@@ -182,6 +197,8 @@ export async function queryGlobalComixKPIs(
         SUM(rev_d14)      AS rev_d14,
         SUM(rev_d30)      AS rev_d30,
         SUM(rev_d90)      AS rev_d90,
+        SUM(sub_d0)       AS sub_d0,
+        SUM(sub_d7)       AS sub_d7,
         SUM(payers_d7)    AS payers_d7,
         SUM(retained_d7)  AS retained_d7,
         SUM(cohort_d7)    AS cohort_d7
@@ -195,7 +212,8 @@ export async function queryGlobalComixKPIs(
         SUM(installs)     AS installs,
         SUM(clicks)       AS clicks,
         SUM(impressions)  AS impressions,
-        SUM(ftd_d7)       AS ftd_d7
+        SUM(ftd_d7)       AS ftd_d7,
+        SUM(ftd_d7)       AS sub_start
       FROM ${spendSub} s
       WHERE date BETWEEN
         DATE_SUB(DATE(${FROM}), INTERVAL DATE_DIFF(DATE(${TO}), DATE(${FROM}), DAY) + 1 DAY)
@@ -207,6 +225,8 @@ export async function queryGlobalComixKPIs(
         SUM(rev_d14)      AS rev_d14,
         SUM(rev_d30)      AS rev_d30,
         SUM(rev_d90)      AS rev_d90,
+        SUM(sub_d0)       AS sub_d0,
+        SUM(sub_d7)       AS sub_d7,
         SUM(payers_d7)    AS payers_d7,
         SUM(retained_d7)  AS retained_d7,
         SUM(cohort_d7)    AS cohort_d7
@@ -222,7 +242,13 @@ export async function queryGlobalComixKPIs(
       sc.clicks                                                         AS clicks,
       sc.impressions                                                    AS impressions,
       sc.ftd_d7                                                         AS ftd_d7,
+      sc.sub_start                                                      AS sub_start,
+      rc.sub_d0                                                         AS sub_d0,
+      rc.sub_d7                                                         AS sub_d7,
       SAFE_DIVIDE(sc.spend, NULLIF(sc.installs, 0))                     AS cpi,
+      SAFE_DIVIDE(sc.spend, NULLIF(sc.sub_start, 0))                    AS cp_sub_start,
+      SAFE_DIVIDE(sc.spend, NULLIF(rc.sub_d0, 0))                       AS cpa_d0,
+      SAFE_DIVIDE(sc.spend, NULLIF(rc.sub_d7, 0))                       AS cpa_d7,
       SAFE_DIVIDE(rc.rev_d7,  NULLIF(sc.spend, 0))                      AS roas,
       SAFE_DIVIDE(sc.clicks, NULLIF(sc.impressions, 0))                 AS ctr,
       SAFE_DIVIDE(sc.spend * 1000, NULLIF(sc.impressions, 0))           AS cpm,
@@ -289,7 +315,30 @@ export async function queryGlobalComixKPIs(
           - SAFE_DIVIDE(rp.retained_d7, NULLIF(rp.cohort_d7, 0)),
         NULLIF(SAFE_DIVIDE(rp.retained_d7, NULLIF(rp.cohort_d7, 0)), 0)
       )                                                                 AS ret_d7_delta,
-      SAFE_DIVIDE(rc.payers_d7 - rp.payers_d7, NULLIF(rp.payers_d7, 0)) AS payers_d7_delta
+      SAFE_DIVIDE(rc.payers_d7 - rp.payers_d7, NULLIF(rp.payers_d7, 0)) AS payers_d7_delta,
+
+      -- Subscription-funnel deltas. Count deltas mirror spend/install
+      -- deltas; CP* / CPA* deltas use the same rate-of-rate shape as
+      -- CPI / CTR / CPM above so a zero prior period collapses to NULL
+      -- instead of crashing.
+      SAFE_DIVIDE(sc.sub_start - sp.sub_start, NULLIF(sp.sub_start, 0)) AS sub_start_delta,
+      SAFE_DIVIDE(rc.sub_d0 - rp.sub_d0, NULLIF(rp.sub_d0, 0))          AS sub_d0_delta,
+      SAFE_DIVIDE(rc.sub_d7 - rp.sub_d7, NULLIF(rp.sub_d7, 0))          AS sub_d7_delta,
+      SAFE_DIVIDE(
+        SAFE_DIVIDE(sc.spend, NULLIF(sc.sub_start, 0))
+          - SAFE_DIVIDE(sp.spend, NULLIF(sp.sub_start, 0)),
+        NULLIF(SAFE_DIVIDE(sp.spend, NULLIF(sp.sub_start, 0)), 0)
+      )                                                                 AS cp_sub_start_delta,
+      SAFE_DIVIDE(
+        SAFE_DIVIDE(sc.spend, NULLIF(rc.sub_d0, 0))
+          - SAFE_DIVIDE(sp.spend, NULLIF(rp.sub_d0, 0)),
+        NULLIF(SAFE_DIVIDE(sp.spend, NULLIF(rp.sub_d0, 0)), 0)
+      )                                                                 AS cpa_d0_delta,
+      SAFE_DIVIDE(
+        SAFE_DIVIDE(sc.spend, NULLIF(rc.sub_d7, 0))
+          - SAFE_DIVIDE(sp.spend, NULLIF(rp.sub_d7, 0)),
+        NULLIF(SAFE_DIVIDE(sp.spend, NULLIF(rp.sub_d7, 0)), 0)
+      )                                                                 AS cpa_d7_delta
     FROM spend_curr sc, rev_curr rc, spend_prev sp, rev_prev rp
   `;
 
@@ -318,6 +367,12 @@ export async function queryGlobalComixKPIs(
     roasD90: numberish(r.roas_d90),
     retD7: numberish(r.ret_d7),
     payersD7: numberish(r.payers_d7),
+    subStart: numberish(r.sub_start),
+    subD0: numberish(r.sub_d0),
+    subD7: numberish(r.sub_d7),
+    cpSubStart: numberish(r.cp_sub_start),
+    cpaD0: numberish(r.cpa_d0),
+    cpaD7: numberish(r.cpa_d7),
     spendDelta: numberOrNull(r.spend_delta),
     installsDelta: numberOrNull(r.installs_delta),
     clicksDelta: numberOrNull(r.clicks_delta),
@@ -335,61 +390,80 @@ export async function queryGlobalComixKPIs(
     roasD90Delta: numberOrNull(r.roas_d90_delta),
     retD7Delta: numberOrNull(r.ret_d7_delta),
     payersD7Delta: numberOrNull(r.payers_d7_delta),
+    subStartDelta: numberOrNull(r.sub_start_delta),
+    subD0Delta: numberOrNull(r.sub_d0_delta),
+    subD7Delta: numberOrNull(r.sub_d7_delta),
+    cpSubStartDelta: numberOrNull(r.cp_sub_start_delta),
+    cpaD0Delta: numberOrNull(r.cpa_d0_delta),
+    cpaD7Delta: numberOrNull(r.cpa_d7_delta),
   };
 }
 
 // ── Daily trend series ──────────────────────────────────────────────────────
 
-export async function queryGlobalComixTrend(
+async function _queryGlobalComixTrend(
   client: string,
   from: string,
   to: string,
-): Promise<BQTrendPoint[]> {
+): Promise<BQTrendPointByNetwork[]> {
   const spendSub = buildSpendSubquery(client);
   const cohortSub = buildCohortSubquery(client);
   const bq = getBigQueryClient();
 
-  // LEFT JOIN keeps days with spend but no matured cohort revenue (e.g.
-  // the trailing 7 days where D7 is still maturing). ROAS for those days
-  // reads as 0 — the trend will visibly dip, which is correct behavior
-  // and surfaces the "data is still ripening" caveat without an extra UI
-  // element.
+  // Per-(date, network) grain — the chart draws one line per ad network
+  // so the spend and cohort CTEs both GROUP BY (date, network) and the
+  // final SELECT preserves the network column. A LEFT JOIN on (date,
+  // network) keeps days with spend but no matured cohort revenue (the
+  // trailing 7 days where D7 is still maturing), which read as 0 ROAS /
+  // 0 sub_d7 — surfaced visually by the chart's maturity-tail overlay.
   const query = `
     WITH spend AS (
       SELECT
         date,
+        network,
         SUM(cost_usd)    AS spend,
         SUM(installs)    AS installs,
         SUM(clicks)      AS clicks,
         SUM(impressions) AS impressions,
-        SUM(ftd_d7)      AS ftd_d7
+        SUM(ftd_d7)      AS ftd_d7,
+        SUM(ftd_d7)      AS sub_start
       FROM ${spendSub}
       WHERE date BETWEEN ${FROM} AND ${TO}
-      GROUP BY date
+      GROUP BY date, network
     ),
     rev AS (
       SELECT
         date,
+        network,
         SUM(rev_d7)       AS rev_d7,
         SUM(rev_d14)      AS rev_d14,
         SUM(rev_d30)      AS rev_d30,
         SUM(rev_d90)      AS rev_d90,
+        SUM(sub_d0)       AS sub_d0,
+        SUM(sub_d7)       AS sub_d7,
         SUM(payers_d7)    AS payers_d7,
         SUM(retained_d7)  AS retained_d7,
         SUM(cohort_d7)    AS cohort_d7
       FROM ${cohortSub}
       WHERE date BETWEEN ${FROM} AND ${TO}
         AND network IS NOT NULL
-      GROUP BY date
+      GROUP BY date, network
     )
     SELECT
       FORMAT_DATE('%Y-%m-%d', s.date)                          AS date,
+      s.network                                                AS network,
       s.spend                                                  AS spend,
       s.installs                                               AS installs,
       s.clicks                                                 AS clicks,
       s.impressions                                            AS impressions,
       s.ftd_d7                                                 AS ftd_d7,
+      s.sub_start                                              AS sub_start,
+      r.sub_d0                                                 AS sub_d0,
+      r.sub_d7                                                 AS sub_d7,
       SAFE_DIVIDE(s.spend, NULLIF(s.installs, 0))              AS cpi,
+      SAFE_DIVIDE(s.spend, NULLIF(s.sub_start, 0))             AS cp_sub_start,
+      SAFE_DIVIDE(s.spend, NULLIF(r.sub_d0, 0))                AS cpa_d0,
+      SAFE_DIVIDE(s.spend, NULLIF(r.sub_d7, 0))                AS cpa_d7,
       SAFE_DIVIDE(r.rev_d7, NULLIF(s.spend, 0))                AS roas,
       SAFE_DIVIDE(s.clicks, NULLIF(s.impressions, 0))          AS ctr,
       SAFE_DIVIDE(s.spend * 1000, NULLIF(s.impressions, 0))    AS cpm,
@@ -402,8 +476,8 @@ export async function queryGlobalComixTrend(
       SAFE_DIVIDE(r.retained_d7, NULLIF(r.cohort_d7, 0))       AS ret_d7,
       r.payers_d7                                              AS payers_d7
     FROM spend s
-    LEFT JOIN rev r USING (date)
-    ORDER BY date ASC
+    LEFT JOIN rev r USING (date, network)
+    ORDER BY date ASC, network ASC
   `;
 
   const [rows] = await bq.query({
@@ -414,12 +488,19 @@ export async function queryGlobalComixTrend(
 
   return rows.map((r: Record<string, unknown>) => ({
     date: String(r.date),
+    network: String(r.network ?? "Unknown"),
     spend: numberish(r.spend),
     installs: numberish(r.installs),
     clicks: numberish(r.clicks),
     impressions: numberish(r.impressions),
     ftdD7: numberish(r.ftd_d7),
+    subStart: numberish(r.sub_start),
+    subD0: numberish(r.sub_d0),
+    subD7: numberish(r.sub_d7),
     cpi: numberish(r.cpi),
+    cpSubStart: numberish(r.cp_sub_start),
+    cpaD0: numberish(r.cpa_d0),
+    cpaD7: numberish(r.cpa_d7),
     roas: numberish(r.roas),
     ctr: numberish(r.ctr),
     cpm: numberish(r.cpm),
@@ -436,7 +517,7 @@ export async function queryGlobalComixTrend(
 
 // ── Channel mix: spend share by network ────────────────────────────────────
 
-export async function queryGlobalComixChannelMix(
+async function _queryGlobalComixChannelMix(
   client: string,
   from: string,
   to: string,
@@ -488,7 +569,7 @@ export async function queryGlobalComixChannelMix(
  * Networks with $0 spend in the period are dropped here so the UI
  * doesn't render an all-zero row that just adds noise.
  */
-export async function queryGlobalComixNetworkBreakdown(
+async function _queryGlobalComixNetworkBreakdown(
   client: string,
   from: string,
   to: string,
@@ -497,6 +578,11 @@ export async function queryGlobalComixNetworkBreakdown(
   const cohortSub = buildCohortSubquery(client);
   const bq = getBigQueryClient();
 
+  // Two trailing CTEs (spend_trailing, rev_trailing) cover the 30 days
+  // immediately before `from`. The final SELECT joins them in alongside
+  // the period CTEs and emits `trailing_cpa_d7_avg` per network — the
+  // status pill's baseline, computed in the same query so the dashboard
+  // doesn't need a separate fetch.
   const query = `
     WITH spend_by_net AS (
       SELECT
@@ -505,7 +591,8 @@ export async function queryGlobalComixNetworkBreakdown(
         SUM(installs)    AS installs,
         SUM(clicks)      AS clicks,
         SUM(impressions) AS impressions,
-        SUM(ftd_d7)      AS ftd_d7
+        SUM(ftd_d7)      AS ftd_d7,
+        SUM(ftd_d7)      AS sub_start
       FROM ${spendSub}
       WHERE date BETWEEN ${FROM} AND ${TO}
       GROUP BY network
@@ -517,11 +604,34 @@ export async function queryGlobalComixNetworkBreakdown(
         SUM(rev_d14)      AS rev_d14,
         SUM(rev_d30)      AS rev_d30,
         SUM(rev_d90)      AS rev_d90,
+        SUM(sub_d0)       AS sub_d0,
+        SUM(sub_d7)       AS sub_d7,
         SUM(payers_d7)    AS payers_d7,
         SUM(retained_d7)  AS retained_d7,
         SUM(cohort_d7)    AS cohort_d7
       FROM ${cohortSub}
       WHERE date BETWEEN ${FROM} AND ${TO}
+        AND network IS NOT NULL
+      GROUP BY network
+    ),
+    spend_trailing AS (
+      SELECT
+        network,
+        SUM(cost_usd) AS spend
+      FROM ${spendSub}
+      WHERE date BETWEEN
+        DATE_SUB(DATE(${FROM}), INTERVAL 30 DAY)
+        AND DATE_SUB(DATE(${FROM}), INTERVAL 1 DAY)
+      GROUP BY network
+    ),
+    rev_trailing AS (
+      SELECT
+        network,
+        SUM(sub_d7) AS sub_d7
+      FROM ${cohortSub}
+      WHERE date BETWEEN
+        DATE_SUB(DATE(${FROM}), INTERVAL 30 DAY)
+        AND DATE_SUB(DATE(${FROM}), INTERVAL 1 DAY)
         AND network IS NOT NULL
       GROUP BY network
     ),
@@ -536,7 +646,13 @@ export async function queryGlobalComixNetworkBreakdown(
       s.clicks                                                     AS clicks,
       s.impressions                                                AS impressions,
       s.ftd_d7                                                     AS ftd_d7,
+      s.sub_start                                                  AS sub_start,
+      r.sub_d0                                                     AS sub_d0,
+      r.sub_d7                                                     AS sub_d7,
       SAFE_DIVIDE(s.spend, NULLIF(s.installs, 0))                  AS cpi,
+      SAFE_DIVIDE(s.spend, NULLIF(s.sub_start, 0))                 AS cp_sub_start,
+      SAFE_DIVIDE(s.spend, NULLIF(r.sub_d0, 0))                    AS cpa_d0,
+      SAFE_DIVIDE(s.spend, NULLIF(r.sub_d7, 0))                    AS cpa_d7,
       SAFE_DIVIDE(s.clicks, NULLIF(s.impressions, 0))              AS ctr,
       SAFE_DIVIDE(s.spend * 1000, NULLIF(s.impressions, 0))        AS cpm,
       SAFE_DIVIDE(s.spend, NULLIF(s.clicks, 0))                    AS cpc,
@@ -545,9 +661,12 @@ export async function queryGlobalComixNetworkBreakdown(
       SAFE_DIVIDE(r.rev_d30, NULLIF(s.spend, 0))                   AS roas_d30,
       SAFE_DIVIDE(r.rev_d90, NULLIF(s.spend, 0))                   AS roas_d90,
       r.payers_d7                                                  AS payers_d7,
-      SAFE_DIVIDE(r.retained_d7, NULLIF(r.cohort_d7, 0))           AS ret_d7
+      SAFE_DIVIDE(r.retained_d7, NULLIF(r.cohort_d7, 0))           AS ret_d7,
+      SAFE_DIVIDE(st.spend, NULLIF(rt.sub_d7, 0))                  AS trailing_cpa_d7_avg
     FROM spend_by_net s
     LEFT JOIN rev_by_net r USING (network)
+    LEFT JOIN spend_trailing st USING (network)
+    LEFT JOIN rev_trailing rt USING (network)
     CROSS JOIN grand g
     WHERE s.spend > 0
     ORDER BY s.spend DESC
@@ -567,7 +686,13 @@ export async function queryGlobalComixNetworkBreakdown(
     clicks: numberish(r.clicks),
     impressions: numberish(r.impressions),
     ftdD7: numberish(r.ftd_d7),
+    subStart: numberish(r.sub_start),
+    subD0: numberish(r.sub_d0),
+    subD7: numberish(r.sub_d7),
     cpi: numberish(r.cpi),
+    cpSubStart: numberish(r.cp_sub_start),
+    cpaD0: numberish(r.cpa_d0),
+    cpaD7: numberish(r.cpa_d7),
     ctr: numberish(r.ctr),
     cpm: numberish(r.cpm),
     cpc: numberish(r.cpc),
@@ -577,6 +702,7 @@ export async function queryGlobalComixNetworkBreakdown(
     roasD90: numberish(r.roas_d90),
     payersD7: numberish(r.payers_d7),
     retD7: numberish(r.ret_d7),
+    trailingCpaD7Avg: numberish(r.trailing_cpa_d7_avg),
   }));
 }
 
@@ -592,7 +718,7 @@ export async function queryGlobalComixNetworkBreakdown(
  * had 90 days to convert yet). The UI should note this on the
  * tooltip — see the PaybackCurve component.
  */
-export async function queryGlobalComixPayback(
+async function _queryGlobalComixPayback(
   client: string,
   from: string,
   to: string,
@@ -653,7 +779,7 @@ export async function queryGlobalComixPayback(
 
 // ── Campaign table (top 100 by spend) ──────────────────────────────────────
 
-export async function queryGlobalComixCampaigns(
+async function _queryGlobalComixCampaigns(
   client: string,
   from: string,
   to: string,
@@ -725,7 +851,7 @@ export async function queryGlobalComixCampaigns(
 
 // ── Earliest/latest dates with spend > 0 ───────────────────────────────────
 
-export async function queryGlobalComixDataBounds(
+async function _queryGlobalComixDataBounds(
   client: string,
 ): Promise<DataBounds> {
   const spendSub = buildSpendSubquery(client);
@@ -755,7 +881,7 @@ export async function queryGlobalComixDataBounds(
  * Returns YYYY-MM-DD or `null` if every table is empty (should never
  * happen in prod, defensive for stage / test envs).
  */
-export async function queryGlobalComixDataAsOf(
+async function _queryGlobalComixDataAsOf(
   client: string,
 ): Promise<string | null> {
   const cfg = getMultiSourceConfig(client);
@@ -780,6 +906,113 @@ export async function queryGlobalComixDataAsOf(
   }
   return null;
 }
+
+// ── Cached exports ─────────────────────────────────────────────────────────
+//
+// TTL choices:
+//   - Dashboard queries (KPIs, trend, channel-mix, network-breakdown,
+//     payback, network-cpa-baseline, campaigns) cache for 15 minutes.
+//     Rivery refreshes the underlying tables every ~30 minutes during
+//     the workday; 15 minutes gives us a stable mid-refresh read without
+//     letting a stale number sit for a full sync cycle. Tag
+//     `globalcomix-dashboard` covers them so a single revalidateTag()
+//     from a future Rivery webhook can blow the whole set.
+//   - Freshness (data-as-of) caches for 5 minutes — short because this
+//     drives the "Data as of …" stamp users trust to time their reads.
+//     Tag `globalcomix-freshness`.
+//   - Data bounds cache for 6 hours — the earliest/latest dates only
+//     move when a backfill lands, which is rare and not user-visible.
+//     Tag `globalcomix-bounds`.
+//
+// `revalidateTag` is left as a future hook; no caller invokes it today.
+
+const DASHBOARD_TTL_S = 60 * 15;
+const FRESHNESS_TTL_S = 60 * 5;
+const BOUNDS_TTL_S = 60 * 60 * 6;
+
+const DASHBOARD_TAGS = ["globalcomix-dashboard"];
+const FRESHNESS_TAGS = ["globalcomix-freshness"];
+const BOUNDS_TAGS = ["globalcomix-bounds"];
+
+export const queryGlobalComixKPIs = (
+  client: string,
+  from: string,
+  to: string,
+) =>
+  unstable_cache(
+    _queryGlobalComixKPIs,
+    ["globalcomix:kpis", client, from, to],
+    { revalidate: DASHBOARD_TTL_S, tags: DASHBOARD_TAGS },
+  )(client, from, to);
+
+export const queryGlobalComixTrend = (
+  client: string,
+  from: string,
+  to: string,
+) =>
+  unstable_cache(
+    _queryGlobalComixTrend,
+    ["globalcomix:trend", client, from, to],
+    { revalidate: DASHBOARD_TTL_S, tags: DASHBOARD_TAGS },
+  )(client, from, to);
+
+export const queryGlobalComixChannelMix = (
+  client: string,
+  from: string,
+  to: string,
+) =>
+  unstable_cache(
+    _queryGlobalComixChannelMix,
+    ["globalcomix:channel-mix", client, from, to],
+    { revalidate: DASHBOARD_TTL_S, tags: DASHBOARD_TAGS },
+  )(client, from, to);
+
+export const queryGlobalComixNetworkBreakdown = (
+  client: string,
+  from: string,
+  to: string,
+) =>
+  unstable_cache(
+    _queryGlobalComixNetworkBreakdown,
+    ["globalcomix:network-breakdown", client, from, to],
+    { revalidate: DASHBOARD_TTL_S, tags: DASHBOARD_TAGS },
+  )(client, from, to);
+
+export const queryGlobalComixPayback = (
+  client: string,
+  from: string,
+  to: string,
+) =>
+  unstable_cache(
+    _queryGlobalComixPayback,
+    ["globalcomix:payback", client, from, to],
+    { revalidate: DASHBOARD_TTL_S, tags: DASHBOARD_TAGS },
+  )(client, from, to);
+
+export const queryGlobalComixCampaigns = (
+  client: string,
+  from: string,
+  to: string,
+) =>
+  unstable_cache(
+    _queryGlobalComixCampaigns,
+    ["globalcomix:campaigns", client, from, to],
+    { revalidate: DASHBOARD_TTL_S, tags: DASHBOARD_TAGS },
+  )(client, from, to);
+
+export const queryGlobalComixDataBounds = (client: string) =>
+  unstable_cache(
+    _queryGlobalComixDataBounds,
+    ["globalcomix:data-bounds", client],
+    { revalidate: BOUNDS_TTL_S, tags: BOUNDS_TAGS },
+  )(client);
+
+export const queryGlobalComixDataAsOf = (client: string) =>
+  unstable_cache(
+    _queryGlobalComixDataAsOf,
+    ["globalcomix:data-as-of", client],
+    { revalidate: FRESHNESS_TTL_S, tags: FRESHNESS_TAGS },
+  )(client);
 
 // ── BigQuery number coercion (shared with bq-queries.ts) ───────────────────
 

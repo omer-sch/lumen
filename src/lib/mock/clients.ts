@@ -97,25 +97,37 @@ export type ClientCoverage = {
 const LEGACY_KPIS: KpiId[] = ["spend", "installs", "cpi", "roas"];
 
 // Everything the multi-source `dwh_*_globalcomix_adjust` + cohort path
-// can fill in: clicks/impressions/multi-window ROAS/retention/payers,
-// plus the legacy four. Order matches the analyst's mental sequence
-// (spend → volume → efficiency → payback → engagement).
+// can fill in. Order matches the analyst's mental sequence — the deck
+// reads the funnel left-to-right (spend → volume → conversions → unit
+// cost → payback / detail), so the swap dropdown offers them in that
+// reading order.
 const MULTI_SOURCE_KPIS: KpiId[] = [
+  // Hero + funnel volume
+  "cpaD7",
   "spend",
   "installs",
+  "subStart",
+  "subD0",
+  "subD7",
+  // Unit cost — the deck's primary lens for week-over-week comparisons
+  "cpi",
+  "cpSubStart",
+  "cpaD0",
+  // Engagement + click economics
   "clicks",
   "impressions",
-  "cpi",
   "ctr",
   "cpm",
   "cpc",
+  // Retention / revenue / ROAS (Detail group — present but de-emphasized
+  // in the chart tab strip)
+  "retD7",
   "revD7",
   "revD30",
   "roas",
   "roasD14",
   "roasD30",
   "roasD90",
-  "retD7",
   "payersD7",
   "ftdD7",
 ];

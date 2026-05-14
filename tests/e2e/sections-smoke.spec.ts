@@ -41,7 +41,10 @@ test.describe("section smoke (preview-mode)", () => {
     page,
   }) => {
     await page.goto("/dashboard");
-    for (const id of ["roas", "spend", "installs", "cpi"] as const) {
+    // Default-client (globalcomix) hero slots — see DEFAULT_SLOTS in
+    // DashboardView. Subscription funnel: CPA D7 → spend → installs →
+    // Sub D7.
+    for (const id of ["cpaD7", "spend", "installs", "subD7"] as const) {
       await expect(page.getByTestId(`kpi-${id}`)).toBeVisible();
     }
     await expect(page.getByTestId("trend-chart")).toBeVisible();

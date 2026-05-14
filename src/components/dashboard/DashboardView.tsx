@@ -7,7 +7,6 @@ import type { DashboardData, Kpi, KpiId } from "@/types/dashboard";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import { useDashboardMode } from "@/lib/filters/use-dashboard-mode";
 import {
-  findClient,
   getClientCoverage,
   getSupportedKpis,
   type ClientCoverage,
@@ -17,7 +16,6 @@ import { KpiCard } from "@/components/dashboard/KpiCard";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { ChannelMix } from "@/components/dashboard/ChannelMix";
 import { NetworkBreakdown } from "@/components/dashboard/NetworkBreakdown";
-import { PaybackCurve } from "@/components/dashboard/PaybackCurve";
 import { PinnedSection } from "@/components/dashboard/PinnedSection";
 import { AIModeView } from "@/components/dashboard/AIModeView";
 import { InfoCallout } from "@/components/ui/InfoCallout";
@@ -77,7 +75,7 @@ function DashboardInner() {
   }, [client, bounds?.earliest, bounds?.latest, windowEmpty]);
 
   return (
-    <div className="flex flex-col gap-4 md:gap-5">
+    <div className="flex flex-col gap-3 md:gap-4">
       <DashboardHeader />
       {mode === "ai" ? (
         <AIModeView />
@@ -98,15 +96,14 @@ function DashboardInner() {
 
 function DashboardHeader() {
   const { mode, setMode } = useDashboardMode();
-  const { from, to, client } = useGlobalFilters();
+  const { from, to } = useGlobalFilters();
   const days = Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
-  const c = findClient(client);
 
   return (
-    <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
-      <div className="flex min-w-0 flex-col gap-1.5">
+    <header className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         <span
-          className="inline-flex items-center gap-2 self-start rounded-full px-3 py-1 font-body text-xs font-semibold uppercase tracking-wider"
+          className="inline-flex shrink-0 items-center gap-2 rounded-full px-2.5 py-0.5 font-body text-[11px] font-semibold uppercase tracking-wider"
           style={{
             background: "color-mix(in oklab, var(--color-ua) 12%, transparent)",
             color: "var(--color-ua)",
@@ -117,39 +114,20 @@ function DashboardHeader() {
           }}
         >
           <LivePulse accent="mint" size={8} />
-          UA · {c.name} · last {days} days
+          UA · last {days} days
         </span>
-        <h2 className="font-display text-2xl font-extrabold leading-tight tracking-tight text-cloud-white sm:text-3xl">
+        <h2 className="truncate font-display text-lg font-extrabold leading-tight tracking-tight text-cloud-white sm:text-xl">
           {mode === "ai" ? (
             <>
               What Lumen thinks{" "}
               <span className="text-gradient-brand">matters now.</span>
             </>
           ) : (
-            <>
-              Performance overview,{" "}
-              <span
-                className="block bg-clip-text text-transparent sm:inline"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(120deg, var(--color-ua) 0%, var(--color-ua-glow) 55%, var(--color-yellow) 100%)",
-                }}
-              >
-                {c.name}.
-              </span>
-            </>
+            <>Performance overview.</>
           )}
         </h2>
-        <p className="max-w-xl font-body text-sm text-[color:var(--text-secondary)]">
-          {mode === "ai"
-            ? "Lumen rebuilt this view from scratch. Each tile is something the brain decided to surface, with a one-line read on why. Step back into My Dashboard for the curated view."
-            : "Your paid performance snapshot for the selected period."}
-        </p>
       </div>
-
-      <div className="flex shrink-0 flex-col items-end gap-2">
-        <ModeToggle mode={mode} setMode={setMode} />
-      </div>
+      <ModeToggle mode={mode} setMode={setMode} />
     </header>
   );
 }
@@ -226,14 +204,28 @@ function ModeToggle({
   );
 }
 
-/** Default order of metrics across the four KPI slots. */
-const DEFAULT_SLOTS: KpiId[] = ["roas", "spend", "installs", "cpi"];
+/** Default order of metrics across the four KPI slots. CPA D7 leads as
+ *  the hero (yellow), then the subscription-funnel volume reads: spend,
+ *  installs, subscribers at D7. Agent-strategy clients don't have CPA D7
+ *  or subD7 populated so `slotsForCoverage` swaps them out for the
+ *  legacy four. */
+const DEFAULT_SLOTS: KpiId[] = ["cpaD7", "spend", "installs", "subD7"];
+
+/** Legacy default for agent-strategy clients (Playw3, 100play). Those
+ *  clients don't populate the subscription funnel, so we keep the
+ *  gaming-vocab tiles where they were. */
+const LEGACY_SLOTS: KpiId[] = ["roas", "spend", "installs", "cpi"];
 
 /** Filter the default slots down to what the client has data for. Order is
- *  preserved so ROAS still leads when present, and the layout collapses to
+ *  preserved so the hero stays in slot 0, and the layout collapses to
  *  the matching grid width below. */
 function slotsForCoverage(coverage: ClientCoverage): KpiId[] {
-  return DEFAULT_SLOTS.filter((id) => {
+  // If the client's supported KPI list doesn't include `cpaD7`, we're
+  // on a legacy / agent-strategy client — fall back to the original
+  // four-tile default.
+  const supportsCpaD7 = coverage.supportedKpis?.includes("cpaD7") ?? false;
+  const base = supportsCpaD7 ? DEFAULT_SLOTS : LEGACY_SLOTS;
+  return base.filter((id) => {
     if (id === "installs") return coverage.hasInstalls;
     if (id === "cpi") return coverage.hasCpi;
     return true;
@@ -303,11 +295,11 @@ function MyDashboard({
             <KpiCardSkeleton key={`kpi-skel-${i}`} />
           ))}
         </section>
-        <section className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4">
-          <div className="lg:col-span-2">
+        <section className="grid grid-cols-1 gap-3 lg:grid-cols-5 lg:gap-4">
+          <div className="lg:col-span-3">
             <TrendChartSkeleton />
           </div>
-          <Skeleton className="h-72 w-full rounded-lg" />
+          <Skeleton className="h-72 w-full rounded-lg lg:col-span-2" />
         </section>
       </div>
     );
@@ -352,7 +344,9 @@ function MyDashboard({
     <div className="flex flex-col gap-3 md:gap-4" data-live>
       {/* KPI strip — equal tiles in a row on lg+, each with its own
           sparkline. Column count adapts to coverage so missing metrics
-          don't leave empty slots. */}
+          don't leave empty slots. The hero (yellow glow) follows the
+          first slot wherever it lands so the brand "yellow is
+          intentional" rule still holds. */}
       <section className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${gridCols}`}>
         {slots.map((activeId, i) => {
           const kpi = kpiById(activeId);
@@ -363,6 +357,10 @@ function MyDashboard({
             date: p.date,
             value: p[activeId] ?? 0,
           }));
+          // Hero is whatever metric occupies slot 0 — the subscription
+          // pivot landed CPA D7 there; agent-strategy clients still
+          // start with ROAS.
+          const heroSlot = i === 0;
           return (
             <KpiCard
               key={`slot-${i}`}
@@ -372,7 +370,8 @@ function MyDashboard({
               delta={kpi.delta}
               direction={kpi.direction}
               hint={kpi.hint}
-              highlight={activeId === "roas"}
+              target={kpi.target}
+              highlight={heroSlot}
               size="compact"
               enterIndex={i + 1}
               series={series}
@@ -404,14 +403,12 @@ function MyDashboard({
         </p>
       )}
 
-      {/* Trend chart + companion. The companion is the new per-network
-          performance table when the client has multi-source data;
-          otherwise we fall back to the original ChannelMix bar list so
-          agent-strategy clients (Playw3, 100play) still get a
-          right-hand panel. Each can fail independently — surface a
-          per-section error inline instead of nuking the page. */}
-      <section className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4">
-        <div className="lg:col-span-2">
+      {/* Trend chart + network breakdown — side-by-side on lg+ so the
+          dashboard fits in one viewport. Chart takes 3/5, breakdown
+          gets 2/5 so the stacked network cards have room to breathe.
+          Stacks on smaller screens. */}
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-5 lg:gap-4">
+        <div className="lg:col-span-3">
           {errors.trend ? (
             <SectionError
               section="the trend chart"
@@ -420,31 +417,29 @@ function MyDashboard({
               data-testid="trend-section-error"
             />
           ) : (
-            <TrendChart trend={data.trend} enterIndex={5} />
+            <TrendChart
+              trend={data.trend}
+              trendByNetwork={data.trendByNetwork}
+              enterIndex={5}
+            />
           )}
         </div>
-        {errors.channelMix ? (
-          <SectionError
-            section="the channel mix"
-            shape="min-h-[14rem]"
-            onRetry={onRetry}
-            data-testid="channel-mix-section-error"
-          />
-        ) : data.networkBreakdown.length > 0 ? (
-          <NetworkBreakdown rows={data.networkBreakdown} enterIndex={6} />
-        ) : (
-          <ChannelMix data={data.channelMix} enterIndex={6} />
-        )}
+        <div className="lg:col-span-2">
+          {errors.channelMix ? (
+            <SectionError
+              section="the channel mix"
+              shape="min-h-[14rem]"
+              onRetry={onRetry}
+              data-testid="channel-mix-section-error"
+            />
+          ) : data.networkBreakdown.length > 0 ? (
+            <NetworkBreakdown rows={data.networkBreakdown} enterIndex={6} />
+          ) : (
+            <ChannelMix data={data.channelMix} enterIndex={6} />
+          )}
+        </div>
       </section>
 
-      {/* Payback curve — only mounted when the client populates the
-          cohort table (multi-source). Renders nothing for agent-strategy
-          clients so the page doesn't reserve empty space. */}
-      {data.payback.length > 0 && (
-        <section>
-          <PaybackCurve points={data.payback} enterIndex={7} />
-        </section>
-      )}
     </div>
   );
 }

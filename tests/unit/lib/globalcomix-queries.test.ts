@@ -17,6 +17,13 @@ vi.mock("@google-cloud/bigquery", () => {
   return { BigQuery };
 });
 
+// Pass-through unstable_cache: invokes the inner function directly so
+// the unit tests don't try to hit Next's incremental cache (which
+// would 500 in vitest where the cache context isn't installed).
+vi.mock("next/cache", () => ({
+  unstable_cache: <T extends (...args: unknown[]) => unknown>(fn: T) => fn,
+}));
+
 beforeEach(() => {
   queryFn.mockReset();
   vi.stubEnv("BQ_PROJECT", "test-project");
@@ -117,13 +124,54 @@ describe("queryGlobalComixKPIs: client guard", () => {
 });
 
 describe("queryGlobalComixTrend / ChannelMix / NetworkBreakdown / Campaigns", () => {
-  it("queryGlobalComixTrend groups by date and orders ascending", async () => {
+  it("queryGlobalComixTrend groups by (date, network) and orders ascending", async () => {
     queryFn.mockResolvedValue([[]]);
     const { queryGlobalComixTrend } = await import("@/lib/globalcomix-queries");
     await queryGlobalComixTrend("globalcomix", FROM, TO);
     const { query } = queryFn.mock.calls[0][0] as { query: string };
-    expect(query).toContain("GROUP BY date");
-    expect(query).toMatch(/ORDER BY date ASC/);
+    // Per-network split: both CTEs and the final ORDER BY include network.
+    expect(query).toMatch(/GROUP BY date,\s*network/);
+    expect(query).toMatch(/ORDER BY date ASC,\s*network ASC/);
+  });
+
+  it("queryGlobalComixTrend selects the subscription-funnel derived metrics", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixTrend } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixTrend("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // CPA D7 hero metric and its peers must appear in the SELECT — the
+    // chart's default tab needs them populated. SAFE_DIVIDE protects
+    // a zero-denominator day from crashing.
+    expect(query).toMatch(/AS cp_sub_start/);
+    expect(query).toMatch(/AS cpa_d0/);
+    expect(query).toMatch(/AS cpa_d7/);
+    expect(query).toMatch(/SAFE_DIVIDE\(s\.spend, NULLIF\(r\.sub_d7,\s*0\)\)\s+AS cpa_d7/);
+  });
+
+  it("queryGlobalComixKPIs binds Sub D0 to _0D_Paying_Users in the cohort CTE", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixKPIs("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toContain("_0D_Paying_Users");
+    expect(query).toMatch(/AS sub_d0/);
+  });
+
+  it("queryGlobalComixNetworkBreakdown embeds the trailing 30d CPA D7 baseline", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixNetworkBreakdown } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixNetworkBreakdown("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // Trailing CTEs are inline so the status pill data comes from the
+    // same query, not a second XHR.
+    expect(query).toMatch(/spend_trailing AS/);
+    expect(query).toMatch(/rev_trailing AS/);
+    expect(query).toMatch(/AS trailing_cpa_d7_avg/);
+    // Trailing window is [from - 30 days, from - 1 day].
+    expect(query).toMatch(/INTERVAL 30 DAY/);
+    expect(query).toMatch(/INTERVAL 1 DAY/);
   });
 
   it("queryGlobalComixChannelMix orders by spend desc and filters $0-spend networks", async () => {
