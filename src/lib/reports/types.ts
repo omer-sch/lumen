@@ -1,14 +1,27 @@
 import type { AgentId } from "@/lib/agents/identity";
 
 /** Section IDs are stable so a saved report keeps the right structure even
- *  if the user rearranges section labels. */
+ *  if the user rearranges section labels. The legacy ids (executive_summary,
+ *  kpis, channel_breakdown, top_campaigns, recommendations) remain in the
+ *  union so reports persisted before the yellowHEAD format ships still
+ *  hydrate cleanly. */
 export type SectionId =
   | "executive_summary"
   | "kpis"
   | "channel_breakdown"
   | "top_campaigns"
-  | "recommendations";
+  | "recommendations"
+  | "platform_overall"
+  | "channel_weekly"
+  | "channel_campaign";
 
+// =============================================================================
+// Legacy types — pre yellowHEAD-format Reports. Kept so localStorage rows
+// from before the switch still render via the fallback path in
+// ReportDocument.tsx. New work should use the yellowHEAD section types below.
+// =============================================================================
+
+/** @deprecated use the yellowHEAD format */
 export type ReportKpi = {
   label: string;
   value: string;
@@ -17,6 +30,7 @@ export type ReportKpi = {
   tone: "good" | "bad" | "neutral";
 };
 
+/** @deprecated use the yellowHEAD format */
 export type ReportChannelRow = {
   channel: string;
   spend: string;
@@ -24,6 +38,7 @@ export type ReportChannelRow = {
   roas: string;
 };
 
+/** @deprecated use the yellowHEAD format */
 export type ReportCampaignRow = {
   name: string;
   channel: string;
@@ -32,12 +47,162 @@ export type ReportCampaignRow = {
   roas: string;
 };
 
+// =============================================================================
+// yellowHEAD weekly-review format — three section templates, instanced
+// across Platform x Channel. See globalcomix-w18-learnings.html for the
+// visual reference.
+// =============================================================================
+
+export type Platform = "android" | "ios" | "web";
+export type Channel = "meta" | "google" | "tiktok" | "asa" | "search";
+
+/** Pink/orange/blue are the everyday callouts; green/violet are reserved
+ *  for cases where we need a fourth or fifth highlight on a single slide. */
+export type CalloutColor = "pink" | "orange" | "blue" | "green" | "violet";
+
+export type MetricValue = {
+  value: number | string;
+  /** Week-over-week % change. Positive = went up. */
+  delta?: number;
+  /** Drives the arrow color. Cost metrics flip the polarity: a drop in
+   *  CPA is "good", which the renderer interprets per-metric. */
+  tone?: "good" | "bad" | "neutral";
+  /** True when the metric's attribution window is still settling (e.g.
+   *  D7 viewed less than 7 days after the period closes). */
+  maturing?: boolean;
+};
+
+export type WeeklyBullet = {
+  text: string;
+  /** "headline-bad" renders the bullet in coral; the first bullet of a
+   *  bad-news section uses this. */
+  tone?: "headline-bad" | "headline-good" | "neutral";
+};
+
+export type WeeklySummaryRow = {
+  /** "Facebook" / "Google" / "TikTok" / "Total" — the row label on the
+   *  platform-overall summary table. */
+  label: string;
+  spend: MetricValue;
+  substart: MetricValue;
+  subD0: MetricValue;
+  subD7: MetricValue;
+  cpSubstart: MetricValue;
+  cpaD0: MetricValue;
+  cpaD7: MetricValue;
+};
+
+export type WeeklySummaryTable = {
+  /** One row per channel under the platform. */
+  rows: WeeklySummaryRow[];
+  total: WeeklySummaryRow;
+};
+
+export type HistoricalWeekRow = {
+  /** "Week 17", "Week 16", … */
+  label: string;
+  /** "20 Apr 2026 to 26 Apr 2026" */
+  range: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  installs: number;
+  cpi: number;
+  substart: number;
+  cpSubstart: number;
+  subD0: number;
+  cpaD0: number;
+  /** Null means the window is still maturing — render as "—" with a
+   *  "maturing" hint. */
+  subD7: number | null;
+  cpaD7: number | null;
+};
+
+export type CampaignRow = {
+  /** Full yellowHEAD-style name,
+   *  e.g. "YH_FB_APP_FULL_IAP_Sub_Android_Evergreen_WW-Top". */
+  campaignName: string;
+  spend: number;
+  installs: number;
+  cpi: number;
+  substart: number;
+  cpSubstart: number;
+  cpSubstartDelta: number;
+  subD0: number;
+  cpaD0: number;
+  cpaD0Delta: number;
+  subD7: number | null;
+  cpaD7: number | null;
+  cpaD7Delta: number | null;
+  /**
+   * Optional callout color. When set, the row renders with a colored
+   * arrow on the right edge. The same color highlights the matching
+   * phrase in the commentary below. Set by the generator based on
+   * delta magnitude.
+   */
+  highlight?: CalloutColor;
+};
+
+export type CampaignCommentary = {
+  /** Group label, e.g. "Sub (Evergreen)" or "SubStart (India)". */
+  groupLabel: string;
+  /** Factual sentence about what the data shows. */
+  observation: string;
+  /** What the team did or recommends. Rendered after the "<> Action Item" pill. */
+  actionItem: string;
+  /**
+   * Phrases inside `observation` to highlight, keyed by the callout
+   * color that links them to a row above.
+   */
+  highlights?: { color: CalloutColor; phrase: string }[];
+};
+
+export type PlatformOverallSection = {
+  id: "platform_overall";
+  platform: Platform;
+  /** e.g. "Android | Overall | Weekly Breakdown". */
+  title: string;
+  summary: WeeklySummaryTable;
+  bullets: WeeklyBullet[];
+};
+
+export type ChannelWeeklySection = {
+  id: "channel_weekly";
+  platform: Platform;
+  channel: Channel;
+  /** e.g. "Android | Meta | Weekly Breakdown". */
+  title: string;
+  currentWeek: WeeklySummaryRow;
+  /** Last 3 to 4 weeks for context. */
+  history: HistoricalWeekRow[];
+  bullets: WeeklyBullet[];
+};
+
+export type ChannelCampaignSection = {
+  id: "channel_campaign";
+  platform: Platform;
+  channel: Channel;
+  /** e.g. "Android | Meta | Campaign Breakdown". */
+  title: string;
+  rows: CampaignRow[];
+  /** One paragraph per campaign group. */
+  commentary: CampaignCommentary[];
+};
+
 export type ReportSection =
+  /** @deprecated legacy executive-summary section */
   | { id: "executive_summary"; title: string; body: string }
+  /** @deprecated legacy kpi section */
   | { id: "kpis"; title: string; body: string; kpis: ReportKpi[] }
+  /** @deprecated legacy channel-breakdown section */
   | { id: "channel_breakdown"; title: string; body: string; rows: ReportChannelRow[] }
+  /** @deprecated legacy top-campaigns section */
   | { id: "top_campaigns"; title: string; body: string; rows: ReportCampaignRow[] }
-  | { id: "recommendations"; title: string; body: string; bullets: string[] };
+  /** @deprecated legacy recommendations section */
+  | { id: "recommendations"; title: string; body: string; bullets: string[] }
+  | PlatformOverallSection
+  | ChannelWeeklySection
+  | ChannelCampaignSection;
 
 export type Report = {
   id: string;

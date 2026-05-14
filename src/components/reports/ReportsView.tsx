@@ -1,15 +1,25 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "next/navigation";
 import {
   BarChart3,
   Check,
   Copy,
   FileText,
+  FileImage,
+  Layers,
   ListChecks,
   Plus,
-  Printer,
+  Presentation,
+  ScrollText,
   Send,
   Sparkles,
   Table,
@@ -22,12 +32,19 @@ import { generateReport } from "@/lib/reports/generate";
 import { useReports } from "@/lib/reports/store";
 import type { Report } from "@/lib/reports/types";
 import { ReportDocument } from "./ReportDocument";
+import { ReportCarousel } from "./carousel/ReportCarousel";
+import { ReportDeckOffscreen } from "./ReportDeckOffscreen";
+import { exportReportAsPdf } from "@/lib/reports/export-pdf";
+import { exportReportAsPptx } from "@/lib/reports/export-pptx";
 
 const PROMPT_PRESETS = [
   "Weekly UA performance summary for the team review",
   "Top 5 campaigns this period and what to do next",
   "Channel-level read with creative recommendations",
 ];
+
+type ViewMode = "carousel" | "document";
+const VIEW_STORAGE_KEY = "lumen.reports.viewMode";
 
 export function ReportsView() {
   return (
@@ -47,6 +64,25 @@ function ReportsInner() {
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("carousel");
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [exporting, setExporting] = useState<null | "pdf" | "pptx">(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [deckMounted, setDeckMounted] = useState(false);
+
+  // Restore view mode for the session only. Carousel is the default for
+  // a fresh load so a shared link opens in deck view.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.sessionStorage.getItem(VIEW_STORAGE_KEY);
+    if (stored === "carousel" || stored === "document") setViewMode(stored);
+  }, []);
+  const setViewModePersisted = useCallback((m: ViewMode) => {
+    setViewMode(m);
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(VIEW_STORAGE_KEY, m);
+    }
+  }, []);
 
   // If the URL carries ?id=…, open that report once the store hydrates.
   useEffect(() => {
@@ -57,12 +93,17 @@ function ReportsInner() {
 
   const activeReport = draft;
 
+  // Reset the active slide whenever the active report changes so we
+  // always land on the cover for a new report.
+  useEffect(() => {
+    setActiveSlide(0);
+  }, [activeReport?.id]);
+
   const handleGenerate = async (input: string) => {
     const q = (input ?? prompt).trim();
     if (!q || generating) return;
     setGenerating(true);
     setPrompt("");
-    // Simulate the AI thinking pass before producing the doc.
     await new Promise((r) => setTimeout(r, 900));
     const r = generateReport({ prompt: q, from, to, client });
     setDraft(r);
@@ -94,7 +135,42 @@ function ReportsInner() {
     }
   };
 
-  const handlePrint = () => window.print();
+  const deckRef = useRef<HTMLDivElement>(null);
+  const handleExportPdf = async () => {
+    if (!activeReport) return;
+    setExportError(null);
+    setExporting("pdf");
+    setDeckMounted(true);
+    // Wait for the off-screen tree to mount + layout. Two RAFs is the
+    // safest cross-browser way to land after a paint.
+    await new Promise<void>((r) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => r())),
+    );
+    try {
+      if (!deckRef.current) throw new Error("Deck render target missing");
+      await exportReportAsPdf(activeReport, deckRef.current);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "PDF export failed";
+      setExportError(msg);
+    } finally {
+      setExporting(null);
+      setDeckMounted(false);
+    }
+  };
+
+  const handleExportPptx = async () => {
+    if (!activeReport) return;
+    setExportError(null);
+    setExporting("pptx");
+    try {
+      await exportReportAsPptx(activeReport);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "PPTX export failed";
+      setExportError(msg);
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const filteredCount = useMemo(
     () => items.filter((r) => r.userId === "mock-user-1").length,
@@ -193,7 +269,6 @@ function ReportsInner() {
           />
         ) : (
           <>
-            {/* Action bar */}
             <div
               className="flex flex-wrap items-center justify-between gap-3 rounded-lg p-3 print:hidden"
               style={{
@@ -210,6 +285,7 @@ function ReportsInner() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <ViewToggle mode={viewMode} onChange={setViewModePersisted} />
                 <button
                   type="button"
                   onClick={handleCopyShare}
@@ -224,25 +300,123 @@ function ReportsInner() {
                   ) : (
                     <>
                       <Copy className="h-3.5 w-3.5" strokeWidth={2} />
-                      Copy share link
+                      Share link
                     </>
                   )}
                 </button>
                 <button
                   type="button"
-                  onClick={handlePrint}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-yellow px-3 py-2 font-body text-xs font-semibold uppercase tracking-wider text-navy shadow-yellow transition-[transform,box-shadow] duration-280 ease-out-quart hover:-translate-y-px active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+                  onClick={handleExportPdf}
+                  disabled={exporting !== null}
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 font-body text-xs font-semibold uppercase tracking-wider text-[color:var(--text-secondary)] transition-[transform,background-color,color] duration-280 ease-out-quart hover:-translate-y-px hover:bg-[color:var(--surface-hover)] hover:text-cloud-white active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+                  style={{ border: "1px solid var(--border-default)" }}
                 >
-                  <Printer className="h-3.5 w-3.5" strokeWidth={2.5} />
-                  Export PDF
+                  <FileImage className="h-3.5 w-3.5" strokeWidth={2} />
+                  {exporting === "pdf" ? "Generating..." : "PDF"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportPptx}
+                  disabled={exporting !== null}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-yellow px-3 py-2 font-body text-xs font-semibold uppercase tracking-wider text-navy shadow-yellow transition-[transform,box-shadow] duration-280 ease-out-quart hover:-translate-y-px active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+                >
+                  <Presentation className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  {exporting === "pptx" ? "Generating..." : "PPTX"}
                 </button>
               </div>
             </div>
 
-            <ReportDocument report={activeReport} onChange={handleDocChange} />
+            {exportError && (
+              <p
+                role="alert"
+                className="rounded-md px-3 py-2 font-body text-xs"
+                style={{
+                  background: "color-mix(in oklab, var(--color-creative) 18%, transparent)",
+                  color: "var(--color-creative)",
+                  border: "1px solid color-mix(in oklab, var(--color-creative) 45%, transparent)",
+                }}
+              >
+                Export failed: {exportError}
+              </p>
+            )}
+
+            {viewMode === "carousel" ? (
+              <ReportCarousel
+                report={activeReport}
+                onChange={handleDocChange}
+                activeIndex={activeSlide}
+                onActiveIndexChange={setActiveSlide}
+              />
+            ) : (
+              <ReportDocument
+                report={activeReport}
+                onChange={handleDocChange}
+              />
+            )}
+
+            {/* Off-screen deck used by the PDF exporter. Mounted only
+                while a PDF export is in progress so we don't pay the
+                render cost otherwise. */}
+            {deckMounted && (
+              <ReportDeckOffscreen ref={deckRef} report={activeReport} />
+            )}
           </>
         )}
       </main>
+    </div>
+  );
+}
+
+function ViewToggle({
+  mode,
+  onChange,
+}: {
+  mode: ViewMode;
+  onChange: (m: ViewMode) => void;
+}) {
+  const segments: { value: ViewMode; label: string; Icon: typeof Layers }[] = [
+    { value: "carousel", label: "Carousel", Icon: Layers },
+    { value: "document", label: "Document", Icon: ScrollText },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="Report view"
+      className="inline-flex items-center rounded-md p-0.5"
+      style={{
+        background: "var(--surface-input)",
+        border: "1px solid var(--border-default)",
+      }}
+    >
+      {segments.map(({ value, label, Icon }) => {
+        const active = value === mode;
+        return (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(value)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 font-body text-[11px] font-semibold uppercase tracking-wider transition-[background-color,color,box-shadow] duration-200",
+              active
+                ? "text-navy"
+                : "text-[color:var(--text-secondary)] hover:text-cloud-white",
+            )}
+            style={
+              active
+                ? {
+                    background: "var(--color-yellow)",
+                    boxShadow: "var(--shadow-yellow)",
+                  }
+                : undefined
+            }
+          >
+            <Icon className="h-3.5 w-3.5" strokeWidth={active ? 2.5 : 2} />
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -267,7 +441,7 @@ function BuilderInput({
     {
       Icon: BarChart3,
       label: "Key metrics",
-      body: "Spend, Installs, CPI, ROAS — with delta vs the prior comparable window.",
+      body: "Spend, Installs, CPI, ROAS, with delta vs the prior comparable window.",
     },
     {
       Icon: Table,

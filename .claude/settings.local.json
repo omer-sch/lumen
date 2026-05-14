@@ -239,7 +239,20 @@
       "Bash(PORT=3001 npx playwright test agents-aria-playground --project=chromium-authed --reporter=list)",
       "Bash(PLAYWRIGHT_PREVIEW=1 PORT=3001 LUMEN_PREVIEW=1 npx playwright test agents-aria-playground --project=chromium-preview --reporter=list)",
       "mcp__claude_ai_Supabase__list_projects",
-      "mcp__claude_ai_Supabase__list_migrations"
+      "mcp__claude_ai_Supabase__list_migrations",
+      "Bash(command -v vercel)",
+      "Bash(gh secret *)",
+      "Bash(gh variable *)",
+      "Bash(bq --project_id=yellowhead-visionbi-rivery ls)",
+      "Bash(bq --project_id=yellowhead-visionbi-rivery query --use_legacy_sql=false --format=pretty --max_rows=200 ' *)",
+      "Bash(bq *)",
+      "Bash(echo \"---exit $?\")",
+      "Bash(kill 36460)",
+      "Bash(kill 46885)",
+      "Bash(pnpm typecheck *)",
+      "Bash(kill 48176)",
+      "Bash(wait)",
+      "Bash(kill 58715)"
     ]
   },
   "enableAllProjectMcpServers": true,
