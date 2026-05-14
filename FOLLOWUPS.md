@@ -40,6 +40,25 @@ own bundler (rolldown) which handles the `node:` scheme; coverage runs
 green. The breakage is webpack-only and shows up on `next build` /
 production deploys.
 
+## Coverage gap: `src/lib/db/*` and `src/lib/reports/export-*.ts` at 0%
+
+**Status:** out of scope for Step 2 + Step 3, pulled out as the next tier.
+
+Route handlers (Step 3) mock the lib boundary, so they exercise the
+parse/dispatch/translate logic but don't reach `addPinForUser`,
+`listAskQueries`, `addFeedback`, `recordAskQuery`, etc. Same shape for the
+PDF / PPTX exporters under `src/lib/reports/`: ReportsView calls them but
+there are no direct tests.
+
+The cleanest path is a thin "lib/db" test layer that mocks the Supabase
+client at the `@supabase/supabase-js` boundary (similar to the BQ pattern
+in `tests/unit/lib/bq-queries.test.ts`) and asserts table/column/select
+shape. The exporters need a separate jspdf / pptxgenjs mock pass.
+
+Hitting 70 functions / 55 branches (the cowork prompt's tier-2 target,
+not just floor) needs this work. Current thresholds are set 1pp below
+actuals (64/45/64/65) as a regression floor.
+
 ## ESLint warnings in `src/lib/bq-queries-100play.ts`
 
 **Status:** pre-existing, warnings only.
