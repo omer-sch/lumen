@@ -216,6 +216,11 @@ export type Report = {
   title: string;
   /** Period the report covers, e.g. "Apr 1 – Apr 30, 2026". */
   period: string;
+  /** Set when the active global filter is wider than a single week and the
+   *  report has narrowed itself to the most recent complete ISO week.
+   *  Rendered as a muted "Filter: ..." line under the period on the cover
+   *  so the user isn't surprised by the narrowed window. */
+  filterRange?: string;
   /** Display label for the active client (e.g. "GlobalComix"). */
   clientLabel: string;
   /** Which agent drafted the report — drives the byline under the title.

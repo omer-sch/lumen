@@ -144,18 +144,30 @@ export function ReportCoverHeader({
         />
       )}
 
-      {/* 4. Client + period subtitle */}
-      <p
-        className={cn(
-          "font-body",
-          isCarousel ? "text-lg font-semibold" : "text-sm",
+      {/* 4. Client + period subtitle (+ filter range when narrowed) */}
+      <div className="flex flex-col gap-1">
+        <p
+          className={cn(
+            "font-body",
+            isCarousel ? "text-lg font-semibold" : "text-sm",
+          )}
+          style={{
+            color: isCarousel ? REPORT_BRAND.yellow : "var(--text-light-secondary)",
+          }}
+        >
+          {clientSubtitle}
+        </p>
+        {report.filterRange && (
+          <p
+            className={cn(
+              "font-body",
+              isCarousel ? "text-xs text-white/55" : "text-[11px] text-[color:var(--text-light-muted)]",
+            )}
+          >
+            Filter: {report.filterRange}
+          </p>
         )}
-        style={{
-          color: isCarousel ? REPORT_BRAND.yellow : "var(--text-light-secondary)",
-        }}
-      >
-        {clientSubtitle}
-      </p>
+      </div>
 
       {/* 5. Author byline */}
       <AgentByline

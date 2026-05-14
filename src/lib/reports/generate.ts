@@ -48,6 +48,49 @@ function deriveTitleSeed(prompt: string): string {
   return cut > 0 ? head.slice(0, cut) : head;
 }
 
+/**
+ * The yellowHEAD weekly format is week-bounded by definition, but the
+ * global filter can be set to any range. When the filter is wider than
+ * a single week we narrow the report period to the most recent complete
+ * ISO week within the range and surface the original range as a muted
+ * "Filter: ..." line on the cover. When the filter is already a single
+ * week (≤ 7 days inclusive) we keep the period as-is.
+ */
+function deriveReportPeriod(
+  from: Date,
+  to: Date,
+): { period: string; filterRange?: string } {
+  // 7 inclusive days renders with a 6-day diff when both endpoints are
+  // at the same time of day.
+  const diffDays = Math.round((to.getTime() - from.getTime()) / 86400000);
+  const fullRange = `${fmtDay(from)} – ${fmtDay(to)}`;
+  if (diffDays <= 6) return { period: fullRange };
+
+  const weekEnd = mostRecentCompleteISOSunday(to);
+  const weekStart = new Date(weekEnd.getTime() - 6 * 86400000);
+  if (weekStart.getTime() < from.getTime()) {
+    // No complete ISO week fits within the filter — fall back to the
+    // raw range. (Theoretical edge case; the inclusive-7-day check
+    // above covers the practical width.)
+    return { period: fullRange };
+  }
+  return {
+    period: `${fmtDay(weekStart)} – ${fmtDay(weekEnd)}`,
+    filterRange: fullRange,
+  };
+}
+
+/** Most recent Sunday <= d, treating Sunday as the end of an ISO week.
+ *  If d is itself a Sunday, returns d. */
+function mostRecentCompleteISOSunday(d: Date): Date {
+  const date = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+  );
+  const day = date.getUTCDay(); // 0 = Sunday
+  date.setUTCDate(date.getUTCDate() - day);
+  return date;
+}
+
 // =============================================================================
 // Public entry point — routes to the new yellowHEAD generator by default.
 // The legacy 5-section generator is kept and exported so saved reports and
@@ -83,7 +126,7 @@ export function generateYellowHeadReport({
 }: GenerateInput): Report {
   const c = findClient(client);
   const clientLabel = c.name;
-  const period = `${fmtDay(from)} – ${fmtDay(to)}`;
+  const { period, filterRange } = deriveReportPeriod(from, to);
   const week = isoWeek(to);
 
   const titleSeed = deriveTitleSeed(prompt);
@@ -198,6 +241,7 @@ export function generateYellowHeadReport({
     prompt,
     title,
     period,
+    filterRange,
     clientLabel,
     authoredBy: "nova",
     sections,
@@ -431,7 +475,7 @@ export function generateLegacyReport({
   const campaigns = getCampaigns({ from, to, client });
   const topCampaigns = campaigns.slice(0, 5);
 
-  const period = `${fmtDay(from)} – ${fmtDay(to)}`;
+  const { period, filterRange } = deriveReportPeriod(from, to);
   const clientLabel = c.name;
 
   const titleSeed = deriveTitleSeed(prompt);
@@ -521,6 +565,7 @@ export function generateLegacyReport({
     prompt,
     title,
     period,
+    filterRange,
     clientLabel,
     authoredBy: "nova",
     sections,
