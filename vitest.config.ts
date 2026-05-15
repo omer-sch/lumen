@@ -1,9 +1,17 @@
 import { defineConfig } from "vitest/config";
+import react from "@vitejs/plugin-react";
 import path from "node:path";
 
 // Vitest config for Lumen unit + lib + route-handler tests.
 // Playwright E2E remains independent (tests/e2e/, run via `npm run test:e2e`).
+//
+// @vitejs/plugin-react gives us JSX transformation so component tests can
+// render `<Component />` directly. Without it, vitest's default transformer
+// only handles TypeScript and trips on TSX. Adding the plugin also lets v8
+// coverage report on TSX files (previously every dashboard component was
+// "Failed to parse, excluded from coverage").
 export default defineConfig({
+  plugins: [react()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

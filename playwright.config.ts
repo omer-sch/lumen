@@ -69,6 +69,8 @@ export default defineConfig({
         "**/agents-memory-persist.spec.ts",
         "**/ai-mode.spec.ts",
         "**/sign-out.spec.ts",
+        // Cache-subsystem admin UX.
+        "**/sync-now.spec.ts",
         // api-auth-matrix.spec.ts is intentionally NOT ignored — it runs
         // in the anonymous chromium project to prove every /api/bq/*
         // route is gated when there is no session.
@@ -112,6 +114,8 @@ export default defineConfig({
         "**/agents-memory-persist.spec.ts",
         "**/ai-mode.spec.ts",
         "**/sign-out.spec.ts",
+        // Cache-subsystem admin UX.
+        "**/sync-now.spec.ts",
       ],
     },
 
