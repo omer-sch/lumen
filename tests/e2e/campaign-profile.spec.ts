@@ -42,18 +42,24 @@ test.describe("/campaigns/[id] profile", () => {
 
     // KPI strip — four tiles for ROAS / Spend / Installs / CPI. The KpiCard
     // renders each label as text; we don't care about exact values, only
-    // that all four labels are present (proves the tile loop ran).
+    // that all four labels are present (proves the tile loop ran). We
+    // scope to the kpi-* testids so the trend chart's metric tabs
+    // (which also surface the words "Spend" / "Installs") don't collide
+    // with the assertion.
     await expect(page.getByText("ROAS (D7)", { exact: true })).toBeVisible();
-    await expect(page.getByText("Spend", { exact: true })).toBeVisible();
-    await expect(page.getByText("Installs", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("kpi-spend").getByText("Spend", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("kpi-installs").getByText("Installs", { exact: true })).toBeVisible();
     await expect(page.getByText("CPI", { exact: true })).toBeVisible();
 
     // Historical chart — TrendChart tags itself with a stable testid and
     // exposes the active metric via data-metric. We only assert visibility
-    // and that the metric switcher is wired.
+    // and that the metric switcher is wired. The default tab group is
+    // "Volume", which carries the `spend` tab — pick that as the
+    // always-present probe so the test does not depend on which group
+    // happens to be active.
     const chart = page.getByTestId("trend-chart");
     await expect(chart).toBeVisible();
-    await expect(page.getByTestId("trend-metric-roas")).toBeVisible();
+    await expect(page.getByTestId("trend-metric-spend")).toBeVisible();
   });
 
   test("invalid campaign id returns 404", async ({ page }) => {

@@ -11,7 +11,7 @@ import {
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SlideCard } from "./SlideCard";
-import { buildSlides } from "./slides";
+import { buildSlides, slideAriaLabel, slideKey } from "./slides";
 import type { Report } from "@/lib/reports/types";
 
 type ReportCarouselProps = {
@@ -24,15 +24,13 @@ type ReportCarouselProps = {
   onActiveIndexChange: (idx: number) => void;
 };
 
-const TRANSITION_MS = 420;
-const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 const SWIPE_THRESHOLD_PX = 50;
 
 /**
- * Coverflow-style carousel. Each slide is absolutely positioned and gets
- * its own transform calculated from its offset to the active slide, so
- * scale, opacity and translate all animate together via a single CSS
- * transition.
+ * Slide-based carousel. Only the active slide renders; navigation snaps
+ * to the next slide with no peek or coverflow animation. The previous
+ * coverflow version had the off-screen neighbors hover into the active
+ * frame during transitions, which read as visual noise.
  */
 export function ReportCarousel({
   report,
@@ -61,16 +59,6 @@ export function ReportCarousel({
 
   const prev = useCallback(() => goTo(safeIndex - 1), [goTo, safeIndex]);
   const next = useCallback(() => goTo(safeIndex + 1), [goTo, safeIndex]);
-
-  const [reducedMotion, setReducedMotion] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const m = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReducedMotion(m.matches);
-    const handler = () => setReducedMotion(m.matches);
-    m.addEventListener("change", handler);
-    return () => m.removeEventListener("change", handler);
-  }, []);
 
   // ---------------------------------------------------------------------
   // Keyboard navigation. Scope to the carousel region; ignore when the
@@ -150,11 +138,6 @@ export function ReportCarousel({
           report={report}
           onChange={onChange}
           readOnly={readOnly}
-          reducedMotion={reducedMotion}
-          onPeekClick={(idx) => {
-            setHasInteracted(true);
-            goTo(idx);
-          }}
         />
 
         {/* Prev / Next buttons */}
@@ -201,7 +184,7 @@ export function ReportCarousel({
         <div className="flex items-center gap-2" role="tablist" aria-label="Slide navigation">
           {slides.map((s, i) => (
             <button
-              key={s.kind === "section" ? s.id : "cover"}
+              key={slideKey(s)}
               type="button"
               role="tab"
               aria-selected={i === safeIndex}
@@ -251,106 +234,42 @@ function CarouselViewport({
   report,
   onChange,
   readOnly,
-  reducedMotion,
-  onPeekClick,
 }: {
   slides: ReturnType<typeof buildSlides>;
   activeIndex: number;
   report: Report;
   onChange: (next: Report) => void;
   readOnly?: boolean;
-  reducedMotion: boolean;
-  onPeekClick: (idx: number) => void;
 }) {
-  // We render the active card and one card on each side; everything else
-  // is unmounted so the off-screen cards don't pay re-render cost.
-  // Each card sits in an absolutely positioned wrapper with its own
-  // transform driven by its offset to the active index.
+  // Only the active slide is rendered. The previous coverflow-style
+  // peek-and-slide animation made the off-screen neighbors hover into
+  // the active frame, which read as visual noise during navigation.
+  // Now we snap to the active slide on change.
+  const active = slides[activeIndex];
+  if (!active) return null;
   return (
-    <div
-      // The viewport reserves space for the active 16:9 card plus 8% on
-      // each side so the peek tails can show without horizontal scroll.
-      // Aspect-video ensures the active card stays at 16:9 across widths.
-      className="relative mx-auto aspect-video w-full max-w-[1100px]"
-      style={{ perspective: "1400px" }}
-    >
-      {slides.map((slide, i) => {
-        const offset = i - activeIndex;
-        // We only mount the three cards in the active band; nearby cards
-        // fade/scale into view, cards further out are skipped entirely.
-        if (Math.abs(offset) > 1) return null;
-
-        const transform = transformFor(offset, reducedMotion);
-        const isActive = offset === 0;
-
-        return (
-          <div
-            key={slide.kind === "section" ? slide.id : "cover"}
-            role="group"
-            aria-roledescription="slide"
-            aria-label={
-              slide.kind === "cover" ? "Cover slide" : slide.label
-            }
-            aria-hidden={!isActive}
-            className={cn(
-              "absolute inset-0 origin-center overflow-hidden rounded-2xl",
-              isActive ? "cursor-default" : "cursor-pointer",
-            )}
-            style={{
-              ...transform,
-              transition: reducedMotion
-                ? "opacity 100ms linear"
-                : `transform ${TRANSITION_MS}ms ${EASE}, opacity ${TRANSITION_MS}ms ${EASE}, filter ${TRANSITION_MS}ms ${EASE}`,
-              willChange: "transform, opacity",
-              zIndex: isActive ? 20 : 10 - Math.abs(offset),
-              boxShadow: isActive
-                ? "0 30px 80px -20px rgba(0,0,0,0.55), 0 4px 24px rgba(0,0,0,0.35)"
-                : "0 12px 40px rgba(0,0,0,0.35)",
-              border: "1px solid var(--surface-light-line)",
-              background: "var(--surface-light-card)",
-            }}
-            onClick={() => {
-              if (!isActive) onPeekClick(i);
-            }}
-            tabIndex={isActive ? 0 : -1}
-          >
-            <SlideCard
-              slide={slide}
-              report={report}
-              readOnly={readOnly || !isActive}
-              onChange={onChange}
-            />
-          </div>
-        );
-      })}
+    <div className="relative mx-auto aspect-video w-full max-w-[1100px]">
+      <div
+        key={slideKey(active)}
+        role="group"
+        aria-roledescription="slide"
+        aria-label={slideAriaLabel(active)}
+        className="absolute inset-0 overflow-hidden rounded-2xl"
+        style={{
+          boxShadow:
+            "0 30px 80px -20px rgba(0,0,0,0.55), 0 4px 24px rgba(0,0,0,0.35)",
+          border: "1px solid var(--surface-light-line)",
+          background: "var(--surface-light-card)",
+        }}
+        tabIndex={0}
+      >
+        <SlideCard
+          slide={active}
+          report={report}
+          readOnly={readOnly}
+          onChange={onChange}
+        />
+      </div>
     </div>
   );
-}
-
-/**
- * Per-slide transform. Active is centered at scale 1. Peeks shift toward
- * their edge by ~60% of the card width and shrink to 0.82 / 0.45 opacity.
- * In reduced-motion mode we drop the translate + scale and just swap
- * opacity for a 100ms cross-fade.
- */
-function transformFor(offset: number, reducedMotion: boolean): React.CSSProperties {
-  if (reducedMotion) {
-    if (offset === 0) return { opacity: 1, transform: "none" };
-    return { opacity: 0, transform: "none", pointerEvents: "none" };
-  }
-  if (offset === 0) {
-    return {
-      transform: "translateX(0) scale(1)",
-      opacity: 1,
-      filter: "saturate(1)",
-    };
-  }
-  // Peek cards sit ~58% of the active card's width toward their side,
-  // partly clipped by the 1100px viewport edge.
-  const sign = offset < 0 ? -1 : 1;
-  return {
-    transform: `translateX(${sign * 58}%) scale(0.82)`,
-    opacity: 0.45,
-    filter: "saturate(0.7)",
-  };
 }

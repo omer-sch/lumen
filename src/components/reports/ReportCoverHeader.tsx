@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { AgentByline } from "@/components/agents/AgentByline";
 import { formatWeekRange, isoWeek } from "@/lib/reports/week";
 import { REPORT_BRAND } from "@/lib/reports/brand";
+import { coverTitleSizing } from "@/lib/reports/layout";
 import type { Report } from "@/lib/reports/types";
 import { EditableText } from "./EditableText";
 import { SampleDataBanner } from "./SampleDataBanner";
@@ -116,33 +117,46 @@ export function ReportCoverHeader({
         Weekly review
       </span>
 
-      {/* 3. Title (editable on both surfaces when onTitleChange is provided) */}
-      {readOnly || !onTitleChange ? (
-        <h1
-          className={cn(
-            "font-display font-extrabold leading-tight tracking-tight",
-            isCarousel ? "text-5xl leading-[1.05]" : "text-3xl sm:text-4xl",
-          )}
-          style={{
-            color: isCarousel ? REPORT_BRAND.white : "var(--text-light-primary)",
-          }}
-        >
-          {report.title}
-        </h1>
-      ) : (
-        <EditableText
-          value={report.title}
-          onChange={onTitleChange}
-          ariaLabel="Report title"
-          tone={isCarousel ? "dark" : "light"}
-          className={cn(
-            "font-display font-extrabold leading-tight tracking-tight",
-            isCarousel
-              ? "text-5xl leading-[1.05] text-cloud-white"
-              : "text-3xl sm:text-4xl text-[color:var(--text-light-primary)]",
-          )}
-        />
-      )}
+      {/* 3. Title (editable on both surfaces when onTitleChange is provided).
+       *    On the carousel cover the type scales down for long titles so a
+       *    legitimate-but-long title doesn't run off the cover. The
+       *    document view keeps its scale; that surface scrolls. */}
+      {(() => {
+        const carouselTitleClass = isCarousel
+          ? coverTitleSizing(report.title).classFragment
+          : "";
+        if (readOnly || !onTitleChange) {
+          return (
+            <h1
+              className={cn(
+                "font-display font-extrabold leading-tight tracking-tight",
+                isCarousel ? carouselTitleClass : "text-3xl sm:text-4xl",
+              )}
+              style={{
+                color: isCarousel
+                  ? REPORT_BRAND.white
+                  : "var(--text-light-primary)",
+              }}
+            >
+              {report.title}
+            </h1>
+          );
+        }
+        return (
+          <EditableText
+            value={report.title}
+            onChange={onTitleChange}
+            ariaLabel="Report title"
+            tone={isCarousel ? "dark" : "light"}
+            className={cn(
+              "font-display font-extrabold leading-tight tracking-tight",
+              isCarousel
+                ? `${carouselTitleClass} text-cloud-white`
+                : "text-3xl sm:text-4xl text-[color:var(--text-light-primary)]",
+            )}
+          />
+        );
+      })()}
 
       {/* 4. Client + period subtitle (+ filter range when narrowed) */}
       <div className="flex flex-col gap-1">

@@ -2,7 +2,7 @@
 
 import { forwardRef } from "react";
 import { SlideCard } from "./carousel/SlideCard";
-import { buildSlides } from "./carousel/slides";
+import { buildSlides, slideKey } from "./carousel/slides";
 import { DECK_DIMENSIONS } from "@/lib/reports/brand";
 import type { Report } from "@/lib/reports/types";
 
@@ -45,7 +45,7 @@ export const ReportDeckOffscreen = forwardRef<HTMLDivElement, ReportDeckOffscree
       >
         {slides.map((slide, i) => (
           <div
-            key={slide.kind === "section" ? slide.id : "cover"}
+            key={slideKey(slide)}
             data-deck-slide
             data-slide-index={i}
             style={{

@@ -9,9 +9,16 @@ import { WeeklyBreakdown } from "../sections/WeeklyBreakdown";
 import { CampaignBreakdown } from "../sections/CampaignBreakdown";
 import { REPORT_BRAND } from "@/lib/reports/brand";
 import type {
+  ChannelCampaignSlide,
+  ChannelWeeklySlide,
+  LegacySection,
+  LegacySlide,
+  PlatformOverallSlide,
+} from "@/lib/reports/layout";
+import type {
+  CampaignCommentary,
   Report,
   ReportSection,
-  ChannelCampaignSection,
 } from "@/lib/reports/types";
 import type { Slide } from "./slides";
 
@@ -48,23 +55,33 @@ const CHANNEL_TITLE = {
  * dimensions); we only render the content.
  */
 export function SlideCard({ slide, report, readOnly, capture, onChange }: SlideCardProps) {
-  if (slide.kind === "cover") {
-    return (
-      <CoverCard
-        report={report}
-        readOnly={readOnly || capture}
-        onChange={onChange}
-      />
-    );
+  const ro = readOnly || capture;
+  switch (slide.kind) {
+    case "cover":
+      return <CoverCard report={report} readOnly={ro} onChange={onChange} />;
+    case "platform_overall":
+      return <PlatformOverallCard slide={slide.slide} />;
+    case "channel_weekly":
+      return <ChannelWeeklyCard slide={slide.slide} />;
+    case "channel_campaign":
+      return (
+        <ChannelCampaignCard
+          slide={slide.slide}
+          report={report}
+          readOnly={ro}
+          onChange={onChange}
+        />
+      );
+    case "legacy":
+      return (
+        <LegacyCard
+          slide={slide.slide}
+          report={report}
+          readOnly={ro}
+          onChange={onChange}
+        />
+      );
   }
-  return (
-    <SectionCard
-      slide={slide}
-      report={report}
-      readOnly={readOnly || capture}
-      onChange={onChange}
-    />
-  );
 }
 
 function CoverCard({
@@ -103,21 +120,138 @@ function CoverCard({
   );
 }
 
-function SectionCard({
+function PlatformOverallCard({
+  slide,
+}: {
+  slide: PlatformOverallSlide;
+}) {
+  return (
+    <div className="flex h-full w-full flex-col bg-[color:var(--surface-light-base)]">
+      <div className="px-6 pt-4">
+        <SectionDivider
+          platform={slide.platform}
+          title={PLATFORM_TITLE[slide.platform]}
+          subtitle="Overall · Weekly Breakdown"
+          continuation={slide.continuation}
+          compact
+        />
+      </div>
+      <div className="flex-1 px-6 pb-4 pt-3">
+        <WeeklyBreakdown
+          summary={slide.summary ?? undefined}
+          bullets={slide.bullets}
+          compact
+        />
+      </div>
+    </div>
+  );
+}
+
+function ChannelWeeklyCard({
+  slide,
+}: {
+  slide: ChannelWeeklySlide;
+}) {
+  return (
+    <div className="flex h-full w-full flex-col bg-[color:var(--surface-light-base)]">
+      <div className="px-6 pt-4">
+        <SectionDivider
+          platform={slide.platform}
+          channel={slide.channel}
+          title={CHANNEL_TITLE[slide.channel]}
+          subtitle="Weekly Breakdown"
+          continuation={slide.continuation}
+          compact
+        />
+      </div>
+      <div className="flex-1 px-6 pb-4 pt-3">
+        <WeeklyBreakdown
+          currentWeek={slide.currentWeek ?? undefined}
+          history={slide.history}
+          bullets={slide.bullets}
+          compact
+        />
+      </div>
+    </div>
+  );
+}
+
+function ChannelCampaignCard({
   slide,
   report,
   readOnly,
   onChange,
 }: {
-  slide: Extract<Slide, { kind: "section" }>;
+  slide: ChannelCampaignSlide;
   report: Report;
   readOnly?: boolean;
   onChange?: (next: Report) => void;
 }) {
-  const { section } = slide;
+  // Commentary edits write back to the original section in the Report's
+  // sections array. Match by platform + channel + section id since the
+  // layout step may have split that section across multiple slides.
+  const onCommentaryChange = useCallback(
+    (next: CampaignCommentary[]) => {
+      if (!onChange) return;
+      onChange({
+        ...report,
+        sections: report.sections.map((s) =>
+          s.id === "channel_campaign" &&
+          s.platform === slide.platform &&
+          s.channel === slide.channel
+            ? { ...s, commentary: next }
+            : s,
+        ),
+      });
+    },
+    [onChange, report, slide.platform, slide.channel],
+  );
+
+  return (
+    <div className="flex h-full w-full flex-col bg-[color:var(--surface-light-base)]">
+      <div className="px-6 pt-4">
+        <SectionDivider
+          platform={slide.platform}
+          channel={slide.channel}
+          title={CHANNEL_TITLE[slide.channel]}
+          subtitle="Campaign Breakdown"
+          continuation={slide.continuation}
+          compact
+        />
+      </div>
+      <div className="flex-1 px-6 pb-4 pt-3">
+        <CampaignBreakdown
+          rows={slide.rows}
+          commentary={slide.commentary}
+          readOnly={readOnly}
+          onCommentaryChange={onCommentaryChange}
+          compact
+        />
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Legacy slide renderer — kept so saved reports persisted before the
+// yellowHEAD format still display correctly in the carousel.
+// =============================================================================
+
+function LegacyCard({
+  slide,
+  report,
+  readOnly,
+  onChange,
+}: {
+  slide: LegacySlide;
+  report: Report;
+  readOnly?: boolean;
+  onChange?: (next: Report) => void;
+}) {
+  const section = slide.section;
 
   const updateSection = useCallback(
-    (patch: Partial<ReportSection>) => {
+    (patch: Partial<LegacySection>) => {
       if (!onChange) return;
       onChange({
         ...report,
@@ -129,75 +263,6 @@ function SectionCard({
     [onChange, report, section.id],
   );
 
-  // yellowHEAD section types come with their own dark divider + a light
-  // content area. We render them edge-to-edge inside the slide so the
-  // divider's navy reads as a colored header band.
-  if (section.id === "platform_overall") {
-    return (
-      <div className="flex h-full w-full flex-col bg-[color:var(--surface-light-base)]">
-        <div className="px-10 pt-8">
-          <SectionDivider
-            platform={section.platform}
-            title={PLATFORM_TITLE[section.platform]}
-            subtitle="Overall · Weekly Breakdown"
-          />
-        </div>
-        <div className="flex-1 overflow-hidden px-10 pb-8 pt-6">
-          <WeeklyBreakdown summary={section.summary} bullets={section.bullets} />
-        </div>
-      </div>
-    );
-  }
-
-  if (section.id === "channel_weekly") {
-    return (
-      <div className="flex h-full w-full flex-col bg-[color:var(--surface-light-base)]">
-        <div className="px-10 pt-8">
-          <SectionDivider
-            platform={section.platform}
-            channel={section.channel}
-            title={CHANNEL_TITLE[section.channel]}
-            subtitle="Weekly Breakdown"
-          />
-        </div>
-        <div className="flex-1 overflow-hidden px-10 pb-8 pt-6">
-          <WeeklyBreakdown
-            currentWeek={section.currentWeek}
-            history={section.history}
-            bullets={section.bullets}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (section.id === "channel_campaign") {
-    return (
-      <div className="flex h-full w-full flex-col bg-[color:var(--surface-light-base)]">
-        <div className="px-10 pt-8">
-          <SectionDivider
-            platform={section.platform}
-            channel={section.channel}
-            title={CHANNEL_TITLE[section.channel]}
-            subtitle="Campaign Breakdown"
-          />
-        </div>
-        <div className="flex-1 overflow-hidden px-10 pb-8 pt-6">
-          <CampaignBreakdown
-            rows={section.rows}
-            commentary={(section as ChannelCampaignSection).commentary}
-            readOnly={readOnly}
-            onCommentaryChange={(next) =>
-              updateSection({ commentary: next } as Partial<ReportSection>)
-            }
-          />
-        </div>
-      </div>
-    );
-  }
-
-  // Legacy section types — keep the inline renderers so old saved reports
-  // still display correctly.
   return (
     <div
       className="flex h-full w-full flex-col gap-5 p-12"
@@ -213,7 +278,9 @@ function SectionCard({
       ) : (
         <EditableText
           value={section.title}
-          onChange={(t) => updateSection({ title: t } as Partial<ReportSection>)}
+          onChange={(t) =>
+            updateSection({ title: t } as Partial<LegacySection>)
+          }
           ariaLabel={`${section.id} title`}
           className="font-display text-3xl font-extrabold leading-tight tracking-tight"
         />
@@ -226,7 +293,9 @@ function SectionCard({
       ) : (
         <EditableText
           value={section.body}
-          onChange={(b) => updateSection({ body: b } as Partial<ReportSection>)}
+          onChange={(b) =>
+            updateSection({ body: b } as Partial<LegacySection>)
+          }
           ariaLabel={`${section.id} body`}
           multiline
           className="font-body text-base leading-relaxed text-[color:var(--text-light-secondary)] min-h-[1.5rem]"
@@ -340,11 +409,14 @@ function SectionCard({
               ) : (
                 <EditableText
                   value={b}
-                  onChange={(next) =>
+                  onChange={(next) => {
+                    if (section.id !== "recommendations") return;
                     updateSection({
-                      bullets: section.bullets.map((x, j) => (j === i ? next : x)),
-                    } as Partial<ReportSection>)
-                  }
+                      bullets: section.bullets.map((x, j) =>
+                        j === i ? next : x,
+                      ),
+                    } as Partial<LegacySection>);
+                  }}
                   multiline
                   ariaLabel={`Recommendation ${i + 1}`}
                   className="flex-1 font-body text-sm leading-relaxed min-h-[1.5rem]"

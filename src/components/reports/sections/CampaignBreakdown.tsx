@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft, ArrowUp } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { EditableText } from "../EditableText";
 import { CALLOUT_HEX, CALLOUT_HIGHLIGHT_RGBA } from "./callout";
 import type {
@@ -15,6 +16,9 @@ type CampaignBreakdownProps = {
   /** Editable in the document view, read-only in share / print. */
   readOnly?: boolean;
   onCommentaryChange?: (next: CampaignCommentary[]) => void;
+  /** Slide-fit variant: tighter padding + smaller fonts so a typical
+   *  carousel slide (5 rows + 1 commentary block) fits the 16:9 frame. */
+  compact?: boolean;
 };
 
 /**
@@ -30,6 +34,7 @@ export function CampaignBreakdown({
   commentary,
   readOnly,
   onCommentaryChange,
+  compact = false,
 }: CampaignBreakdownProps) {
   const maxSpend = Math.max(...rows.map((r) => r.spend), 1);
   const maxCost = Math.max(
@@ -39,16 +44,31 @@ export function CampaignBreakdown({
     1,
   );
 
+  // Continuation slides can carry just rows or just commentary; the layout
+  // step decides what fits. Both halves render independently so a missing
+  // half doesn't leave a header band hanging.
+  const hasRows = rows.length > 0;
+  const hasCommentary = commentary.length > 0;
+
+  const cellPad = compact ? "px-1.5 py-1" : "px-2 py-2.5";
+  const headerPad = compact ? "px-1.5 py-1" : "px-2 py-2";
+  const headerText = compact ? "text-[9px]" : "text-[10px]";
+  const tableText = compact ? "text-[10.5px]" : "text-[12.5px]";
+
   return (
     <div
-      className="flex flex-col gap-5 rounded-xl px-6 py-6 print:break-inside-avoid"
+      className={cn(
+        "flex flex-col rounded-xl print:break-inside-avoid",
+        compact ? "gap-3 px-4 py-3" : "gap-5 px-6 py-6",
+      )}
       style={{ background: "var(--surface-light-card)" }}
     >
+      {hasRows && (
       <div className="relative overflow-x-auto">
-        <table className="w-full border-collapse text-[12.5px]">
+        <table className={cn("w-full border-collapse", tableText)}>
           <thead>
             <tr>
-              <th className="border-b py-2 pl-2 pr-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-[color:var(--text-light-muted)]" style={{ borderColor: "var(--surface-light-line)" }}>
+              <th className={cn("border-b text-left font-semibold uppercase tracking-[0.08em] text-[color:var(--text-light-muted)]", compact ? "pl-1.5 pr-2 py-1" : "pl-2 pr-3 py-2", headerText)} style={{ borderColor: "var(--surface-light-line)" }}>
                 Campaign
               </th>
               {(
@@ -68,7 +88,7 @@ export function CampaignBreakdown({
               ).map((h, i) => (
                 <th
                   key={`${h}-${i}`}
-                  className="border-b px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-[color:var(--text-light-muted)]"
+                  className={cn("border-b text-right font-semibold uppercase tracking-[0.08em] text-[color:var(--text-light-muted)]", headerPad, headerText)}
                   style={{ borderColor: "var(--surface-light-line)" }}
                 >
                   {h}
@@ -83,28 +103,41 @@ export function CampaignBreakdown({
                 row={r}
                 maxSpend={maxSpend}
                 maxCost={maxCost}
+                compact={compact}
+                cellPad={cellPad}
               />
             ))}
           </tbody>
         </table>
       </div>
+      )}
 
+      {hasCommentary && (
       <div className="flex flex-col">
         {commentary.map((c, idx) => (
           <div
             key={`${c.groupLabel}-${idx}`}
-            className="flex flex-col gap-2 border-t py-4 first:border-t-0 first:pt-2"
+            className={cn(
+              "flex flex-col border-t first:border-t-0 first:pt-1",
+              compact ? "gap-1 py-2" : "gap-2 py-4",
+            )}
             style={{ borderColor: "var(--surface-light-line)" }}
           >
-            <div className="font-body text-[13px] leading-relaxed text-[color:var(--text-light-primary)]">
+            <div className={cn(
+              "font-body leading-relaxed text-[color:var(--text-light-primary)]",
+              compact ? "text-[11.5px]" : "text-[13px]",
+            )}>
               <span className="font-bold text-[color:var(--text-light-primary)]">
                 {c.groupLabel}:
               </span>{" "}
               <HighlightedText text={c.observation} highlights={c.highlights} />
             </div>
-            <div className="flex flex-wrap items-start gap-2">
+            <div className={cn("flex flex-wrap items-start", compact ? "gap-1.5" : "gap-2")}>
               <span
-                className="inline-flex shrink-0 items-center rounded-md px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.06em]"
+                className={cn(
+                  "inline-flex shrink-0 items-center rounded-md font-mono font-bold uppercase tracking-[0.06em]",
+                  compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-1 text-[10px]",
+                )}
                 style={{
                   background: "var(--color-yellow)",
                   color: "var(--color-navy)",
@@ -113,7 +146,10 @@ export function CampaignBreakdown({
                 {"<>"} Action Item
               </span>
               {readOnly ? (
-                <p className="font-body text-[13px] leading-relaxed text-[color:var(--text-light-primary)]">
+                <p className={cn(
+                  "font-body leading-relaxed text-[color:var(--text-light-primary)]",
+                  compact ? "text-[11.5px]" : "text-[13px]",
+                )}>
                   {c.actionItem}
                 </p>
               ) : (
@@ -129,13 +165,17 @@ export function CampaignBreakdown({
                   }}
                   multiline
                   ariaLabel={`${c.groupLabel} action item`}
-                  className="flex-1 font-body text-[13px] leading-relaxed text-[color:var(--text-light-primary)] min-h-[1.5rem]"
+                  className={cn(
+                    "flex-1 font-body leading-relaxed text-[color:var(--text-light-primary)] min-h-[1.5rem]",
+                    compact ? "text-[11.5px]" : "text-[13px]",
+                  )}
                 />
               )}
             </div>
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }
@@ -144,10 +184,14 @@ function CampaignTableRow({
   row,
   maxSpend,
   maxCost,
+  compact = false,
+  cellPad,
 }: {
   row: CampaignRow;
   maxSpend: number;
   maxCost: number;
+  compact?: boolean;
+  cellPad: string;
 }) {
   const callout = row.highlight;
   return (
@@ -158,43 +202,54 @@ function CampaignTableRow({
       }}
     >
       <td
-        className="max-w-[260px] truncate py-2.5 pl-2 pr-3 font-medium text-[color:var(--text-light-primary)]"
+        className={cn(
+          "font-medium text-[color:var(--text-light-primary)]",
+          compact ? "py-1 pl-1.5 pr-2" : "py-2.5 pl-2 pr-3",
+        )}
         title={row.campaignName}
+        // Campaign names like "YH_FB_APP_FULL_IAP_..." share a long prefix
+        // and only differ at the tail; truncating would make rows
+        // indistinguishable. Allow break-anywhere wrap so the
+        // distinguishing tail is always visible.
+        style={{ wordBreak: "break-word" }}
       >
         {row.campaignName}
       </td>
-      <td className="px-2 py-2.5 text-right tabular-nums" style={spendTint(row.spend, maxSpend)}>
+      <td className={cn("text-right tabular-nums", cellPad)} style={spendTint(row.spend, maxSpend)}>
         {formatMoney(row.spend)}
       </td>
-      <td className="px-2 py-2.5 text-right tabular-nums text-[color:var(--text-light-primary)]">
+      <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
         {row.installs.toLocaleString()}
       </td>
-      <td className="px-2 py-2.5 text-right tabular-nums text-[color:var(--text-light-primary)]">
+      <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
         ${row.cpi.toFixed(2)}
       </td>
-      <td className="px-2 py-2.5 text-right tabular-nums text-[color:var(--text-light-primary)]">
+      <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
         {row.substart}
       </td>
-      <td className="px-2 py-2.5 text-right tabular-nums" style={costTint(row.cpSubstart, maxCost)}>
+      <td className={cn("text-right tabular-nums", cellPad)} style={costTint(row.cpSubstart, maxCost)}>
         ${row.cpSubstart.toFixed(2)}
       </td>
-      <td className="px-2 py-2.5 text-right tabular-nums">
-        <DeltaChip delta={row.cpSubstartDelta} polarity="down-good" />
+      <td className={cn("text-right tabular-nums", cellPad)}>
+        <DeltaChip delta={row.cpSubstartDelta} polarity="down-good" compact={compact} />
       </td>
-      <td className="px-2 py-2.5 text-right tabular-nums text-[color:var(--text-light-primary)]">
+      <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
         {row.subD0}
       </td>
-      <td className="px-2 py-2.5 text-right tabular-nums" style={costTint(row.cpaD0, maxCost)}>
+      <td className={cn("text-right tabular-nums", cellPad)} style={costTint(row.cpaD0, maxCost)}>
         ${row.cpaD0.toFixed(2)}
       </td>
-      <td className="px-2 py-2.5 text-right tabular-nums">
-        <DeltaChip delta={row.cpaD0Delta} polarity="down-good" />
+      <td className={cn("text-right tabular-nums", cellPad)}>
+        <DeltaChip delta={row.cpaD0Delta} polarity="down-good" compact={compact} />
       </td>
-      <td className="px-2 py-2.5 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+      <td className={cn("text-right tabular-nums text-[color:var(--text-light-secondary)]", cellPad)}>
         {row.subD7 === null ? "—" : row.subD7}
       </td>
       <td
-        className="relative py-2.5 pl-2 pr-7 text-right tabular-nums"
+        className={cn(
+          "relative text-right tabular-nums",
+          compact ? "py-1 pl-1.5 pr-5" : "py-2.5 pl-2 pr-7",
+        )}
         style={row.cpaD7 !== null ? costTint(row.cpaD7, maxCost) : undefined}
       >
         {row.cpaD7 === null ? (
@@ -202,13 +257,13 @@ function CampaignTableRow({
         ) : (
           `$${row.cpaD7.toFixed(2)}`
         )}
-        {callout && <CalloutArrow color={callout} />}
+        {callout && <CalloutArrow color={callout} compact={compact} />}
       </td>
     </tr>
   );
 }
 
-function CalloutArrow({ color }: { color: CalloutColor }) {
+function CalloutArrow({ color, compact = false }: { color: CalloutColor; compact?: boolean }) {
   // Reference deck anchors the arrow inside the last cell at the right
   // edge so it always renders even when the table is in an overflow-x
   // scroller. The cell has position: relative, the arrow position:
@@ -219,7 +274,7 @@ function CalloutArrow({ color }: { color: CalloutColor }) {
       className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2"
       style={{ color: CALLOUT_HEX[color] }}
     >
-      <ArrowLeft className="h-5 w-5" strokeWidth={3} />
+      <ArrowLeft className={compact ? "h-3.5 w-3.5" : "h-5 w-5"} strokeWidth={3} />
     </span>
   );
 }
@@ -227,9 +282,11 @@ function CalloutArrow({ color }: { color: CalloutColor }) {
 function DeltaChip({
   delta,
   polarity,
+  compact = false,
 }: {
   delta: number | null;
   polarity: "up-good" | "down-good";
+  compact?: boolean;
 }) {
   if (delta === null || !Number.isFinite(delta) || delta === 0) {
     return <span className="text-[color:var(--text-light-muted)]">—</span>;
@@ -239,11 +296,14 @@ function DeltaChip({
   const color = good ? "#16A34A" : "#DC2626";
   return (
     <span
-      className="inline-flex items-center gap-0.5 text-[11px] font-semibold"
+      className={cn(
+        "inline-flex items-center gap-0.5 font-semibold",
+        compact ? "text-[9px]" : "text-[11px]",
+      )}
       style={{ color }}
     >
       <ArrowUp
-        className="h-3 w-3"
+        className={compact ? "h-2.5 w-2.5" : "h-3 w-3"}
         strokeWidth={2.5}
         style={{ transform: up ? "none" : "rotate(180deg)" }}
       />

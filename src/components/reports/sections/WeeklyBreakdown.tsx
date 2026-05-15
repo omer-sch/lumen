@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type {
   HistoricalWeekRow,
   MetricValue,
@@ -15,6 +16,9 @@ type WeeklyBreakdownProps = {
   /** Optional last 3-4 weeks of context, only on channel-weekly. */
   history?: HistoricalWeekRow[];
   bullets: WeeklyBullet[];
+  /** Slide-fit variant: tighter padding + smaller fonts so the table +
+   *  bullets pack into a 16:9 frame. */
+  compact?: boolean;
 };
 
 /** Volume metrics: an increase reads as good, a decrease as bad. */
@@ -44,14 +48,18 @@ export function WeeklyBreakdown({
   currentWeek,
   history,
   bullets,
+  compact = false,
 }: WeeklyBreakdownProps) {
   // The platform-overall variant: one row per channel + totals.
   // The channel-weekly variant: a single "this week" row.
+  // Continuation slides may carry neither, in which case the two-half
+  // summary block is skipped entirely and we only render history / bullets.
   const rows: WeeklySummaryRow[] = summary
     ? [...summary.rows, summary.total]
     : currentWeek
       ? [currentWeek]
       : [];
+  const hasSummary = rows.length > 0;
 
   const maxSpend = Math.max(
     ...rows.map((r) => (typeof r.spend.value === "number" ? r.spend.value : 0)),
@@ -66,21 +74,33 @@ export function WeeklyBreakdown({
     1,
   );
 
+  const cellPad = compact ? "px-1.5 py-1" : "px-2 py-2.5";
+  const labelPad = compact ? "py-1 pr-2" : "py-2.5 pr-3";
+  const tableText = compact ? "text-[11px]" : "text-[13px]";
+  const headerText = compact ? "text-[9px]" : "text-[10px]";
+
   return (
-    <div className="flex flex-col gap-5 rounded-xl px-6 py-6 print:break-inside-avoid" style={{ background: "var(--surface-light-card)" }}>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div
+      className={cn(
+        "flex flex-col rounded-xl print:break-inside-avoid",
+        compact ? "gap-2 px-4 py-3" : "gap-5 px-6 py-6",
+      )}
+      style={{ background: "var(--surface-light-card)" }}
+    >
+      {hasSummary && (
+      <div className={cn("grid grid-cols-1 lg:grid-cols-2", compact ? "gap-3" : "gap-4")}>
         {/* Volume half */}
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
+          <table className={cn("w-full border-collapse", tableText)}>
             <thead>
               <tr>
-                <th className="border-b py-2 pr-3 text-left text-[10px] font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]" style={{ borderColor: "var(--surface-light-line)" }}>
+                <th className={cn("border-b text-left font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]", labelPad, headerText)} style={{ borderColor: "var(--surface-light-line)" }}>
                   Channel
                 </th>
                 {VOLUME_KEYS.map((k) => (
                   <th
                     key={k}
-                    className="border-b py-2 px-2 text-right text-[10px] font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]"
+                    className={cn("border-b text-right font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]", cellPad, headerText)}
                     style={{ borderColor: "var(--surface-light-line)" }}
                   >
                     {VOLUME_LABELS[k]}
@@ -100,21 +120,21 @@ export function WeeklyBreakdown({
                       fontWeight: isTotal ? 700 : undefined,
                     }}
                   >
-                    <td className="py-2.5 pr-3 font-semibold text-[color:var(--text-light-primary)]">
+                    <td className={cn("font-semibold text-[color:var(--text-light-primary)]", labelPad)}>
                       {r.label}
                     </td>
                     <td
-                      className="px-2 py-2.5 text-right tabular-nums"
+                      className={cn("text-right tabular-nums", cellPad)}
                       style={spendTint(r.spend, maxSpend)}
                     >
-                      <MetricCell metric={r.spend} polarity="up-good" />
+                      <MetricCell metric={r.spend} polarity="up-good" compact={compact} />
                     </td>
                     {(["substart", "subD0", "subD7"] as const).map((k) => (
                       <td
                         key={k}
-                        className="px-2 py-2.5 text-right tabular-nums text-[color:var(--text-light-primary)]"
+                        className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}
                       >
-                        <MetricCell metric={r[k]} polarity="up-good" />
+                        <MetricCell metric={r[k]} polarity="up-good" compact={compact} />
                       </td>
                     ))}
                   </tr>
@@ -126,16 +146,16 @@ export function WeeklyBreakdown({
 
         {/* Cost half */}
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
+          <table className={cn("w-full border-collapse", tableText)}>
             <thead>
               <tr>
-                <th className="border-b py-2 pr-3 text-left text-[10px] font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]" style={{ borderColor: "var(--surface-light-line)" }}>
+                <th className={cn("border-b text-left font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]", labelPad, headerText)} style={{ borderColor: "var(--surface-light-line)" }}>
                   Channel
                 </th>
                 {COST_KEYS.map((k) => (
                   <th
                     key={k}
-                    className="border-b py-2 px-2 text-right text-[10px] font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]"
+                    className={cn("border-b text-right font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]", cellPad, headerText)}
                     style={{ borderColor: "var(--surface-light-line)" }}
                   >
                     {COST_LABELS[k]}
@@ -155,16 +175,16 @@ export function WeeklyBreakdown({
                       fontWeight: isTotal ? 700 : undefined,
                     }}
                   >
-                    <td className="py-2.5 pr-3 font-semibold text-[color:var(--text-light-primary)]">
+                    <td className={cn("font-semibold text-[color:var(--text-light-primary)]", labelPad)}>
                       {r.label}
                     </td>
                     {COST_KEYS.map((k) => (
                       <td
                         key={k}
-                        className="px-2 py-2.5 text-right tabular-nums"
+                        className={cn("text-right tabular-nums", cellPad)}
                         style={costTint(r[k], maxCost)}
                       >
-                        <MetricCell metric={r[k]} polarity="down-good" />
+                        <MetricCell metric={r[k]} polarity="down-good" compact={compact} />
                       </td>
                     ))}
                   </tr>
@@ -174,17 +194,21 @@ export function WeeklyBreakdown({
           </table>
         </div>
       </div>
+      )}
 
       {history && history.length > 0 && (
-        <HistoryTable rows={history} />
+        <HistoryTable rows={history} compact={compact} />
       )}
 
       {bullets.length > 0 && (
-        <ul className="flex flex-col gap-2 pt-1">
+        <ul className={cn("flex flex-col pt-1", compact ? "gap-1" : "gap-2")}>
           {bullets.map((b, i) => (
             <li
               key={i}
-              className="font-body text-sm leading-relaxed"
+              className={cn(
+                "font-body leading-relaxed",
+                compact ? "text-[12px]" : "text-sm",
+              )}
               style={{
                 color:
                   b.tone === "headline-bad"
@@ -212,9 +236,11 @@ export function WeeklyBreakdown({
 function MetricCell({
   metric,
   polarity,
+  compact = false,
 }: {
   metric: MetricValue;
   polarity: "up-good" | "down-good";
+  compact?: boolean;
 }) {
   const { value, delta, maturing } = metric;
   const display =
@@ -230,7 +256,7 @@ function MetricCell({
   }
 
   return (
-    <span className="inline-flex items-baseline justify-end gap-1.5">
+    <span className="inline-flex items-baseline justify-end gap-1">
       <span
         className="font-semibold text-[color:var(--text-light-primary)]"
         style={maturing ? { opacity: 0.55 } : undefined}
@@ -239,10 +265,13 @@ function MetricCell({
       </span>
       {Arrow && (
         <span
-          className="inline-flex items-center gap-0.5 text-[11px] font-semibold tabular-nums"
+          className={cn(
+            "inline-flex items-center gap-0.5 font-semibold tabular-nums",
+            compact ? "text-[9px]" : "text-[11px]",
+          )}
           style={{ color: toneColor ?? undefined }}
         >
-          <Arrow className="h-3 w-3" strokeWidth={2.5} />
+          <Arrow className={compact ? "h-2.5 w-2.5" : "h-3 w-3"} strokeWidth={2.5} />
           {Math.abs(delta as number).toFixed(1)}%
         </span>
       )}
@@ -250,20 +279,23 @@ function MetricCell({
   );
 }
 
-function HistoryTable({ rows }: { rows: HistoricalWeekRow[] }) {
+function HistoryTable({ rows, compact = false }: { rows: HistoricalWeekRow[]; compact?: boolean }) {
+  const cellPad = compact ? "px-1.5 py-1" : "px-2 py-2";
+  const headerText = compact ? "text-[9px]" : "text-[10px]";
+  const tableText = compact ? "text-[10.5px]" : "text-[12px]";
   return (
     <div className="overflow-x-auto rounded-md" style={{ border: "1px solid var(--surface-light-line)" }}>
-      <table className="w-full border-collapse text-[12px]">
+      <table className={cn("w-full border-collapse", tableText)}>
         <thead>
           <tr>
-            <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]">
+            <th className={cn("text-left font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]", cellPad, headerText)}>
               Week
             </th>
-            <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]">
+            <th className={cn("text-left font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]", cellPad, headerText)}>
               Range
             </th>
             {(["Spend", "Installs", "CPI", "SubStart", "CP SubStart", "Sub D0", "CPA D0", "Sub D7", "CPA D7"] as const).map((h) => (
-              <th key={h} className="px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]">
+              <th key={h} className={cn("text-right font-semibold uppercase tracking-[0.10em] text-[color:var(--text-light-muted)]", cellPad, headerText)}>
                 {h}
               </th>
             ))}
@@ -272,37 +304,37 @@ function HistoryTable({ rows }: { rows: HistoricalWeekRow[] }) {
         <tbody>
           {rows.map((r) => (
             <tr key={r.label} className="border-t" style={{ borderColor: "var(--surface-light-line)" }}>
-              <td className="px-2 py-2 font-semibold text-[color:var(--text-light-primary)]">
+              <td className={cn("font-semibold text-[color:var(--text-light-primary)]", cellPad)}>
                 {r.label}
               </td>
-              <td className="px-2 py-2 text-[color:var(--text-light-secondary)]">
+              <td className={cn("text-[color:var(--text-light-secondary)]", cellPad)}>
                 {r.range}
               </td>
-              <td className="px-2 py-2 text-right tabular-nums text-[color:var(--text-light-primary)]">
+              <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
                 {formatMoney(r.spend)}
               </td>
-              <td className="px-2 py-2 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+              <td className={cn("text-right tabular-nums text-[color:var(--text-light-secondary)]", cellPad)}>
                 {formatNumber(r.impressions)}
               </td>
-              <td className="px-2 py-2 text-right tabular-nums text-[color:var(--text-light-primary)]">
+              <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
                 ${r.cpi.toFixed(2)}
               </td>
-              <td className="px-2 py-2 text-right tabular-nums text-[color:var(--text-light-primary)]">
+              <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
                 {r.substart}
               </td>
-              <td className="px-2 py-2 text-right tabular-nums text-[color:var(--text-light-primary)]">
+              <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
                 ${r.cpSubstart.toFixed(2)}
               </td>
-              <td className="px-2 py-2 text-right tabular-nums text-[color:var(--text-light-primary)]">
+              <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
                 {r.subD0}
               </td>
-              <td className="px-2 py-2 text-right tabular-nums text-[color:var(--text-light-primary)]">
+              <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
                 ${r.cpaD0.toFixed(2)}
               </td>
-              <td className="px-2 py-2 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+              <td className={cn("text-right tabular-nums text-[color:var(--text-light-secondary)]", cellPad)}>
                 {r.subD7 === null ? "—" : r.subD7}
               </td>
-              <td className="px-2 py-2 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+              <td className={cn("text-right tabular-nums text-[color:var(--text-light-secondary)]", cellPad)}>
                 {r.cpaD7 === null ? "—" : `$${r.cpaD7.toFixed(2)}`}
               </td>
             </tr>

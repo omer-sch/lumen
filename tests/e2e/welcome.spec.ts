@@ -67,7 +67,7 @@ test.describe("welcome page (authenticated)", () => {
       {
         name: COOKIE,
         value: todayISO(),
-        url: page.url() === "about:blank" ? "http://localhost:3001" : page.url(),
+        domain: "localhost",
         path: "/",
         sameSite: "Lax",
       },
@@ -89,7 +89,7 @@ test.describe("welcome page (authenticated)", () => {
       {
         name: COOKIE,
         value: "2000-01-01",
-        url: "http://localhost:3001",
+        domain: "localhost",
         path: "/",
         sameSite: "Lax",
       },
