@@ -438,70 +438,33 @@ async function _queryFreshness(client?: string): Promise<FreshnessData> {
   }
 }
 
-// ── Cached exports (Next route-handler cache, 30 min TTL) ──────────────────
-// Each query is keyed by the variable arguments via the cache-key array so
-// switching client or date range produces a separate cache entry.
+// ── Exports ────────────────────────────────────────────────────────────────
+// The six dashboard dispatchers (KPIs, Trend, ChannelMix, NetworkBreakdown,
+// Payback, Campaigns) used to be wrapped in `unstable_cache` for an extra
+// in-process 30-minute shield. That layer is gone now — for two reasons:
+//
+//   1. For the GlobalComix branch, the inner `globalcomix-queries.ts`
+//      module owns caching via Upstash (`withRedisCache`). Two layers
+//      created "which one is authoritative" confusion, and the outer
+//      Next cache made admin-triggered Sync now invisible on the serving
+//      instance for up to 30 minutes (Redis was invalidated; Next held
+//      stale).
+//   2. For non-multi-source clients (`playw3`, `100play`), this means
+//      every request now goes direct to BigQuery. Accepted explicitly:
+//      those clients aren't dashboard-live today; Phase 1.5 will migrate
+//      them onto `withRedisCache` and restore caching.
+//
+// Freshness and DataBounds stay wrapped: freshness is a cost cap for a
+// query users hit on every dashboard mount (10-minute TTL is the right
+// shape there), and DataBounds is so slow-moving that the 24-hour Next
+// cache is the cheapest place to hold it.
 
-const REVALIDATE_SECONDS = 1800;
-
-export const queryDashboardKPIs = (
-  client: string,
-  from: string,
-  to: string,
-) =>
-  unstable_cache(_queryDashboardKPIs, ["bq:kpis", client, from, to], {
-    revalidate: REVALIDATE_SECONDS,
-    tags: ["bq", `bq:${client}`],
-  })(client, from, to);
-
-export const queryTrend = (client: string, from: string, to: string) =>
-  unstable_cache(_queryTrend, ["bq:trend", client, from, to], {
-    revalidate: REVALIDATE_SECONDS,
-    tags: ["bq", `bq:${client}`],
-  })(client, from, to);
-
-export const queryChannelMix = (
-  client: string,
-  from: string,
-  to: string,
-) =>
-  unstable_cache(_queryChannelMix, ["bq:channel-mix", client, from, to], {
-    revalidate: REVALIDATE_SECONDS,
-    tags: ["bq", `bq:${client}`],
-  })(client, from, to);
-
-export const queryCampaigns = (
-  client: string,
-  from: string,
-  to: string,
-) =>
-  unstable_cache(_queryCampaigns, ["bq:campaigns", client, from, to], {
-    revalidate: REVALIDATE_SECONDS,
-    tags: ["bq", `bq:${client}`],
-  })(client, from, to);
-
-export const queryNetworkBreakdown = (
-  client: string,
-  from: string,
-  to: string,
-) =>
-  unstable_cache(
-    _queryNetworkBreakdown,
-    ["bq:network-breakdown", client, from, to],
-    { revalidate: REVALIDATE_SECONDS, tags: ["bq", `bq:${client}`] },
-  )(client, from, to);
-
-export const queryPayback = (
-  client: string,
-  from: string,
-  to: string,
-) =>
-  unstable_cache(
-    _queryPayback,
-    ["bq:payback", client, from, to],
-    { revalidate: REVALIDATE_SECONDS, tags: ["bq", `bq:${client}`] },
-  )(client, from, to);
-
+export const queryDashboardKPIs = _queryDashboardKPIs;
+export const queryTrend = _queryTrend;
+export const queryChannelMix = _queryChannelMix;
+export const queryCampaigns = _queryCampaigns;
+export const queryNetworkBreakdown = _queryNetworkBreakdown;
+export const queryPayback = _queryPayback;
 
 // `client` is part of the cache key so each client gets its own dataAsOf;
 // when undefined (e.g. a generic freshness ping with no active client),

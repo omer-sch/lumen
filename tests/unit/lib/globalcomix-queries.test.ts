@@ -4,6 +4,11 @@
 // network dwh_* tables and revenue comes from the cohort table. These tests
 // pin the SQL shape (UNION leg presence, dedupe predicate, cohort join,
 // Google iOS exclusion, parameter binding) without ever hitting BigQuery.
+//
+// The module is now wrapped by `withRedisCache` (Upstash). The wrapper is
+// mocked to record the call shape (client, query, ttlSeconds, params) AND
+// transparently invoke the loader, so the existing SQL/coercion assertions
+// keep working *and* a dedicated suite below pins the cache contract.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const queryFn = vi.fn();
@@ -17,15 +22,35 @@ vi.mock("@google-cloud/bigquery", () => {
   return { BigQuery };
 });
 
-// Pass-through unstable_cache: invokes the inner function directly so
-// the unit tests don't try to hit Next's incremental cache (which
-// would 500 in vitest where the cache context isn't installed).
-vi.mock("next/cache", () => ({
-  unstable_cache: <T extends (...args: unknown[]) => unknown>(fn: T) => fn,
+// Captures every `withRedisCache(opts, loader)` invocation so the
+// "calls the wrapper with the expected shape" suite below can inspect
+// what was handed in. The mock implementation invokes the loader
+// directly, so the rest of this file's SQL/coercion assertions exercise
+// the real `_queryGlobalComix*` bodies just as they did pre-migration.
+type CacheCall = {
+  client: string;
+  query: string;
+  params: unknown;
+  ttlSeconds: number;
+  hardCeilingSeconds?: number;
+};
+const cacheCalls: CacheCall[] = [];
+
+vi.mock("@/lib/cache/with-redis-cache", () => ({
+  withRedisCache: async <T>(opts: CacheCall, loader: () => Promise<T>) => {
+    cacheCalls.push(opts);
+    return loader();
+  },
 }));
+
+// The cache wrapper assertions below derive the expected param hash by
+// running the real `paramHash` helper. Keep the import after the mock
+// so we still see the real keys module (only the wrapper is mocked).
+import { paramHash } from "@/lib/cache/keys";
 
 beforeEach(() => {
   queryFn.mockReset();
+  cacheCalls.length = 0;
   vi.stubEnv("BQ_PROJECT", "test-project");
   vi.stubEnv("BQ_DATASET", "test_dataset");
   vi.stubEnv("ALLOWED_CLIENTS", "globalcomix,playw3,100play");
@@ -311,5 +336,88 @@ describe("queryGlobalComixKPIs: numeric coercion", () => {
     const result = await queryGlobalComixKPIs("globalcomix", FROM, TO);
     expect(result.spend).toBe(9999);
     expect(result.installs).toBe(42);
+  });
+});
+
+// ── Cache-wrapping contract ───────────────────────────────────────────────
+//
+// The 6 dashboard queries cache for 12 hours; DataBounds caches for 30
+// minutes; DataAsOf is intentionally NOT wrapped (drives the freshness
+// stamp, see globalcomix-queries.ts header comment). Each wrapped export
+// must hand `withRedisCache` a `{client, query, params, ttlSeconds}`
+// shape that matches what `cacheKey()` will hash to — so two callers
+// passing equivalent params land on the same Redis key.
+describe("globalcomix-queries cache-wrapping contract", () => {
+  const TWELVE_HOURS_S = 60 * 60 * 12;
+  const THIRTY_MIN_S = 60 * 30;
+  const expectedDateParams = { from: FROM, to: TO };
+  const expectedDateHash = paramHash(expectedDateParams);
+  const expectedEmptyHash = paramHash({});
+
+  async function callAll(client: string, from: string, to: string) {
+    const mod = await import("@/lib/globalcomix-queries");
+    queryFn.mockResolvedValue([[]]);
+    await mod.queryGlobalComixKPIs(client, from, to);
+    await mod.queryGlobalComixTrend(client, from, to);
+    await mod.queryGlobalComixChannelMix(client, from, to);
+    await mod.queryGlobalComixNetworkBreakdown(client, from, to);
+    await mod.queryGlobalComixPayback(client, from, to);
+    await mod.queryGlobalComixCampaigns(client, from, to);
+    await mod.queryGlobalComixDataBounds(client);
+    // DataAsOf is intentionally uncached — make sure we don't see it.
+    queryFn.mockResolvedValue([[{ data_as_of: "2026-05-14" }]]);
+    await mod.queryGlobalComixDataAsOf(client);
+  }
+
+  it("wraps every dashboard query with the right (client, query, ttl, params) shape", async () => {
+    await callAll("globalcomix", FROM, TO);
+
+    const byQuery = Object.fromEntries(cacheCalls.map((c) => [c.query, c]));
+
+    for (const name of [
+      "kpis",
+      "trend",
+      "channel-mix",
+      "network-breakdown",
+      "payback",
+      "campaigns",
+    ] as const) {
+      const call = byQuery[name];
+      expect(call, name).toBeDefined();
+      expect(call.client).toBe("globalcomix");
+      expect(call.ttlSeconds).toBe(TWELVE_HOURS_S);
+      expect(call.params).toEqual(expectedDateParams);
+      // Sanity: same date params hash identically across all six —
+      // proves callers will share Redis keys when their windows match.
+      expect(paramHash(call.params)).toBe(expectedDateHash);
+    }
+  });
+
+  it("wraps DataBounds with a 30-minute TTL and empty params", async () => {
+    await callAll("globalcomix", FROM, TO);
+    const bounds = cacheCalls.find((c) => c.query === "data-bounds");
+    expect(bounds).toBeDefined();
+    expect(bounds!.ttlSeconds).toBe(THIRTY_MIN_S);
+    expect(bounds!.params).toEqual({});
+    expect(paramHash(bounds!.params)).toBe(expectedEmptyHash);
+  });
+
+  it("does NOT wrap DataAsOf — it must stay live for the freshness path", async () => {
+    await callAll("globalcomix", FROM, TO);
+    expect(cacheCalls.find((c) => c.query === "data-as-of")).toBeUndefined();
+    // Defense-in-depth: nothing else should be wrapped under a name we
+    // didn't intend. If a future query name leaks through, this asserts.
+    const names = cacheCalls.map((c) => c.query).sort();
+    expect(names).toEqual(
+      [
+        "kpis",
+        "trend",
+        "channel-mix",
+        "network-breakdown",
+        "payback",
+        "campaigns",
+        "data-bounds",
+      ].sort(),
+    );
   });
 });
