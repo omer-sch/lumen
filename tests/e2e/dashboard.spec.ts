@@ -6,7 +6,7 @@ import { setupClerkTestingToken } from "@clerk/testing/playwright";
 // is what drives the KPIs and trend chart (no real DB wiring yet, per
 // SPEC.md "Phase 0"). When real data lands, the value-format assertions
 // below may need tightening, but the structural ones (count of tiles,
-// presence of swap controls, mode toggle) stay valid.
+// trend group tabs, mode toggle) stay valid.
 
 test.describe("dashboard (authenticated)", () => {
   test.beforeEach(async ({ page, context }) => {
@@ -60,37 +60,30 @@ test.describe("dashboard (authenticated)", () => {
     await expect(subD7).toContainText(/\d/);
   });
 
-  // Swappable KPI slots — each slot's label is a popover trigger
-  // (data-testid="kpi-swap-{activeId}"). After swapping, the slot's
-  // testid updates to the new metric id. This guards the
-  // "KPI tiles are now swappable" feature.
-  test("a KPI slot can swap to a different metric", async ({ page }) => {
-    // Slot 0 starts as CPA D7 (DEFAULT_SLOTS[0]) — open its swap popover.
-    const heroTile = page.getByTestId("kpi-cpaD7").first();
-    await expect(heroTile).toBeVisible();
-
-    await heroTile.getByTestId("kpi-swap-cpaD7").click();
-    // Pick "Total spend" from the popover. The option testid is stable.
-    await page.getByTestId("kpi-swap-option-spend").click();
-
-    // After the swap, slot 0 should now render as kpi-spend, so there
-    // are two kpi-spend tiles (the original slot-1 spend + slot-0).
-    await expect(page.getByTestId("kpi-spend")).toHaveCount(2);
-  });
-
   // Trend chart + metric switcher — the chart starts on the hero
   // metric (cpaD7 for multi-source clients) and exposes a `data-metric`
-  // attribute that updates when a tab is clicked.
-  test("trend chart switches metrics", async ({ page }) => {
+  // attribute that updates when a tab is clicked. The switcher is now
+  // two-tiered: pick a group first (Volume / Efficiency / Revenue /
+  // Money back / Users), then a metric inside it. Group tabs swap which
+  // metric tabs are visible, so to reach `spend` from the default
+  // `cpaD7` (Efficiency) we go through `trend-group-volume`.
+  test("trend chart switches metrics via the grouped tab strip", async ({ page }) => {
     const chart = page.getByTestId("trend-chart");
     await expect(chart).toBeVisible();
     await expect(chart).toHaveAttribute("data-metric", "cpaD7");
 
-    await page.getByTestId("trend-metric-spend").click();
+    // Jump to the Volume group; its first metric (`spend`) becomes active.
+    await page.getByTestId("trend-group-volume").click();
     await expect(chart).toHaveAttribute("data-metric", "spend");
 
+    // Pick a non-default metric inside the same group.
     await page.getByTestId("trend-metric-installs").click();
     await expect(chart).toHaveAttribute("data-metric", "installs");
+
+    // Hop back to Efficiency and re-select the hero metric.
+    await page.getByTestId("trend-group-efficiency").click();
+    await page.getByTestId("trend-metric-cpaD7").click();
+    await expect(chart).toHaveAttribute("data-metric", "cpaD7");
   });
 
   // Lumen Dashboard mode toggle — the rename from "AI Dashboard" to

@@ -60,13 +60,17 @@ test.describe("dashboard / GlobalComix subscription view", () => {
   }) => {
     const chart = page.getByTestId("trend-chart");
 
-    await page.getByTestId("trend-metric-spend").click();
+    // Volume group: jump to `spend` via its group tab.
+    await page.getByTestId("trend-group-volume").click();
     await expect(chart).toHaveAttribute("data-metric", "spend");
 
+    // Efficiency group: re-select the hero metric.
+    await page.getByTestId("trend-group-efficiency").click();
     await page.getByTestId("trend-metric-cpaD7").click();
     await expect(chart).toHaveAttribute("data-metric", "cpaD7");
 
-    await page.getByTestId("trend-metric-roas").click();
+    // Money back group: first metric (`roas`) becomes active on group click.
+    await page.getByTestId("trend-group-money-back").click();
     await expect(chart).toHaveAttribute("data-metric", "roas");
   });
 
@@ -75,8 +79,9 @@ test.describe("dashboard / GlobalComix subscription view", () => {
     // first render.
     await expect(page.getByTestId("trend-maturity-note")).toBeVisible();
 
-    // Spend has no cohort tail — note should disappear.
-    await page.getByTestId("trend-metric-spend").click();
+    // Switch to Volume group → first metric (`spend`) has no cohort tail,
+    // so the floating pill should disappear.
+    await page.getByTestId("trend-group-volume").click();
     await expect(page.getByTestId("trend-maturity-note")).toHaveCount(0);
   });
 

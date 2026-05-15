@@ -269,10 +269,6 @@ function MyDashboard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coverageKey]);
 
-  const setSlot = (slotIndex: number, nextId: KpiId) => {
-    setSlots((cur) => cur.map((id, i) => (i === slotIndex ? nextId : id)));
-  };
-
   // Tailwind needs static class names — pick the column count up-front.
   const gridCols =
     slots.length >= 4
@@ -326,9 +322,9 @@ function MyDashboard({
     );
   }
 
-  // The swap options for each tile are limited to the metrics this client
-  // actually populates. `supportedKpis` is the canonical list (legacy four
-  // for agent-strategy clients, full extended set for multi-source).
+  // Trim the KPI list to what this client actually populates. `supportedKpis`
+  // is the canonical list (legacy four for agent-strategy clients, full
+  // extended set for multi-source).
   const supportedSet = new Set<KpiId>(supportedKpis);
   const visibleKpis = data.kpis.filter((k) => {
     if (!supportedSet.has(k.id)) return false;
@@ -336,7 +332,6 @@ function MyDashboard({
     if (k.id === "cpi") return coverage.hasCpi;
     return true;
   });
-  const swapOptions = visibleKpis.map((k) => ({ id: k.id, label: k.label }));
   const kpiById = (id: KpiId): Kpi =>
     visibleKpis.find((k) => k.id === id) ?? visibleKpis[0];
 
@@ -375,11 +370,6 @@ function MyDashboard({
               size="compact"
               enterIndex={i + 1}
               series={series}
-              swap={{
-                options: swapOptions,
-                activeId,
-                onChange: (next) => setSlot(i, next),
-              }}
             />
           );
         })}
