@@ -6,6 +6,7 @@
     "silent": false
   },
   "crons": [
-    { "path": "/api/cron/warm-cache", "schedule": "0 6,18 * * *" }
+    { "path": "/api/cron/warm-cache", "schedule": "0 6,18 * * *" },
+    { "path": "/api/cron/rag-reindex-knowledge", "schedule": "0 5 * * *" }
   ]
 }

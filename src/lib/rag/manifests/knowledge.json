@@ -1,0 +1,335 @@
+{
+  "version": 1,
+  "description": "Manifest of knowledge sources to index into the rag_chunks knowledge corpus. Two kinds of entries: source=repo (paths under the deployed app root, accessible to Vercel functions) and source=vault (paths under the local Lumen Vault, only accessible from the backfill script). The 0 5 UTC cron processes only source=repo entries; source=vault entries are indexed manually via scripts/backfill-knowledge-corpus.mjs.",
+  "entries": [
+    {
+      "source": "repo",
+      "path": "CLAUDE.md",
+      "source_path": "lumen/CLAUDE.md",
+      "metadata": {
+        "tags": ["product", "context", "rules"]
+      }
+    },
+    {
+      "source": "repo",
+      "path": "SPEC.md",
+      "source_path": "lumen/SPEC.md",
+      "metadata": {
+        "tags": ["product", "spec"]
+      }
+    },
+    {
+      "source": "repo",
+      "path": "BRANCH_PLAN.md",
+      "source_path": "lumen/BRANCH_PLAN.md",
+      "metadata": {
+        "tags": ["product", "plan", "hermes"]
+      }
+    },
+    {
+      "source": "repo",
+      "path": "FOLLOWUPS.md",
+      "source_path": "lumen/FOLLOWUPS.md",
+      "metadata": {
+        "tags": ["product", "followups"]
+      }
+    },
+    {
+      "source": "repo",
+      "path": "LUMEN_DATA_PLAN.md",
+      "source_path": "lumen/LUMEN_DATA_PLAN.md",
+      "metadata": {
+        "tags": ["data", "plan"]
+      }
+    },
+    {
+      "source": "repo",
+      "path": "specs/automated-report-workflow.md",
+      "source_path": "lumen/specs/automated-report-workflow.md",
+      "metadata": {
+        "tags": ["spec", "reports", "automation"]
+      }
+    },
+    {
+      "source": "repo",
+      "path": "prompts/2026-05-15-rag-scaffold.md",
+      "source_path": "lumen/prompts/2026-05-15-rag-scaffold.md",
+      "metadata": {
+        "tags": ["spec", "rag", "hermes"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Status.md",
+      "source_path": "vault/Status.md",
+      "metadata": {
+        "tags": ["status"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Decisions.md",
+      "source_path": "vault/Decisions.md",
+      "metadata": {
+        "tags": ["decisions", "history"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Home.md",
+      "source_path": "vault/Home.md",
+      "metadata": {
+        "tags": ["index"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Company/yellowHEAD Overview.md",
+      "source_path": "vault/Company/yellowHEAD Overview.md",
+      "metadata": {
+        "tags": ["company", "context"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Company/The Four Teams.md",
+      "source_path": "vault/Company/The Four Teams.md",
+      "metadata": {
+        "tags": ["company", "teams"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Product/Lumen Vision.md",
+      "source_path": "vault/Product/Lumen Vision.md",
+      "metadata": {
+        "tags": ["product", "vision"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Product/Looker Studio Problem.md",
+      "source_path": "vault/Product/Looker Studio Problem.md",
+      "metadata": {
+        "tags": ["product", "context"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Product/Information Architecture.md",
+      "source_path": "vault/Product/Information Architecture.md",
+      "metadata": {
+        "tags": ["product", "ia"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Product/Decisions Made.md",
+      "source_path": "vault/Product/Decisions Made.md",
+      "metadata": {
+        "tags": ["product", "decisions", "rules"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Product/Open Questions.md",
+      "source_path": "vault/Product/Open Questions.md",
+      "metadata": {
+        "tags": ["product", "questions"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Product/Pages/Dashboard.md",
+      "source_path": "vault/Product/Pages/Dashboard.md",
+      "metadata": {
+        "tags": ["product", "page", "dashboard"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Product/Pages/Reports.md",
+      "source_path": "vault/Product/Pages/Reports.md",
+      "metadata": {
+        "tags": ["product", "page", "reports"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Product/Pages/Ask.md",
+      "source_path": "vault/Product/Pages/Ask.md",
+      "metadata": {
+        "tags": ["product", "page", "ask"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Product/Pages/Campaigns.md",
+      "source_path": "vault/Product/Pages/Campaigns.md",
+      "metadata": {
+        "tags": ["product", "page", "campaigns"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Product/Pages/Knowledge.md",
+      "source_path": "vault/Product/Pages/Knowledge.md",
+      "metadata": {
+        "tags": ["product", "page", "knowledge"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Product/Pages/Feed.md",
+      "source_path": "vault/Product/Pages/Feed.md",
+      "metadata": {
+        "tags": ["product", "page", "feed"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Product/Pages/Agents.md",
+      "source_path": "vault/Product/Pages/Agents.md",
+      "metadata": {
+        "tags": ["product", "page", "agents"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Users/Personas Overview.md",
+      "source_path": "vault/Users/Personas Overview.md",
+      "metadata": {
+        "tags": ["users", "personas"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Users/UA Analyst.md",
+      "source_path": "vault/Users/UA Analyst.md",
+      "metadata": {
+        "tags": ["users", "persona", "ua"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Users/CSM.md",
+      "source_path": "vault/Users/CSM.md",
+      "metadata": {
+        "tags": ["users", "persona", "csm"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Users/Creative Analyst.md",
+      "source_path": "vault/Users/Creative Analyst.md",
+      "metadata": {
+        "tags": ["users", "persona", "creative"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Users/ASO SEO Specialist.md",
+      "source_path": "vault/Users/ASO SEO Specialist.md",
+      "metadata": {
+        "tags": ["users", "persona", "organic"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Users/Leadership.md",
+      "source_path": "vault/Users/Leadership.md",
+      "metadata": {
+        "tags": ["users", "persona", "leadership"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Technical/Tech Stack.md",
+      "source_path": "vault/Technical/Tech Stack.md",
+      "metadata": {
+        "tags": ["technical", "stack"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Technical/BigQuery Warehouse.md",
+      "source_path": "vault/Technical/BigQuery Warehouse.md",
+      "metadata": {
+        "tags": ["technical", "bigquery", "data"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Technical/BigQuery Access.md",
+      "source_path": "vault/Technical/BigQuery Access.md",
+      "metadata": {
+        "tags": ["technical", "bigquery", "access"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Technical/Data Infrastructure.md",
+      "source_path": "vault/Technical/Data Infrastructure.md",
+      "metadata": {
+        "tags": ["technical", "infrastructure"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Specs/Caching Architecture.md",
+      "source_path": "vault/Specs/Caching Architecture.md",
+      "metadata": {
+        "tags": ["spec", "caching"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Specs/Automated Report Workflow.md",
+      "source_path": "vault/Specs/Automated Report Workflow.md",
+      "metadata": {
+        "tags": ["spec", "reports", "automation", "playbook"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Specs/Dashboard Optimization - GlobalComix.md",
+      "source_path": "vault/Specs/Dashboard Optimization - GlobalComix.md",
+      "metadata": {
+        "tags": ["spec", "dashboard", "globalcomix", "client:globalcomix"],
+        "client": "globalcomix"
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Research/Discovery Interview - UA Team (2026-05-04).md",
+      "source_path": "vault/Research/Discovery Interview - UA Team (2026-05-04).md",
+      "metadata": {
+        "tags": ["research", "ua", "interview"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Research/Discovery Interview - BI Team (2026-05-05).md",
+      "source_path": "vault/Research/Discovery Interview - BI Team (2026-05-05).md",
+      "metadata": {
+        "tags": ["research", "bi", "interview"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Research/Workflow Case Study - Creative Feedback Loop.md",
+      "source_path": "vault/Research/Workflow Case Study - Creative Feedback Loop.md",
+      "metadata": {
+        "tags": ["research", "creative", "playbook"]
+      }
+    },
+    {
+      "source": "vault",
+      "path": "Research/Client Report Reference - Smart Sleep Coach.md",
+      "source_path": "vault/Research/Client Report Reference - Smart Sleep Coach.md",
+      "metadata": {
+        "tags": ["research", "reference", "client"]
+      }
+    }
+  ]
+}

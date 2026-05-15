@@ -54,14 +54,38 @@ const BodySchema = z.discriminatedUnion("corpus", [
   }),
 ]);
 
-export async function POST(req: NextRequest) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+function isValidBackfillSecret(provided: string): boolean {
+  const expected = process.env.CRON_SECRET ?? "";
+  if (!expected || expected.length !== provided.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) {
+    diff |= expected.charCodeAt(i) ^ provided.charCodeAt(i);
   }
-  const adminUserId = await getAdminUserId();
-  if (!adminUserId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  return diff === 0;
+}
+
+export async function POST(req: NextRequest) {
+  // Two auth paths:
+  //   1. Clerk session + admin allowlist (interactive admin use).
+  //   2. `x-backfill-secret: <CRON_SECRET>` (the local backfill script
+  //      uses this to call the API without a Clerk session — same
+  //      shared secret as the cron route).
+  const backfillSecret = req.headers.get("x-backfill-secret") ?? "";
+  const isBackfill = backfillSecret.length > 0 && isValidBackfillSecret(backfillSecret);
+
+  let principalLabel: string;
+  if (isBackfill) {
+    principalLabel = "backfill-script";
+  } else {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const adminUserId = await getAdminUserId();
+    if (!adminUserId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    principalLabel = adminUserId;
   }
 
   let raw: unknown;
@@ -106,7 +130,7 @@ export async function POST(req: NextRequest) {
 
   console.info({
     event: "rag.index",
-    userId: adminUserId,
+    principal: principalLabel,
     corpus: body.corpus,
     chunks_indexed: result.chunks_indexed,
     embedding_tokens: result.embedding_tokens,

@@ -143,6 +143,56 @@ describe("POST /api/rag/index", () => {
     );
   });
 
+  it("accepts the x-backfill-secret header in place of Clerk auth", async () => {
+    // CRON_SECRET path: no Clerk session needed. Use the same value as
+    // the header.
+    process.env.CRON_SECRET = "backfill-secret-with-enough-entropy-12345";
+    indexKnowledgeMock.mockResolvedValue({
+      chunks_indexed: 1,
+      embedding_tokens: 10,
+      cost_usd: 0.0000013,
+    });
+    const { POST } = await import("@/app/api/rag/index/route");
+    const res = await POST(
+      buildRequest("/api/rag/index", {
+        method: "POST",
+        headers: {
+          "x-backfill-secret": "backfill-secret-with-enough-entropy-12345",
+        },
+        body: {
+          corpus: "knowledge",
+          source_path: "vault/x.md",
+          content: "body",
+        },
+      }),
+    );
+    expect(res.status).toBe(200);
+    // Clerk auth helpers are NOT called when the backfill secret is
+    // valid.
+    expect(authMock).not.toHaveBeenCalled();
+    expect(getAdminUserIdMock).not.toHaveBeenCalled();
+    delete process.env.CRON_SECRET;
+  });
+
+  it("rejects a wrong x-backfill-secret and falls through to Clerk auth (then 401)", async () => {
+    process.env.CRON_SECRET = "real-secret-with-enough-entropy-12345678";
+    authMock.mockResolvedValue({ userId: null });
+    const { POST } = await import("@/app/api/rag/index/route");
+    const res = await POST(
+      buildRequest("/api/rag/index", {
+        method: "POST",
+        headers: { "x-backfill-secret": "wrong" },
+        body: {
+          corpus: "knowledge",
+          source_path: "x",
+          content: "body",
+        },
+      }),
+    );
+    expect(res.status).toBe(401);
+    delete process.env.CRON_SECRET;
+  });
+
   it("dispatches comms corpus to indexCommsThread", async () => {
     authMock.mockResolvedValue({ userId: "user_admin_1" });
     getAdminUserIdMock.mockResolvedValue("user_admin_1");
