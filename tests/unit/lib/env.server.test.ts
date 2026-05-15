@@ -9,6 +9,7 @@ describe("env.server", () => {
     for (const k of [
       "CLERK_SECRET_KEY",
       "ANTHROPIC_API_KEY",
+      "OPENAI_API_KEY",
       "FAL_KEY",
       "HF_TOKEN",
       "SENTRY_DSN",
@@ -47,6 +48,7 @@ describe("env.server", () => {
   it("optional vars return empty string instead of throwing", async () => {
     const { serverEnv } = await import("@/lib/env.server");
     expect(serverEnv.ANTHROPIC_API_KEY).toBe("");
+    expect(serverEnv.OPENAI_API_KEY).toBe("");
     expect(serverEnv.FAL_KEY).toBe("");
     expect(serverEnv.HF_TOKEN).toBe("");
     expect(serverEnv.SENTRY_DSN).toBe("");

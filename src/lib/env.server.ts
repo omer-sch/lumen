@@ -19,6 +19,15 @@ export const serverEnv = {
   get ANTHROPIC_API_KEY() {
     return read("ANTHROPIC_API_KEY", { optional: true });
   },
+  /**
+   * Optional. OpenAI key used by the RAG layer for embeddings
+   * (`text-embedding-3-large` truncated to 1536 dim). Never appears in
+   * client code. When unset, `embed()` throws on call so a misconfigured
+   * deploy fails loud instead of silently producing zero-vectors.
+   */
+  get OPENAI_API_KEY() {
+    return read("OPENAI_API_KEY", { optional: true });
+  },
   get FAL_KEY() {
     return read("FAL_KEY", { optional: true });
   },

@@ -24,16 +24,19 @@
     "@upstash/redis": "^1.38.0",
     "clsx": "^2.1.1",
     "html2canvas": "^1.4.1",
+    "js-tiktoken": "^1.0.21",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.14.0",
     "next": "^15.5.15",
+    "openai": "^6.37.0",
     "posthog-js": "^1.372.6",
     "pptxgenjs": "^4.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^3.8.1",
     "server-only": "^0.0.1",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@clerk/testing": "^2.0.24",
