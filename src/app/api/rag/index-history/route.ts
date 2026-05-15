@@ -30,22 +30,27 @@ const BodySchema = z.object({
   completed_at: z.string().optional(),
 });
 
+/**
+ * Constant-time secret comparison. Matches the canonical helper in
+ * /api/cron/warm-cache/route.ts verbatim. The trailing
+ * `expected.length > 0` guard is load-bearing: without it, an unset
+ * CRON_SECRET plus an empty bearer would compare-equal.
+ */
 function isValidSecret(provided: string): boolean {
   const expected = process.env.CRON_SECRET ?? "";
-  if (!expected) return false;
-  if (expected.length !== provided.length) {
-    let diff = 1;
+  if (!expected || expected.length !== provided.length) {
+    let diff = expected.length === provided.length ? 0 : 1;
     const len = Math.max(expected.length, provided.length, 32);
     for (let i = 0; i < len; i++) {
       diff |= (expected.charCodeAt(i) || 0) ^ (provided.charCodeAt(i) || 0);
     }
-    return diff === 0;
+    return diff === 0 && expected.length > 0;
   }
   let diff = 0;
   for (let i = 0; i < expected.length; i++) {
     diff |= expected.charCodeAt(i) ^ provided.charCodeAt(i);
   }
-  return diff === 0;
+  return diff === 0 && expected.length > 0;
 }
 
 function bearerFromHeader(value: string | null): string {

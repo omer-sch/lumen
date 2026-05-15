@@ -54,14 +54,27 @@ const BodySchema = z.discriminatedUnion("corpus", [
   }),
 ]);
 
+/**
+ * Constant-time secret comparison. Matches the canonical helper in
+ * /api/cron/warm-cache/route.ts verbatim so a future rotation only has
+ * to touch one shape. Walks a fixed-length sweep on the length-mismatch
+ * path so the rejection time doesn't leak the secret length.
+ */
 function isValidBackfillSecret(provided: string): boolean {
   const expected = process.env.CRON_SECRET ?? "";
-  if (!expected || expected.length !== provided.length) return false;
+  if (!expected || expected.length !== provided.length) {
+    let diff = expected.length === provided.length ? 0 : 1;
+    const len = Math.max(expected.length, provided.length, 32);
+    for (let i = 0; i < len; i++) {
+      diff |= (expected.charCodeAt(i) || 0) ^ (provided.charCodeAt(i) || 0);
+    }
+    return diff === 0 && expected.length > 0;
+  }
   let diff = 0;
   for (let i = 0; i < expected.length; i++) {
     diff |= expected.charCodeAt(i) ^ provided.charCodeAt(i);
   }
-  return diff === 0;
+  return diff === 0 && expected.length > 0;
 }
 
 export async function POST(req: NextRequest) {

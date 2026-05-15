@@ -43,7 +43,8 @@ export type Citation = { source_path: string; chunk_id: string };
 export type RetrieveResult = {
   chunks: RetrievedChunk[];
   citations: Citation[];
-  total_searched: number;
+  /** Number of chunks returned (after ANN + filter). Not the corpus size searched. */
+  chunks_returned: number;
   latency_ms: number;
   query_embedding_cost_usd: number;
 };
@@ -108,7 +109,7 @@ export async function retrieve(
   return {
     chunks,
     citations,
-    total_searched: chunks.length,
+    chunks_returned: chunks.length,
     latency_ms: Date.now() - startedAt,
     query_embedding_cost_usd: cost_usd,
   };

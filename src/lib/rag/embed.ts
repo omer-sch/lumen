@@ -20,9 +20,7 @@ function getClient(): OpenAI {
   if (_client) return _client;
   const key = serverEnv.OPENAI_API_KEY;
   if (!key) {
-    throw new Error(
-      "OPENAI_API_KEY not set; embed() requires it. Add it to .env.local (name only, no value, then provide the key separately).",
-    );
+    throw new Error("OPENAI_API_KEY not set; embed() requires it.");
   }
   _client = new OpenAI({ apiKey: key });
   return _client;

@@ -120,7 +120,7 @@ describe("retrieve result shape", () => {
     const r = await retrieve({ corpus: "knowledge", query: "x" });
     expect(r.chunks).toEqual([]);
     expect(r.citations).toEqual([]);
-    expect(r.total_searched).toBe(0);
+    expect(r.chunks_returned).toBe(0);
     expect(r.latency_ms).toBeGreaterThanOrEqual(0);
     expect(r.query_embedding_cost_usd).toBeGreaterThanOrEqual(0);
   });

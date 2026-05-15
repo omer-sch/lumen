@@ -57,6 +57,17 @@ export async function processManifestEntry(
 ): Promise<EntryResult> {
   try {
     const absolute = path.resolve(sourceRoot, entry.path);
+    // Containment: guard against a future manifest typo that uses '..'
+    // or absolute paths to escape the configured sourceRoot. The
+    // current manifest is checked in, but defense-in-depth is cheap.
+    const safeRoot = path.resolve(sourceRoot);
+    if (!absolute.startsWith(safeRoot + path.sep) && absolute !== safeRoot) {
+      return {
+        source_path: entry.source_path,
+        status: "error",
+        error: `path escapes sourceRoot: ${entry.path}`,
+      };
+    }
     const content = await reader(absolute);
     const prefix = sha256Prefix(content);
     const indexed = await latestIndexedPrefix(entry.source_path);
@@ -76,7 +87,8 @@ export async function processManifestEntry(
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    if (message.includes("ENOENT")) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (code === "ENOENT" || message.includes("ENOENT")) {
       return {
         source_path: entry.source_path,
         status: "missing",
