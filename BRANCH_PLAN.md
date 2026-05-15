@@ -4,7 +4,13 @@ Hermes v0: first real Lumen agent, end to end. Paste a client email, get a yello
 
 ## Status
 
-Phase 0 — branch setup. See session note (in vault) for the running squad matrix.
+Phase 1 complete (yellow → resolved). Phase 2 gated on Omer's STOP-gate sign-off plus `OPENAI_API_KEY` in `.env.local` (the latter only required when Phase 2's `parse_intent` runs a real Haiku call).
+
+Session notes:
+- Phase 0: external vault (one-time deviation, accepted).
+- Phase 1: `Sessions/first-real-agent-try/phase-1.md`.
+
+Phase-1 commits: `58fcba5..8d74b2d` (6 commits). Test count 469 → 570 (+101 new). RAG paths at 95 percent statement coverage; agent scaffold at 91 percent.
 
 ## Plan
 
