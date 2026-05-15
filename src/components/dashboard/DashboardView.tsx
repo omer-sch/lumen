@@ -109,12 +109,12 @@ function DashboardHeader() {
   const hoverTitle = pickHoverTitle(freshness, errored);
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex min-w-0 items-center gap-3">
+    <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+      <div className="flex min-w-0 flex-col gap-2">
         <span
           data-testid="data-freshness-bar"
           title={hoverTitle}
-          className="inline-flex shrink-0 flex-col gap-0.5 rounded-md px-2.5 py-1 font-body text-[11px] font-semibold uppercase tracking-wider"
+          className="inline-flex shrink-0 flex-col gap-0.5 self-start rounded-md px-3 py-1 font-body text-[11px] font-semibold uppercase tracking-wider"
           style={{
             background: "color-mix(in oklab, var(--color-ua) 12%, transparent)",
             color: "var(--color-ua)",
@@ -141,7 +141,7 @@ function DashboardHeader() {
             {syncLabel}
           </span>
         </span>
-        <h2 className="truncate font-display text-lg font-extrabold leading-tight tracking-tight text-cloud-white sm:text-xl">
+        <h2 className="font-display text-xl font-extrabold leading-tight tracking-tight text-cloud-white sm:text-2xl">
           {mode === "ai" ? (
             <>
               What Lumen thinks{" "}
