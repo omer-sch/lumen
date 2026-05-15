@@ -1,6 +1,6 @@
 import "server-only";
 
-import { unstable_cache } from "next/cache";
+import { withRedisCache } from "@/lib/cache/with-redis-cache";
 import { getBigQueryClient } from "@/lib/bq";
 import { getMultiSourceConfig, qualifyTable } from "@/lib/bq-security";
 import type {
@@ -907,112 +907,139 @@ async function _queryGlobalComixDataAsOf(
   return null;
 }
 
-// ── Cached exports ─────────────────────────────────────────────────────────
+// ── Cached exports (Upstash Redis, per-client keys) ────────────────────────
 //
 // TTL choices:
-//   - Dashboard queries (KPIs, trend, channel-mix, network-breakdown,
-//     payback, network-cpa-baseline, campaigns) cache for 15 minutes.
-//     Rivery refreshes the underlying tables every ~30 minutes during
-//     the workday; 15 minutes gives us a stable mid-refresh read without
-//     letting a stale number sit for a full sync cycle. Tag
-//     `globalcomix-dashboard` covers them so a single revalidateTag()
-//     from a future Rivery webhook can blow the whole set.
-//   - Freshness (data-as-of) caches for 5 minutes — short because this
-//     drives the "Data as of …" stamp users trust to time their reads.
-//     Tag `globalcomix-freshness`.
-//   - Data bounds cache for 6 hours — the earliest/latest dates only
-//     move when a backfill lands, which is rare and not user-visible.
-//     Tag `globalcomix-bounds`.
+//   - Dashboard queries (KPIs, Trend, ChannelMix, NetworkBreakdown,
+//     Payback, Campaigns) cache for 12 hours. Rivery refreshes the
+//     warehouse roughly twice a day; the cron warmer (also twice a day,
+//     offset from Rivery) repopulates these keys so the dashboard never
+//     pays the BigQuery latency under normal conditions. A future
+//     Rivery-driven webhook will invalidate a client's keys when a
+//     fresh sync lands so the 12h is a ceiling, not a floor.
+//   - DataBounds caches for 30 minutes. Bounds only move when a backfill
+//     lands or a brand-new day's data arrives, so a long TTL is safe;
+//     30 minutes matches the table in the cache spec.
+//   - DataAsOf is intentionally NOT Redis-cached. It drives the user's
+//     "Data as of …" freshness stamp and a stale read here defeats the
+//     purpose of the indicator. The cost of letting it hit BigQuery on
+//     every freshness ping is bounded by the outer 10-minute
+//     unstable_cache wrap in bq-queries.ts on `queryFreshness`.
 //
-// `revalidateTag` is left as a future hook; no caller invokes it today.
+// Keys are `lumen:cache:v1:{client}:{query}:{paramHash}` — see
+// `src/lib/cache/keys.ts`. The wrapper handles bypass / hit / miss /
+// error logging and the SET-after-miss write-through.
 
-const DASHBOARD_TTL_S = 60 * 15;
-const FRESHNESS_TTL_S = 60 * 5;
-const BOUNDS_TTL_S = 60 * 60 * 6;
-
-const DASHBOARD_TAGS = ["globalcomix-dashboard"];
-const FRESHNESS_TAGS = ["globalcomix-freshness"];
-const BOUNDS_TAGS = ["globalcomix-bounds"];
+const DASHBOARD_TTL_S = 60 * 60 * 12; // 12h
+const BOUNDS_TTL_S = 60 * 30; //         30m
 
 export const queryGlobalComixKPIs = (
   client: string,
   from: string,
   to: string,
 ) =>
-  unstable_cache(
-    _queryGlobalComixKPIs,
-    ["globalcomix:kpis", client, from, to],
-    { revalidate: DASHBOARD_TTL_S, tags: DASHBOARD_TAGS },
-  )(client, from, to);
+  withRedisCache(
+    {
+      client,
+      query: "kpis",
+      params: { from, to },
+      ttlSeconds: DASHBOARD_TTL_S,
+    },
+    () => _queryGlobalComixKPIs(client, from, to),
+  );
 
 export const queryGlobalComixTrend = (
   client: string,
   from: string,
   to: string,
 ) =>
-  unstable_cache(
-    _queryGlobalComixTrend,
-    ["globalcomix:trend", client, from, to],
-    { revalidate: DASHBOARD_TTL_S, tags: DASHBOARD_TAGS },
-  )(client, from, to);
+  withRedisCache(
+    {
+      client,
+      query: "trend",
+      params: { from, to },
+      ttlSeconds: DASHBOARD_TTL_S,
+    },
+    () => _queryGlobalComixTrend(client, from, to),
+  );
 
 export const queryGlobalComixChannelMix = (
   client: string,
   from: string,
   to: string,
 ) =>
-  unstable_cache(
-    _queryGlobalComixChannelMix,
-    ["globalcomix:channel-mix", client, from, to],
-    { revalidate: DASHBOARD_TTL_S, tags: DASHBOARD_TAGS },
-  )(client, from, to);
+  withRedisCache(
+    {
+      client,
+      query: "channel-mix",
+      params: { from, to },
+      ttlSeconds: DASHBOARD_TTL_S,
+    },
+    () => _queryGlobalComixChannelMix(client, from, to),
+  );
 
 export const queryGlobalComixNetworkBreakdown = (
   client: string,
   from: string,
   to: string,
 ) =>
-  unstable_cache(
-    _queryGlobalComixNetworkBreakdown,
-    ["globalcomix:network-breakdown", client, from, to],
-    { revalidate: DASHBOARD_TTL_S, tags: DASHBOARD_TAGS },
-  )(client, from, to);
+  withRedisCache(
+    {
+      client,
+      query: "network-breakdown",
+      params: { from, to },
+      ttlSeconds: DASHBOARD_TTL_S,
+    },
+    () => _queryGlobalComixNetworkBreakdown(client, from, to),
+  );
 
 export const queryGlobalComixPayback = (
   client: string,
   from: string,
   to: string,
 ) =>
-  unstable_cache(
-    _queryGlobalComixPayback,
-    ["globalcomix:payback", client, from, to],
-    { revalidate: DASHBOARD_TTL_S, tags: DASHBOARD_TAGS },
-  )(client, from, to);
+  withRedisCache(
+    {
+      client,
+      query: "payback",
+      params: { from, to },
+      ttlSeconds: DASHBOARD_TTL_S,
+    },
+    () => _queryGlobalComixPayback(client, from, to),
+  );
 
 export const queryGlobalComixCampaigns = (
   client: string,
   from: string,
   to: string,
 ) =>
-  unstable_cache(
-    _queryGlobalComixCampaigns,
-    ["globalcomix:campaigns", client, from, to],
-    { revalidate: DASHBOARD_TTL_S, tags: DASHBOARD_TAGS },
-  )(client, from, to);
+  withRedisCache(
+    {
+      client,
+      query: "campaigns",
+      params: { from, to },
+      ttlSeconds: DASHBOARD_TTL_S,
+    },
+    () => _queryGlobalComixCampaigns(client, from, to),
+  );
 
 export const queryGlobalComixDataBounds = (client: string) =>
-  unstable_cache(
-    _queryGlobalComixDataBounds,
-    ["globalcomix:data-bounds", client],
-    { revalidate: BOUNDS_TTL_S, tags: BOUNDS_TAGS },
-  )(client);
+  withRedisCache(
+    {
+      client,
+      query: "data-bounds",
+      params: {},
+      ttlSeconds: BOUNDS_TTL_S,
+    },
+    () => _queryGlobalComixDataBounds(client),
+  );
 
+// Not Redis-cached on purpose — see the header comment above. The outer
+// `queryFreshness` in bq-queries.ts already wraps the whole freshness
+// response in a 10-minute unstable_cache, which is the right place for
+// any cost cap on this query.
 export const queryGlobalComixDataAsOf = (client: string) =>
-  unstable_cache(
-    _queryGlobalComixDataAsOf,
-    ["globalcomix:data-as-of", client],
-    { revalidate: FRESHNESS_TTL_S, tags: FRESHNESS_TAGS },
-  )(client);
+  _queryGlobalComixDataAsOf(client);
 
 // ── BigQuery number coercion (shared with bq-queries.ts) ───────────────────
 

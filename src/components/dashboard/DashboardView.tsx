@@ -21,6 +21,7 @@ import { ChannelMix } from "@/components/dashboard/ChannelMix";
 import { NetworkBreakdown } from "@/components/dashboard/NetworkBreakdown";
 import { PinnedSection } from "@/components/dashboard/PinnedSection";
 import { AIModeView } from "@/components/dashboard/AIModeView";
+import { SyncNowButton } from "@/components/dashboard/SyncNowButton";
 import { InfoCallout } from "@/components/ui/InfoCallout";
 import { LivePulse } from "@/components/ui/LivePulse";
 import { SectionError } from "@/components/ui/SectionError";
@@ -111,36 +112,39 @@ function DashboardHeader() {
   return (
     <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
       <div className="flex min-w-0 flex-col gap-2">
-        <span
-          data-testid="data-freshness-bar"
-          title={hoverTitle}
-          className="inline-flex shrink-0 flex-col gap-0.5 self-start rounded-md px-3 py-1 font-body text-[11px] font-semibold uppercase tracking-wider"
-          style={{
-            background: "color-mix(in oklab, var(--color-ua) 12%, transparent)",
-            color: "var(--color-ua)",
-            border:
-              "1px solid color-mix(in oklab, var(--color-ua) 35%, transparent)",
-            boxShadow:
-              "0 0 24px color-mix(in oklab, var(--color-ua) 18%, transparent)",
-          }}
-        >
-          <span className="inline-flex items-center gap-2">
-            <LivePulse accent="mint" size={8} />
-            UA · last {days} days
-          </span>
+        <div className="flex flex-wrap items-start gap-2 self-start">
           <span
-            data-testid="data-freshness-label"
-            className="inline-flex items-center gap-1.5 font-body text-[10px] font-medium normal-case tracking-normal"
-            style={{ opacity: 0.78 }}
+            data-testid="data-freshness-bar"
+            title={hoverTitle}
+            className="inline-flex shrink-0 flex-col gap-0.5 rounded-md px-3 py-1 font-body text-[11px] font-semibold uppercase tracking-wider"
+            style={{
+              background: "color-mix(in oklab, var(--color-ua) 12%, transparent)",
+              color: "var(--color-ua)",
+              border:
+                "1px solid color-mix(in oklab, var(--color-ua) 35%, transparent)",
+              boxShadow:
+                "0 0 24px color-mix(in oklab, var(--color-ua) 18%, transparent)",
+            }}
           >
+            <span className="inline-flex items-center gap-2">
+              <LivePulse accent="mint" size={8} />
+              UA · last {days} days
+            </span>
             <span
-              aria-hidden
-              className="inline-block h-1 w-1 rounded-full"
-              style={{ background: syncTone.dot, boxShadow: syncTone.glow }}
-            />
-            {syncLabel}
+              data-testid="data-freshness-label"
+              className="inline-flex items-center gap-1.5 font-body text-[10px] font-medium normal-case tracking-normal"
+              style={{ opacity: 0.78 }}
+            >
+              <span
+                aria-hidden
+                className="inline-block h-1 w-1 rounded-full"
+                style={{ background: syncTone.dot, boxShadow: syncTone.glow }}
+              />
+              {syncLabel}
+            </span>
           </span>
-        </span>
+          <SyncNowButton />
+        </div>
         <h2 className="font-display text-xl font-extrabold leading-tight tracking-tight text-cloud-white sm:text-2xl">
           {mode === "ai" ? (
             <>

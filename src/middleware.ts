@@ -16,6 +16,11 @@ const isPublicRoute = createRouteMatcher([
   // and forwards them server-side to bypass ad-blockers. Configured via
   // tunnelRoute in next.config.ts.
   "/monitoring(.*)",
+  // Vercel cron invocations carry no Clerk session — they authenticate
+  // via the `x-cron-secret` header which the route handler verifies in
+  // constant time. Letting these past Clerk's auth gate is the only
+  // way the cron job can ever reach the handler.
+  "/api/cron/(.*)",
 ]);
 
 // Routes that must stay behind Clerk even in PREVIEW mode:
