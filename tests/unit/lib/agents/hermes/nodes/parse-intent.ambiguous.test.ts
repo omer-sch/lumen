@@ -201,6 +201,48 @@ describe("parseIntent — ambiguous-input behavior", () => {
       .toContain("Weekly review");
   });
 
+  it("client allowlist: unknown slug forces confidence under 0.5 + prepends a doubt", async () => {
+    mockHaikuIntent({
+      client: "competitor-corp",
+      platforms: ["ios"],
+      channels: ["meta"],
+      period: { label: "this past week", iso_start: null, iso_end: null },
+      focus: null,
+      confidence: 0.94,
+      doubts: [],
+    });
+    const { parseIntent } = await import(
+      "@/lib/agents/hermes/nodes/parse-intent"
+    );
+    const update = await parseIntent(
+      makeState("Weekly review please for CompetitorCorp on Meta iOS."),
+    );
+    expect(update.intent?.client).toBe("competitor-corp");
+    expect(update.intent?.confidence).toBeLessThan(0.5);
+    expect(update.intent?.doubts?.[0]).toMatch(/not on the known allowlist/);
+  });
+
+  it("client allowlist: known slug passes through untouched", async () => {
+    mockHaikuIntent({
+      client: "globalcomix",
+      platforms: ["android"],
+      channels: ["meta"],
+      period: { label: "this past week", iso_start: null, iso_end: null },
+      focus: null,
+      confidence: 0.92,
+      doubts: [],
+    });
+    const { parseIntent } = await import(
+      "@/lib/agents/hermes/nodes/parse-intent"
+    );
+    const update = await parseIntent(
+      makeState("Weekly review please for GlobalComix on Meta android."),
+    );
+    expect(update.intent?.client).toBe("globalcomix");
+    expect(update.intent?.confidence).toBe(0.92);
+    expect(update.intent?.doubts).toEqual([]);
+  });
+
   it("rememberSlice failure is swallowed; the run still returns intent", async () => {
     rememberSliceMock.mockRejectedValueOnce(new Error("supabase down"));
     mockHaikuIntent({

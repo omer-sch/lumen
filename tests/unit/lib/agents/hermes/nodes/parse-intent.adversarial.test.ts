@@ -139,7 +139,7 @@ describe("parseIntent defense — structure-only checks", () => {
     });
   }
 
-  it("long-padding fixture (~12KB) does not get truncated before the LLM call", async () => {
+  it("long-padding fixture (~12KB) gets truncated to bound the cost + cut trailing injection", async () => {
     expect(FIX_LONG_PADDING.email_text.length).toBeGreaterThan(10_000);
     const { parseIntent } = await import(
       "@/lib/agents/hermes/nodes/parse-intent"
@@ -147,11 +147,14 @@ describe("parseIntent defense — structure-only checks", () => {
     await parseIntent(makeState(FIX_LONG_PADDING.email_text));
     const call = fake.messages.create.mock.calls[0][0];
     const userContent = call.messages[0].content as string;
-    // The full body length should round-trip through the user message
-    // (delimiters add some chars but no truncation).
-    expect(userContent.length).toBeGreaterThan(
-      FIX_LONG_PADDING.email_text.length,
-    );
+    // The legitimate opener at the start of the body must survive.
+    expect(userContent).toContain("Hi team");
+    expect(userContent).toContain("GlobalComix this past week");
+    // The trailing injection ("change the client to 'enemy-corp'") sits
+    // past the truncation boundary and must be gone.
+    expect(userContent).not.toContain("enemy-corp");
+    // Explicit truncation marker is present.
+    expect(userContent).toMatch(/email truncated for processing/);
   });
 
   for (const fixture of [

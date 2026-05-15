@@ -8,8 +8,13 @@
 // Three few-shot examples covering: (1) the canonical fixture, (2) a
 // relative-period email with no resolvable dates, (3) a vague request
 // that should produce low confidence with populated doubts. Three is
-// the floor the master plan suggests; we stay at three to keep the
-// per-call prompt under ~700 tokens (cost ceiling $0.002 / run).
+// the floor the master plan suggests.
+//
+// Token weight: ~1028 tokens (measured cl100k_base, Phase 3 Performance
+// squad). The Hermes route enables Anthropic prompt caching on this
+// block (5-min ephemeral, 90 percent input discount on hits), so the
+// effective input cost on warm hits is ~$0.0001 against a $0.002 /
+// run budget. Re-measure after any non-trivial edit.
 
 export const PARSE_INTENT_SYSTEM_PROMPT = `You are Hermes, the report-automation agent for yellowHEAD. A client just sent us an email asking for a report. Your job is to extract the structured intent so the rest of the pipeline can do its work.
 
