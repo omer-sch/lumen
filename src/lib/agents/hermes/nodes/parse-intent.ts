@@ -23,7 +23,6 @@ import {
 // typical phrasing — empty in v0 since the Comms corpus stays
 // unpopulated until Gmail OAuth.
 
-const SYSTEM_PROMPT = PARSE_INTENT_SYSTEM_PROMPT;
 
 const TOOL_NAME = "extract_intent";
 
@@ -126,9 +125,14 @@ export async function parseIntent(
       content: c.content,
       similarity: c.similarity,
     }));
-  } catch {
+  } catch (err) {
     // Comms is non-load-bearing in v0; a retrieve failure shouldn't
-    // block parse_intent. Log via the run trace instead of throwing.
+    // block parse_intent. Logged so an outage isn't silent.
+    console.warn({
+      event: "hermes.parse_intent.comms_retrieve_failed",
+      run_id: state.run_id,
+      error: err instanceof Error ? err.message : String(err),
+    });
     commsChunks = [];
   }
 
@@ -148,7 +152,7 @@ export async function parseIntent(
   const response = await getAnthropicClient().messages.create({
     model: pickModel("haiku"),
     max_tokens: 1024,
-    system: SYSTEM_PROMPT,
+    system: PARSE_INTENT_SYSTEM_PROMPT,
     tools: [
       {
         name: TOOL_NAME,
@@ -181,9 +185,15 @@ export async function parseIntent(
       intent,
       sample_email_excerpt: state.email_text.slice(0, 280),
     });
-  } catch {
-    // swallow; the run's primary contract is the typed intent, not the
-    // memory side-effect.
+  } catch (err) {
+    // The run's primary contract is the typed intent, not the memory
+    // side-effect — but log so an outage doesn't go unnoticed.
+    console.warn({
+      event: "hermes.parse_intent.remember_slice_failed",
+      run_id: state.run_id,
+      client: intent.client,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   const endedAt = new Date().toISOString();

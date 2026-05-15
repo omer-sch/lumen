@@ -56,23 +56,24 @@ Correct tool call:
   "doubts": ["No platform was specified; defaulted to android + ios. Confirm with sender if web should also be included."]
 }
 
-## Example 3 (vague request — low confidence)
+## Example 3 (vague request — low confidence, explicit guessing)
 
 Email:
 "Hey, can you put something together that shows how we're doing? Need it for the call."
 
-Correct tool call:
+Correct tool call (confidence < 0.5; doubts explicitly flag the guess so a human reviewer treats this as a draft):
 {
   "client": "globalcomix",
   "platforms": ["android"],
   "channels": ["meta"],
   "period": { "label": "recent", "iso_start": null, "iso_end": null },
   "focus": null,
-  "confidence": 0.42,
+  "confidence": 0.32,
   "doubts": [
-    "No client mentioned by name; using the active pilot as a guess.",
-    "No platforms or channels named.",
-    "No reporting period stated.",
+    "GUESS: defaulting client to globalcomix (the active pilot); confirm with sender before this report is shared.",
+    "GUESS: no platforms named; defaulting to android.",
+    "GUESS: no channels named; defaulting to meta.",
+    "No reporting period stated; defaulted to 'recent'.",
     "What kind of call is this for? Audience determines depth."
   ]
 }
