@@ -3,12 +3,15 @@ import { setupClerkTestingToken } from "@clerk/testing/playwright";
 
 /**
  * GlobalComix dashboard, Phase 1 subscription-vocabulary surface:
- *   - Hero tile is CPA D7 (yellow glow), value reads "$X.XX".
- *   - Trend chart defaults to `cpaD7` and renders one Line per ad
- *     network — Google, Meta, TikTok, Apple Search Ads.
- *   - Cohort tabs carry the "tail" indicator pill.
- *   - Network table mounts with the deck-aligned columns, exposes a
- *     "Show more columns" toggle, and rows are clickable.
+ *   - Hero tile is CPA D7 (yellow glow); cost values follow the brand
+ *     currency bands so big CPAs read as "$14.9k" not "$14,928.79".
+ *   - Trend chart defaults to `spend` (Volume) and renders one Line per
+ *     ad network — Google, Meta, TikTok, Apple Search Ads. Title
+ *     templates on the active metric ("{label} over time, by ad network.").
+ *   - Cohort tabs carry an (i) info icon; a muted italic note appears
+ *     below the chart for cohort metrics.
+ *   - Network panel mounts with the compact card stack, exposes a
+ *     "More" toggle, and rows are clickable.
  */
 
 test.describe("dashboard / GlobalComix subscription view", () => {
@@ -35,17 +38,18 @@ test.describe("dashboard / GlobalComix subscription view", () => {
     const hero = page.getByTestId("kpi-cpaD7");
     await expect(hero).toBeVisible();
     await expect(hero).toContainText(/Cost per subscriber at 1 week/i);
-    // Value is rendered via formatKpi.cpi → "$X.XX" (no `x` suffix).
-    await expect(hero).toContainText(/\$\d+\.\d{2}/);
-    await expect(hero).not.toContainText(/x$/);
+    // Value is rendered via formatKpi.cpi → one of the brand currency
+    // bands ($X.XX, $XXX, $X,XXX, $X.Xk, $X.XXM). Not the ratio shape.
+    await expect(hero).toContainText(/\$[\d,.]+[kM]?/);
+    await expect(hero).not.toContainText(/\dx\b/);
   });
 
-  test("trend chart defaults to CPA D7 and tab groups are visible", async ({
+  test("trend chart defaults to Spend (Volume) and tab groups are visible", async ({
     page,
   }) => {
     const chart = page.getByTestId("trend-chart");
     await expect(chart).toBeVisible();
-    await expect(chart).toHaveAttribute("data-metric", "cpaD7");
+    await expect(chart).toHaveAttribute("data-metric", "spend");
 
     // Five groups in the tab strip: Volume / Efficiency / Revenue / Money back / Users.
     await expect(page.getByTestId("trend-group-volume")).toBeVisible();
@@ -59,12 +63,10 @@ test.describe("dashboard / GlobalComix subscription view", () => {
     page,
   }) => {
     const chart = page.getByTestId("trend-chart");
-
-    // Volume group: jump to `spend` via its group tab.
-    await page.getByTestId("trend-group-volume").click();
+    // Default starts on `spend` (Volume).
     await expect(chart).toHaveAttribute("data-metric", "spend");
 
-    // Efficiency group: re-select the hero metric.
+    // Efficiency group: pick the hero cohort metric.
     await page.getByTestId("trend-group-efficiency").click();
     await page.getByTestId("trend-metric-cpaD7").click();
     await expect(chart).toHaveAttribute("data-metric", "cpaD7");
@@ -75,14 +77,30 @@ test.describe("dashboard / GlobalComix subscription view", () => {
   });
 
   test("cohort tabs show the maturity note when active", async ({ page }) => {
-    // CPA D7 is the default — maturity note should be on screen on
-    // first render.
-    await expect(page.getByTestId("trend-maturity-note")).toBeVisible();
-
-    // Switch to Volume group → first metric (`spend`) has no cohort tail,
-    // so the floating pill should disappear.
-    await page.getByTestId("trend-group-volume").click();
+    // Default is `spend` (no cohort tail) — italic below-chart note
+    // should be absent on first render.
     await expect(page.getByTestId("trend-maturity-note")).toHaveCount(0);
+
+    // Switch into Efficiency and pick CPA D7 (a 7-day cohort) — the
+    // italic note appears, naming the window length in days.
+    await page.getByTestId("trend-group-efficiency").click();
+    await page.getByTestId("trend-metric-cpaD7").click();
+    const note = page.getByTestId("trend-maturity-note");
+    await expect(note).toBeVisible();
+    await expect(note).toContainText(/last 7 days are still maturing/i);
+  });
+
+  test("chart title templates on the active metric", async ({ page }) => {
+    const title = page.getByTestId("trend-chart-title");
+    // Default state — Spend.
+    await expect(title).toContainText(/spend over time, by ad network/i);
+
+    // Switch to a different group/metric — title follows.
+    await page.getByTestId("trend-group-efficiency").click();
+    await page.getByTestId("trend-metric-cpaD7").click();
+    await expect(title).toContainText(
+      /cost per subscriber at 1 week over time, by ad network/i,
+    );
   });
 
   test("network list mounts with key metrics + more toggle + clickable rows", async ({

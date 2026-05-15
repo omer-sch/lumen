@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { Info } from "lucide-react";
 import {
   CartesianGrid,
   ComposedChart,
+  Customized,
   Line,
   ReferenceArea,
   ReferenceLine,
@@ -32,8 +34,9 @@ type TrendChartProps = {
   trendByNetwork?: TrendByNetwork[];
   /** Stagger position in the page (1-based). */
   enterIndex?: number;
-  /** Optional initial metric — defaults to "cpaD7" for multi-source
-   *  consumers (the new hero metric), `spend` for legacy. */
+  /** Optional initial metric. Defaults to `spend` (Volume) — the
+   *  daily-glance read most users open the chart for. Callers can
+   *  override to land on a different hero metric. */
   initialMetric?: KpiId;
 };
 
@@ -122,7 +125,7 @@ export function TrendChart({
   trend,
   trendByNetwork,
   enterIndex,
-  initialMetric = "cpaD7",
+  initialMetric = "spend",
 }: TrendChartProps) {
   const [metric, setMetric] = useState<KpiId>(initialMetric);
   const active = METRICS[metric] ?? METRICS.spend;
@@ -181,8 +184,11 @@ export function TrendChart({
       data-metric={metric}
     >
       <div className="mb-2 min-w-0">
-        <h2 className="font-display text-md font-bold leading-none text-cloud-white">
-          {active.label} over time
+        <h2
+          className="font-display text-md font-bold leading-none text-cloud-white"
+          data-testid="trend-chart-title"
+        >
+          {active.label} over time, by ad network.
         </h2>
         <p className="mt-0.5 font-body text-[11px] text-[color:var(--text-muted)]">
           Daily, last {dates.length} days · split by ad network
@@ -263,15 +269,16 @@ export function TrendChart({
                 >
                   {m.label}
                   {m.cohort && (
-                    <span
-                      className="rounded-full px-1 font-body text-[8px] uppercase tracking-[0.1em]"
-                      style={{
-                        background: "color-mix(in oklab, var(--color-yellow) 18%, transparent)",
-                        color: "var(--color-yellow)",
-                      }}
+                    <Info
+                      aria-label={`Recent days within the last ${m.cohort} days are still maturing.`}
+                      className="h-3 w-3 shrink-0"
+                      style={{ color: "var(--color-yellow)" }}
+                      strokeWidth={2.25}
                     >
-                      tail
-                    </span>
+                      <title>
+                        {`Recent days are still maturing. They may read lower than the truth.`}
+                      </title>
+                    </Info>
                   )}
                 </button>
               );
@@ -281,29 +288,10 @@ export function TrendChart({
       </div>
 
       <div className="relative w-full flex-1 min-h-[14rem]">
-        {showMaturityNote && (
-          <span
-            data-testid="trend-maturity-note"
-            className="pointer-events-none absolute right-2 top-1 z-10 inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-body text-[9px] font-semibold uppercase tracking-[0.14em]"
-            style={{
-              background: "color-mix(in oklab, var(--color-yellow) 14%, transparent)",
-              color: "var(--color-yellow)",
-              boxShadow:
-                "inset 0 0 0 1px color-mix(in oklab, var(--color-yellow) 35%, transparent)",
-            }}
-            aria-label="Recent days are still maturing and may read lower than the truth"
-          >
-            <span
-              className="inline-block h-1 w-1 rounded-full"
-              style={{ background: "var(--color-yellow)" }}
-            />
-            still maturing
-          </span>
-        )}
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={chartData}
-            margin={{ top: 8, right: 12, bottom: 8, left: 0 }}
+            margin={{ top: 8, right: 92, bottom: 8, left: 0 }}
           >
             <defs>
               <linearGradient id="trend-maturity-fade" x1="0" y1="0" x2="1" y2="0">
@@ -396,13 +384,161 @@ export function TrendChart({
                 />
               );
             })}
+            {/* End-of-line labels with vertical collision avoidance. Drawn
+             *  as a single SVG group via Customized so we can read the
+             *  chart's pixel coords for every series and push overlapping
+             *  labels apart along Y before rendering. */}
+            <Customized
+              component={(props: unknown) => (
+                <EndOfLineLabels
+                  chartProps={props}
+                  byNetwork={byNetwork}
+                  chartData={chartData}
+                />
+              )}
+            />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+
+      {showMaturityNote && (
+        <p
+          data-testid="trend-maturity-note"
+          className="mt-2 font-body text-[11px] italic leading-relaxed text-[color:var(--text-muted)]"
+        >
+          Days within the last {maturityDays}{" "}
+          {maturityDays === 1 ? "day" : "days"} are still maturing.
+        </p>
+      )}
     </GlassCard>
   );
 }
 
+
+/**
+ * End-of-line labels for the multi-network trend chart, with vertical
+ * collision avoidance. Renders inside recharts' SVG via `Customized` so
+ * it can read the resolved x/y axis scales and place every label in one
+ * pass — if two labels would overlap (within MIN_GAP px vertically), the
+ * lower one is nudged down. A short connector hooks each label back to
+ * its line's terminal point so the mapping stays clear after the nudge.
+ */
+function EndOfLineLabels({
+  chartProps,
+  byNetwork,
+  chartData,
+}: {
+  chartProps: unknown;
+  byNetwork: TrendByNetwork[];
+  chartData: Array<Record<string, number | string>>;
+}) {
+  const props = chartProps as {
+    xAxisMap?: Record<
+      string,
+      {
+        scale: (v: string | number) => number;
+        bandwidth?: () => number;
+      }
+    >;
+    yAxisMap?: Record<string, { scale: (v: number) => number }>;
+  };
+  const xAxis = Object.values(props.xAxisMap ?? {})[0];
+  const yAxis = Object.values(props.yAxisMap ?? {})[0];
+  if (!xAxis || !yAxis) return null;
+
+  type LabelEntry = {
+    network: string;
+    color: string;
+    px: number;
+    dataY: number;
+    y: number;
+  };
+
+  const entries: LabelEntry[] = [];
+  for (const series of byNetwork) {
+    if (series.network === "All") continue;
+    const lastIdx = findLastVisibleDate(chartData, series.network);
+    if (lastIdx == null) continue;
+    const row = chartData[lastIdx];
+    const v = row[series.network];
+    if (typeof v !== "number" || v === 0) continue;
+    const date = row.date as string;
+    let px = xAxis.scale(date);
+    // Recharts band scales return the left edge of the band; center it.
+    if (typeof xAxis.bandwidth === "function") {
+      px += xAxis.bandwidth() / 2;
+    }
+    const py = yAxis.scale(v);
+    if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+    entries.push({
+      network: series.network,
+      color: networkColor(series.network),
+      px,
+      dataY: py,
+      y: py,
+    });
+  }
+
+  if (entries.length === 0) return null;
+
+  // Sort by anchor Y ascending; push overlapping labels apart with a
+  // single forward pass at MIN_GAP minimum spacing.
+  entries.sort((a, b) => a.dataY - b.dataY);
+  const MIN_GAP = 14;
+  for (let i = 1; i < entries.length; i++) {
+    if (entries[i].y - entries[i - 1].y < MIN_GAP) {
+      entries[i].y = entries[i - 1].y + MIN_GAP;
+    }
+  }
+
+  return (
+    <g pointerEvents="none" data-testid="trend-end-labels">
+      {entries.map((e) => {
+        const labelX = e.px + 6;
+        const nudged = Math.abs(e.y - e.dataY) > 0.5;
+        return (
+          <g key={e.network}>
+            {nudged && (
+              <line
+                x1={e.px + 2}
+                y1={e.dataY}
+                x2={labelX - 1}
+                y2={e.y}
+                stroke={e.color}
+                strokeOpacity={0.5}
+                strokeWidth={1}
+              />
+            )}
+            <text
+              x={labelX}
+              y={e.y}
+              fill={e.color}
+              fontSize={11}
+              fontWeight={800}
+              fontFamily="var(--font-display)"
+              alignmentBaseline="middle"
+            >
+              {e.network}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+/** Index of the latest date where this network had a non-zero value.
+ *  `null` if the series is all zeros — we don't label an empty line. */
+function findLastVisibleDate(
+  rows: Array<Record<string, number | string>>,
+  network: string,
+): number | null {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const v = rows[i][network];
+    if (typeof v === "number" && v !== 0) return i;
+  }
+  return null;
+}
 
 /**
  * Returns the date list in insertion order. We rely on `Map` to

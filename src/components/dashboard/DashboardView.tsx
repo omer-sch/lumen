@@ -7,6 +7,7 @@ import type { DashboardData, Kpi, KpiId } from "@/types/dashboard";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import { useDashboardMode } from "@/lib/filters/use-dashboard-mode";
 import {
+  findClient,
   getClientCoverage,
   getSupportedKpis,
   type ClientCoverage,
@@ -96,8 +97,9 @@ function DashboardInner() {
 
 function DashboardHeader() {
   const { mode, setMode } = useDashboardMode();
-  const { from, to } = useGlobalFilters();
+  const { from, to, client } = useGlobalFilters();
   const days = Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
+  const c = findClient(client);
 
   return (
     <header className="flex flex-wrap items-center justify-between gap-3">
@@ -123,7 +125,10 @@ function DashboardHeader() {
               <span className="text-gradient-brand">matters now.</span>
             </>
           ) : (
-            <>Performance overview.</>
+            <>
+              Performance overview,{" "}
+              <span className="text-gradient-brand">{c.name}.</span>
+            </>
           )}
         </h2>
       </div>
@@ -429,7 +434,6 @@ function MyDashboard({
           )}
         </div>
       </section>
-
     </div>
   );
 }

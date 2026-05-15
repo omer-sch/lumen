@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { CountUpNumber } from "@/components/ui/CountUpNumber";
+import { deltaSignal } from "@/lib/dashboard/delta-signal";
 import { targetMeterFill } from "@/lib/dashboard/target-meter";
 import type { KpiDirection, KpiId } from "@/types/dashboard";
 
@@ -123,12 +124,8 @@ export function KpiCard({
   swap,
   target,
 }: KpiCardProps) {
-  const hasDelta = delta != null;
-  const positive = hasDelta
-    ? direction === "higher-better"
-      ? delta >= 0
-      : delta <= 0
-    : true;
+  const signal = deltaSignal(delta, direction);
+  const hasDelta = delta != null && Number.isFinite(delta) && delta !== 0;
   // "—" is the placeholder for "no value yet" (live-fetch loading). Skip
   // the count-up parsing so we don't render a stray "0" next to the dash.
   const isPlaceholder = value.trim() === "—";
@@ -194,15 +191,20 @@ export function KpiCard({
         {hasDelta ? (
           <span
             data-testid={id ? `kpi-${id}-delta` : undefined}
+            data-signal={signal}
             className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-body text-xs font-semibold tabular-nums transition-transform duration-280 ease-out-quart group-hover:-translate-y-px"
             style={{
-              background: positive
-                ? "var(--tint-success-soft)"
-                : "var(--tint-danger-soft)",
-              color: positive ? "var(--color-ua)" : "var(--color-creative)",
+              background:
+                signal === "good"
+                  ? "var(--tint-success-soft)"
+                  : "var(--tint-danger-soft)",
+              color:
+                signal === "good"
+                  ? "var(--color-ua)"
+                  : "var(--color-creative)",
             }}
           >
-            {delta >= 0 ? (
+            {delta > 0 ? (
               <ArrowUpRight className="h-3 w-3" strokeWidth={2.25} />
             ) : (
               <ArrowDownRight className="h-3 w-3" strokeWidth={2.25} />
@@ -210,12 +212,17 @@ export function KpiCard({
             {Math.abs(delta).toFixed(1)}%
           </span>
         ) : (
-          // No prior-period baseline (e.g. new client). Render an em-dash
-          // chip in muted styling so the tile reads "no change to compare"
+          // No prior-period baseline, or no movement. Render an em-dash
+          // chip in muted styling so the tile reads "nothing to compare"
           // rather than "+0.0%" — which would silently miscommunicate.
           <span
             data-testid={id ? `kpi-${id}-delta` : undefined}
-            title="No prior-period baseline"
+            data-signal="neutral"
+            title={
+              delta == null
+                ? "No prior-period baseline"
+                : "No change vs prior period"
+            }
             className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-body text-xs font-semibold tabular-nums text-[color:var(--text-muted)]"
             style={{ background: "var(--surface-input)" }}
           >

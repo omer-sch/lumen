@@ -41,14 +41,13 @@ test.describe("dashboard (authenticated)", () => {
 
   // Count-up numbers — KpiCard wraps the value in <CountUpNumber> which
   // animates from 0 to the final value. By the time the page settles,
-  // the rendered text must be a real value, not "0" or empty.
+  // the rendered text must be a real currency / count, not "0" or empty.
   test("KPI values count up and settle on real numbers", async ({ page }) => {
     const cpa = page.getByTestId("kpi-cpaD7");
     await expect(cpa).toBeVisible();
-    // CPA D7 is rendered via formatKpi.cpi → "$X.XX". Match the brand
-    // shape rather than a specific number so live data drift doesn't
-    // flip this test red.
-    await expect(cpa).toContainText(/\$\d+\.\d{2}/);
+    // CPA D7 routes through formatKpi.cpi → one of the brand currency
+    // bands. Match shape, not a specific number.
+    await expect(cpa).toContainText(/\$[\d,.]+[kM]?/);
 
     const spend = page.getByTestId("kpi-spend");
     await expect(spend).toContainText(/\$\d/);
@@ -60,30 +59,30 @@ test.describe("dashboard (authenticated)", () => {
     await expect(subD7).toContainText(/\d/);
   });
 
-  // Trend chart + metric switcher — the chart starts on the hero
-  // metric (cpaD7 for multi-source clients) and exposes a `data-metric`
-  // attribute that updates when a tab is clicked. The switcher is now
-  // two-tiered: pick a group first (Volume / Efficiency / Revenue /
-  // Money back / Users), then a metric inside it. Group tabs swap which
-  // metric tabs are visible, so to reach `spend` from the default
-  // `cpaD7` (Efficiency) we go through `trend-group-volume`.
+  // Trend chart + metric switcher — the chart starts on `spend` (Volume),
+  // the daily-glance default, and exposes a `data-metric` attribute that
+  // updates when a tab is clicked. The switcher is two-tiered: pick a
+  // group first (Volume / Efficiency / Revenue / Money back / Users),
+  // then a metric inside it. Group tabs swap which metric tabs are
+  // visible, so to reach `cpaD7` from the default we go through
+  // `trend-group-efficiency`.
   test("trend chart switches metrics via the grouped tab strip", async ({ page }) => {
     const chart = page.getByTestId("trend-chart");
     await expect(chart).toBeVisible();
-    await expect(chart).toHaveAttribute("data-metric", "cpaD7");
-
-    // Jump to the Volume group; its first metric (`spend`) becomes active.
-    await page.getByTestId("trend-group-volume").click();
     await expect(chart).toHaveAttribute("data-metric", "spend");
 
-    // Pick a non-default metric inside the same group.
+    // Same group — pick a different volume metric.
     await page.getByTestId("trend-metric-installs").click();
     await expect(chart).toHaveAttribute("data-metric", "installs");
 
-    // Hop back to Efficiency and re-select the hero metric.
+    // Jump to Efficiency and pick the hero cohort metric.
     await page.getByTestId("trend-group-efficiency").click();
     await page.getByTestId("trend-metric-cpaD7").click();
     await expect(chart).toHaveAttribute("data-metric", "cpaD7");
+
+    // Hop back to Volume — first metric (`spend`) becomes active on click.
+    await page.getByTestId("trend-group-volume").click();
+    await expect(chart).toHaveAttribute("data-metric", "spend");
   });
 
   // Lumen Dashboard mode toggle — the rename from "AI Dashboard" to
