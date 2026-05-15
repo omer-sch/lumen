@@ -1,3 +1,4 @@
+// STUB(phase-2): replaced in Phase 5.
 import "server-only";
 
 import type { Bullet, HermesState, HermesStateUpdate } from "../state";

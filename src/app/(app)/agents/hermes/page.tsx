@@ -14,7 +14,7 @@ export default function HermesPlaygroundRoute(): React.ReactElement {
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-10">
       <header className="flex flex-col gap-3">
-        <p className="font-body text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+        <p className="font-body text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text-secondary)]">
           Agents · Hermes
         </p>
         <h1 className="font-display text-4xl font-extrabold leading-none tracking-tight text-cloud-white">

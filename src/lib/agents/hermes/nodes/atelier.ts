@@ -1,3 +1,4 @@
+// STUB(phase-2): replaced in Phase 6.
 import "server-only";
 
 import type { Deck, HermesState, HermesStateUpdate } from "../state";

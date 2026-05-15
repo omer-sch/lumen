@@ -15,7 +15,13 @@ export const maxDuration = 300;
 // graph end to end and returns the final state.
 
 export async function POST(req: NextRequest) {
-  const authResult = await requireAgentAuth("hermes");
+  // Hermes runs are expensive (Haiku + multi-LLM by phase 6). Tighter
+  // than the scaffold default (30 / 5 min). Recommended by Security
+  // squad in the Phase 2 review.
+  const authResult = await requireAgentAuth("hermes", {
+    maxPerWindow: 10,
+    windowMs: 5 * 60 * 1000,
+  });
   if (!authResult.ok) {
     const headers: Record<string, string> = {};
     if (authResult.status === 429) {

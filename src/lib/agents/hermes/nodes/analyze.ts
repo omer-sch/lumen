@@ -1,3 +1,5 @@
+// STUB(phase-2): replaced in Phase 4. Grep `STUB(phase-2):` to find
+// every node still on placeholders before the demo cutover.
 import "server-only";
 
 import type {

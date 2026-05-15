@@ -16,10 +16,15 @@ type RunResponse = {
     platforms: string[];
     channels: string[];
     period: { label: string; iso_start: string | null; iso_end: string | null };
-    focus: string | null;
+    focus?: string | null;
     confidence: number;
     doubts: string[];
   } | null;
+  // The server returns these but the v0 UI doesn't render them yet.
+  // Typed loosely so a server-side shape change shows up as a TS error
+  // here instead of silently mis-rendering.
+  findings?: unknown[];
+  approval?: Record<string, unknown>;
   bullets: Array<{ claim: string; slide_target: string }>;
   deck: {
     pptx_path: string | null;
@@ -105,14 +110,14 @@ export function HermesPlayground(): React.ReactElement {
         <div className="flex items-center justify-between">
           <label
             htmlFor={textareaId}
-            className="font-body text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]"
+            className="font-body text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text-secondary)]"
           >
             Paste client email
           </label>
           <button
             type="button"
             onClick={handleLoadFixture}
-            className="font-body text-xs text-[color:var(--text-secondary)] underline-offset-2 hover:underline focus:underline focus:outline-none"
+            className="rounded-sm font-body text-xs text-[color:var(--text-secondary)] underline-offset-2 hover:underline focus:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-ua)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--surface-base)]"
           >
             Use canonical fixture
           </button>
@@ -131,7 +136,7 @@ export function HermesPlayground(): React.ReactElement {
         />
         <p
           id={`${textareaId}-hint`}
-          className="font-body text-xs text-[color:var(--text-muted)]"
+          className="font-body text-xs text-[color:var(--text-secondary)]"
         >
           {emailText.trim().length} / {MAX_LEN} characters · minimum {MIN_LEN}.
           Hermes parses intent, then runs Analyze / Quill / Atelier (currently
@@ -221,7 +226,7 @@ function Stat({
 }): React.ReactElement {
   return (
     <div className="rounded-2xl border border-[color:var(--border-glass)] bg-[color:var(--surface-card)] p-3">
-      <div className="font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+      <div className="font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-secondary)]">
         {label}
       </div>
       <div
@@ -266,7 +271,7 @@ function NodeTrace({
                   </span>
                 )}
               </div>
-              <span className="font-body text-xs tabular-nums text-[color:var(--text-muted)]">
+              <span className="font-body text-xs tabular-nums text-[color:var(--text-secondary)]">
                 {ms}ms
               </span>
             </li>
@@ -301,7 +306,7 @@ function IntentPanel({
         </dl>
         {intent.doubts.length > 0 && (
           <div className="mt-3">
-            <div className="font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+            <div className="font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-secondary)]">
               Doubts
             </div>
             <ul className="mt-1 list-inside list-disc text-sm text-[color:var(--text-secondary)]">
@@ -325,7 +330,7 @@ function Pair({
 }): React.ReactElement {
   return (
     <div>
-      <dt className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+      <dt className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-secondary)]">
         {label}
       </dt>
       <dd className="mt-0.5 text-cloud-white">{value}</dd>
@@ -350,12 +355,12 @@ function DeckPanel({
         {hasFile ? (
           <a
             href={deck.pptx_path ?? "#"}
-            className="font-body text-sm text-[color:var(--color-ua)] underline-offset-2 hover:underline focus:underline focus:outline-none"
+            className="rounded-sm font-body text-sm text-[color:var(--color-ua)] underline-offset-2 hover:underline focus:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-ua)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--surface-base)]"
           >
             Download .pptx
           </a>
         ) : (
-          <p className="font-body text-xs text-[color:var(--text-muted)]">
+          <p className="font-body text-xs text-[color:var(--text-secondary)]">
             No .pptx written (Atelier is a stub in phase 2). Slide manifest
             and bullets below.
           </p>
@@ -374,7 +379,7 @@ function DeckPanel({
                   <span className="font-display text-sm font-semibold text-cloud-white">
                     {slide.title}
                   </span>
-                  <span className="font-body text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                  <span className="font-body text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-secondary)]">
                     {slide.layout}
                   </span>
                 </div>

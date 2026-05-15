@@ -22,7 +22,11 @@ export const IntentSchema = z.object({
     iso_start: z.string().nullable(),
     iso_end: z.string().nullable(),
   }),
-  focus: z.string().nullable(),
+  // focus + doubts are tolerant of Haiku omitting them. Either Zod path
+  // (.nullable().optional() / .default([])) matches what the tool
+  // schema declares optional. Phase 3's adversarial fixtures lock this
+  // contract in further.
+  focus: z.string().nullable().optional(),
   confidence: z.number().min(0).max(1),
   doubts: z.array(z.string()).default([]),
 });
@@ -141,6 +145,11 @@ export const HermesStateAnnotation = Annotation.Root({
       edits: [],
     }),
   }),
+  // `history` updates MUST be an array — every node returns
+  // `history: [{...}]`, never a bare object. A future node returning a
+  // single event without wrapping it in [] would silently break the
+  // concat below. Enforced by the HermesStateUpdate type at the
+  // function-signature level.
   history: Annotation<HistoryEvent[]>({
     reducer: (a, b) => a.concat(b),
     default: () => [],

@@ -61,7 +61,7 @@ describe("POST /api/agents/hermes/generate", () => {
     expect(startRunMock).not.toHaveBeenCalled();
   });
 
-  it("returns 429 with Retry-After when rate-limited", async () => {
+  it("returns 429 with Retry-After when rate-limited; never calls startRun", async () => {
     requireAuthMock.mockResolvedValue({
       ok: false,
       status: 429,
@@ -77,6 +77,9 @@ describe("POST /api/agents/hermes/generate", () => {
     );
     expect(res.status).toBe(429);
     expect(res.headers.get("Retry-After")).toBe("42");
+    expect(startRunMock).not.toHaveBeenCalled();
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("Rate limit");
   });
 
   it("returns 400 on invalid JSON", async () => {
@@ -183,5 +186,11 @@ describe("POST /api/agents/hermes/generate", () => {
     );
     expect(res.status).toBe(500);
     expect(failRunMock).toHaveBeenCalledWith("run-2", "Haiku unavailable");
+    // Locks down the contract that the raw upstream error string never
+    // reaches the client (it goes to failRun and console.error instead).
+    const body = (await res.json()) as { error: string; run_id: string };
+    expect(body.error).toBe("Hermes run failed");
+    expect(JSON.stringify(body)).not.toContain("Haiku unavailable");
+    expect(body.run_id).toBe("run-2");
   });
 });

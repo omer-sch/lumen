@@ -59,7 +59,7 @@ const TOOL_INPUT_SCHEMA = {
     },
     focus: {
       type: ["string", "null"],
-      description: "What the client specifically asked us to look at.",
+      description: "What the client specifically asked us to look at. null if none.",
     },
     confidence: {
       type: "number",
@@ -70,12 +70,28 @@ const TOOL_INPUT_SCHEMA = {
     doubts: {
       type: "array",
       items: { type: "string" },
-      description: "Open questions or ambiguities you'd surface to a human.",
+      description: "Open questions or ambiguities you'd surface to a human. [] if none.",
     },
   },
-  required: ["client", "platforms", "channels", "period", "confidence"],
+  // focus + doubts are declared `required` here so Haiku is more likely
+  // to populate them (Anthropic's tool_use is more reliable when the
+  // schema is explicit). IntentSchema also tolerates omission on the
+  // Zod side, so a recalcitrant Haiku that drops them won't fail the
+  // run.
+  required: [
+    "client",
+    "platforms",
+    "channels",
+    "period",
+    "confidence",
+    "focus",
+    "doubts",
+  ],
 };
 
+// TODO(phase-3): pull from a clients table or env rather than
+// hardcoding. Drifting from this list will silently mis-scope Comms
+// retrieves.
 function pickClientFromEmail(text: string): string | null {
   // Light heuristic to scope the Comms retrieve before the LLM runs.
   // Phase 3 hardens this; for v0 we just check for a known client
@@ -155,6 +171,9 @@ export async function parseIntent(
 
   const intent: Intent = IntentSchema.parse(toolUse.input);
 
+  // TODO(phase-3): rememberSlice("parse_intent", intent.client, {
+  //   intent, sample_email_excerpt: state.email_text.slice(0, 280),
+  // }) — gives parse_intent retrieval-from-itself across runs.
   const endedAt = new Date().toISOString();
 
   return {
