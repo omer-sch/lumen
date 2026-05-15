@@ -13,6 +13,8 @@ import {
   type ClientCoverage,
 } from "@/lib/mock/clients";
 import { useDashboardData } from "@/lib/dashboard/use-dashboard-data";
+import { useFreshness } from "@/lib/dashboard/use-freshness";
+import type { FreshnessData } from "@/types/dashboard";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { ChannelMix } from "@/components/dashboard/ChannelMix";
@@ -100,12 +102,19 @@ function DashboardHeader() {
   const { from, to, client } = useGlobalFilters();
   const days = Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
   const c = findClient(client);
+  const { state: freshness, errored } = useFreshness(client);
+
+  const syncLabel = pickSyncLabel(freshness, errored);
+  const syncTone = pickSyncTone(freshness, errored);
+  const hoverTitle = pickHoverTitle(freshness, errored);
 
   return (
     <header className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-3">
         <span
-          className="inline-flex shrink-0 items-center gap-2 rounded-full px-2.5 py-0.5 font-body text-[11px] font-semibold uppercase tracking-wider"
+          data-testid="data-freshness-bar"
+          title={hoverTitle}
+          className="inline-flex shrink-0 flex-col gap-0.5 rounded-md px-2.5 py-1 font-body text-[11px] font-semibold uppercase tracking-wider"
           style={{
             background: "color-mix(in oklab, var(--color-ua) 12%, transparent)",
             color: "var(--color-ua)",
@@ -115,8 +124,22 @@ function DashboardHeader() {
               "0 0 24px color-mix(in oklab, var(--color-ua) 18%, transparent)",
           }}
         >
-          <LivePulse accent="mint" size={8} />
-          UA · last {days} days
+          <span className="inline-flex items-center gap-2">
+            <LivePulse accent="mint" size={8} />
+            UA · last {days} days
+          </span>
+          <span
+            data-testid="data-freshness-label"
+            className="inline-flex items-center gap-1.5 font-body text-[10px] font-medium normal-case tracking-normal"
+            style={{ opacity: 0.78 }}
+          >
+            <span
+              aria-hidden
+              className="inline-block h-1 w-1 rounded-full"
+              style={{ background: syncTone.dot, boxShadow: syncTone.glow }}
+            />
+            {syncLabel}
+          </span>
         </span>
         <h2 className="truncate font-display text-lg font-extrabold leading-tight tracking-tight text-cloud-white sm:text-xl">
           {mode === "ai" ? (
@@ -135,6 +158,77 @@ function DashboardHeader() {
       <ModeToggle mode={mode} setMode={setMode} />
     </header>
   );
+}
+
+type SyncTone = { dot: string; glow: string };
+
+const GRAY_TONE: SyncTone = { dot: "rgba(255,255,255,0.35)", glow: "none" };
+
+function pickSyncTone(state: FreshnessData | null, errored: boolean): SyncTone {
+  if (errored || state == null || state.hoursAgo < 0) return GRAY_TONE;
+  if (state.hoursAgo < 12)
+    return {
+      dot: "var(--color-ua)",
+      glow: "0 0 6px color-mix(in oklab, var(--color-ua) 50%, transparent)",
+    };
+  if (state.hoursAgo < 24)
+    return {
+      dot: "var(--color-yellow)",
+      glow: "0 0 6px color-mix(in oklab, var(--color-yellow) 50%, transparent)",
+    };
+  return {
+    dot: "var(--color-creative)",
+    glow: "0 0 6px color-mix(in oklab, var(--color-creative) 50%, transparent)",
+  };
+}
+
+/** Short text inside the chip. The full "Data as of" date lives in the
+ *  hover tooltip so the chip stays compact. */
+function pickSyncLabel(
+  state: FreshnessData | null,
+  errored: boolean,
+): string {
+  if (errored) return "freshness unavailable";
+  if (state == null) return "checking freshness";
+  if (state.hoursAgo < 0) return "freshness unavailable";
+  if (state.hoursAgo === 0) return "synced under an hour ago";
+  const unit = state.hoursAgo === 1 ? "hour" : "hours";
+  return `synced ${state.hoursAgo} ${unit} ago`;
+}
+
+/** Verbose hover tooltip. Adds the "Data as of" date and surfaces a hint
+ *  about loader staleness when the warehouse hasn't run in over a day. */
+function pickHoverTitle(
+  state: FreshnessData | null,
+  errored: boolean,
+): string | undefined {
+  if (errored) return "Freshness signal unreachable from BigQuery.";
+  if (state == null) return undefined;
+  const asOf = state.dataAsOf ? formatDataAsOf(state.dataAsOf) : null;
+  const head = asOf ? `Data as of ${asOf}.` : "Data freshness available.";
+  if (state.hoursAgo < 0) return head;
+  const hours = state.hoursAgo;
+  const unit = hours === 1 ? "hour" : "hours";
+  const synced =
+    hours === 0
+      ? "Pipeline synced less than an hour ago."
+      : `Pipeline last synced ${hours} ${unit} ago.`;
+  const tail =
+    hours >= 24
+      ? " Loader is overdue (more than a day since last run)."
+      : "";
+  return `${head} ${synced}${tail}`;
+}
+
+function formatDataAsOf(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (!Number.isFinite(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 function ModeToggle({

@@ -50,16 +50,21 @@ test.describe("dashboard — BQ-backed UI surface", () => {
     await expect(page).toHaveURL(/\/dashboard/);
   });
 
-  test("DataFreshnessBar mounts under the topbar with a 'Data' label", async ({
+  test("Freshness chip lives inside the mint UA badge as a second row", async ({
     page,
   }) => {
+    // The chip carries the UA "last X days" line plus a "synced X hours
+    // ago" sub-line, with a hover title that surfaces the "Data as of"
+    // date. Both the bar and label testids stay so cross-test selectors
+    // keep working.
     const bar = page.getByTestId("data-freshness-bar");
     await expect(bar).toBeVisible();
+    await expect(bar).toContainText(/UA · last \d+ days?/i);
     const label = page.getByTestId("data-freshness-label");
     await expect(label).toBeVisible();
-    // "Data last updated…", "Data freshness unavailable", or
-    // "Checking data freshness…" — all start with "Data" / contain "data".
-    await expect(label).toContainText(/[Dd]ata/);
+    // One of: "synced X hours ago", "synced under an hour ago",
+    // "checking freshness", "freshness unavailable".
+    await expect(label).toContainText(/(synced|freshness|checking)/i);
   });
 
   test("Playw3 coverage chip appears for playw3, hidden for globalcomix", async ({
