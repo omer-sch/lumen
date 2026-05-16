@@ -67,9 +67,34 @@ describe("DraftFromEmailModal", () => {
     expect(textarea.value).toMatch(/GlobalComix/);
   });
 
-  it("on success redirects to /agents/hermes/runs/<run_id>", async () => {
+  it("on success redirects to /reports/<report_id>?source=hermes", async () => {
     fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ run_id: "run-xyz" }), {
+      new Response(
+        JSON.stringify({ run_id: "run-xyz", report_id: "rpt_run-xyz" }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+    render(<DraftFromEmailModal open={true} onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/Email body/i), {
+      target: {
+        value:
+          "Hi team, please send us a weekly review for GlobalComix on Meta.",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Draft report/i }));
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith(
+        "/reports/rpt_run-xyz?source=hermes",
+      );
+    });
+  });
+
+  it("falls back to the playground when Atelier did not produce a report_id", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ run_id: "run-xyz", report_id: null }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
@@ -83,7 +108,7 @@ describe("DraftFromEmailModal", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /Draft report/i }));
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/agents/hermes/runs/run-xyz");
+      expect(pushMock).toHaveBeenCalledWith("/agents/hermes?run=run-xyz");
     });
   });
 

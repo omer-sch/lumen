@@ -12,13 +12,16 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 // Paste-to-draft entry point for Hermes. Modal with a single textarea +
-// submit. On success, redirects to /agents/hermes/runs/<run_id> where
-// the Phase 7 review surface takes over.
+// submit. On success, Atelier inserts the draft into the reports table
+// and the modal redirects to /reports/<report_id>?source=hermes, which
+// renders through the same components a manually-built report uses.
+// Falls back to the playground (/agents/hermes?run=<id>) when Atelier
+// could not produce a report_id (skipped intent / snapshot / user_id).
 //
 // Documented deviation: the master plan calls for SSE-streamed run
 // trace inside the modal. v0 ships a synchronous request with an
 // indeterminate progress indicator that names the current pipeline
-// step ("parse_intent → analyze → quill → atelier"). The streaming
+// step ("parse_intent, analyze, quill, atelier"). The streaming
 // variant lands in a polish phase after the demo.
 
 const MIN_LEN = 30;
