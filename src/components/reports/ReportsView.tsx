@@ -36,6 +36,7 @@ import { ReportCarousel } from "./carousel/ReportCarousel";
 import { ReportDeckOffscreen } from "./ReportDeckOffscreen";
 import { exportReportAsPdf } from "@/lib/reports/export-pdf";
 import { exportReportAsPptx } from "@/lib/reports/export-pptx";
+import { DraftFromEmailButton } from "./DraftFromEmailModal";
 
 const PROMPT_PRESETS = [
   "Weekly UA performance summary for the team review",
@@ -460,16 +461,19 @@ function BuilderInput({
   return (
     <div className="flex flex-col gap-6 py-2">
       <header className="flex flex-col items-start gap-3">
-        <span
-          className="inline-flex items-center gap-2 rounded-full px-3 py-1 font-body text-xs font-semibold uppercase tracking-wider text-yellow"
-          style={{
-            background: "var(--tint-yellow-soft)",
-            boxShadow: "0 0 24px rgba(255,221,12,0.18)",
-          }}
-        >
-          <Sparkles className="h-3 w-3" strokeWidth={2.25} />
-          Build & share
-        </span>
+        <div className="flex w-full items-start justify-between gap-3">
+          <span
+            className="inline-flex items-center gap-2 rounded-full px-3 py-1 font-body text-xs font-semibold uppercase tracking-wider text-yellow"
+            style={{
+              background: "var(--tint-yellow-soft)",
+              boxShadow: "0 0 24px rgba(255,221,12,0.18)",
+            }}
+          >
+            <Sparkles className="h-3 w-3" strokeWidth={2.25} />
+            Build & share
+          </span>
+          <DraftFromEmailButton />
+        </div>
         <h2 className="font-display text-2xl font-extrabold leading-tight tracking-tight text-cloud-white sm:text-3xl">
           Reports{" "}
           <span className="text-gradient-brand">that write themselves.</span>
