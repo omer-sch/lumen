@@ -38,6 +38,8 @@ const isPublicRoute = createRouteMatcher([
   "/welcome(.*)",
   "/monitoring(.*)",
   "/api/cron/(.*)",
+  "/api/rag/index",
+  "/api/rag/index-history",
 ]);
 
 // Clerk's matcher reads `req.nextUrl.pathname`, so a plain `Request` is
@@ -53,6 +55,21 @@ describe("middleware public-route matcher", () => {
 
   it("matches sub-paths under /api/cron/", () => {
     expect(isPublicRoute(fakeRequest("/api/cron/anything-else"))).toBe(true);
+  });
+
+  it("treats /api/rag/index as public so the backfill x-backfill-secret path can reach the handler", () => {
+    expect(isPublicRoute(fakeRequest("/api/rag/index"))).toBe(true);
+  });
+
+  it("treats /api/rag/index-history as public so the pg_net trigger can reach the handler", () => {
+    expect(isPublicRoute(fakeRequest("/api/rag/index-history"))).toBe(true);
+  });
+
+  it("does NOT mark /api/rag (the prefix without a specific endpoint) public", () => {
+    // The matchers are exact: only /api/rag/index and /api/rag/index-history
+    // are public. A future /api/rag/* sibling that arrives without being
+    // added to the matcher must NOT bypass Clerk silently.
+    expect(isPublicRoute(fakeRequest("/api/rag/some-future-route"))).toBe(false);
   });
 
   it("does NOT mark adjacent admin / cache routes public", () => {

@@ -20,7 +20,7 @@ import {
 // (disclose-system-prompt, fake-in-body-instructions, 10KB padding).
 //
 // Comms RAG retrieve runs first so the model can match the sender's
-// typical phrasing — empty in v0 since the Comms corpus stays
+// typical phrasing,empty in v0 since the Comms corpus stays
 // unpopulated until Gmail OAuth.
 
 
@@ -91,7 +91,7 @@ const TOOL_INPUT_SCHEMA = {
 // Tighter than GenerateRequestSchema's 20k char cap; bounds the
 // worst-case parse_intent cost to ~$0.0015 / run and removes the
 // "trailing injection past a wall of padding" attack vector. ~8k
-// chars is ~2k tokens — comfortably above typical email body length.
+// chars is ~2k tokens,comfortably above typical email body length.
 const MAX_EMAIL_TEXT_CHARS = 8000;
 
 function truncateEmail(text: string): string {
@@ -131,7 +131,7 @@ function pickClientFromEmail(text: string): string | null {
 
 // Post-parse defense. If the model returns a client slug we don't
 // recognise, that's either a real new client (handled by widening the
-// allowlist) or — given the adversarial-fixture context — a successful
+// allowlist) or,given the adversarial-fixture context,a successful
 // prompt-injection attempt where the body convinced the model to swap
 // the client. Either way, the run should not silently accept it.
 // We don't fail the run because legitimate-but-unknown clients should
@@ -249,10 +249,10 @@ export async function parseIntent(
   // TODO(phase-5): persisting the first 280 chars of email_text into
   // agent_memory_kv is acceptable for v0 because all email_text is
   // admin-pasted today. Re-evaluate before Gmail OAuth widens the
-  // input source — at that point either redact PII or shorten the
+  // input source,at that point either redact PII or shorten the
   // TTL on this slice.
   // Stored separately from RAG's History corpus (which holds bullets
-  // and findings, not intent). Failures here MUST NOT break the run —
+  // and findings, not intent). Failures here MUST NOT break the run;
   // memory is best-effort.
   try {
     await rememberSlice("parse_intent", intent.client, {
@@ -261,7 +261,7 @@ export async function parseIntent(
     });
   } catch (err) {
     // The run's primary contract is the typed intent, not the memory
-    // side-effect — but log so an outage doesn't go unnoticed.
+    // side-effect,but log so an outage doesn't go unnoticed.
     console.warn({
       event: "hermes.parse_intent.remember_slice_failed",
       run_id: state.run_id,

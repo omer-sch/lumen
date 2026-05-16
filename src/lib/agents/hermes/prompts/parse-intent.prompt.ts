@@ -29,7 +29,7 @@ export const PARSE_INTENT_SYSTEM_PROMPT = `You are Hermes, the report-automation
 
 # Examples
 
-## Example 1 (canonical — high confidence)
+## Example 1 (canonical, high confidence)
 
 Email:
 "Hi team, could you send over the weekly review for GlobalComix? I'm mostly interested in how iOS is doing on Meta this past week; we saw the dashboards move and want a narrative we can share with the client tomorrow. Thanks, Emily."
@@ -61,7 +61,7 @@ Correct tool call:
   "doubts": ["No platform was specified; defaulted to android + ios. Confirm with sender if web should also be included."]
 }
 
-## Example 3 (vague request — low confidence, explicit guessing)
+## Example 3 (vague request, low confidence, explicit guessing)
 
 Email:
 "Hey, can you put something together that shows how we're doing? Need it for the call."

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 // Phase 7 review surface. View the Hermes draft, see the bullets per
 // slide, approve, download. Inline edit + section regenerate are
-// queued for a polish phase — for v0 the approve flow plus the run
+// queued for a polish phase. For v0 the approve flow plus the run
 // trace is enough to demonstrate the trust contract.
 
 export type HermesRunData = {
@@ -125,10 +125,10 @@ export function HermesRunReview({
           Download .pptx
         </a>
         {approved ? (
-          <span
-            role="status"
-            className="font-body text-sm text-[color:var(--text-secondary)]"
-          >
+          // Approval is also reflected in the Status stat tile (RunSummary).
+          // Drop role="status" here so a screen-reader update after the
+          // optimistic setRun doesn't double-announce the same fact.
+          <span className="font-body text-sm text-[color:var(--text-secondary)]">
             Approved
             {run.approval?.approved_at
               ? ` at ${new Date(run.approval.approved_at).toLocaleString()}`
@@ -211,7 +211,7 @@ function RunSummary({
       />
       <Stat
         label="Latency"
-        value={latency != null ? `${(latency / 1000).toFixed(1)}s` : "—"}
+        value={latency != null ? `${(latency / 1000).toFixed(1)}s` : "..."}
         mono
       />
     </div>

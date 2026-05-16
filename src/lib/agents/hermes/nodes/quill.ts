@@ -129,7 +129,7 @@ export function validateBullets(
     }
     // If the bullet has framing (an action_item or columns_used > 0)
     // but no citations and the source Finding had citations, that's a
-    // dropped citation — fail.
+    // dropped citation, fail.
     const finding = findings.find((f) => f.source_query_id === b.source_query_id);
     const findingHadCitations =
       finding != null && finding.citations.length > 0;

@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
   // Two auth paths:
   //   1. Clerk session + admin allowlist (interactive admin use).
   //   2. `x-backfill-secret: <CRON_SECRET>` (the local backfill script
-  //      uses this to call the API without a Clerk session — same
+  //      uses this to call the API without a Clerk session; same
   //      shared secret as the cron route).
   const backfillSecret = req.headers.get("x-backfill-secret") ?? "";
   const isBackfill = backfillSecret.length > 0 && isValidBackfillSecret(backfillSecret);

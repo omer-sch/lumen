@@ -6,7 +6,7 @@ import {
   type HermesRunData,
 } from "@/components/agents/hermes/HermesRunReview";
 
-export const metadata = { title: "Hermes draft — Lumen" };
+export const metadata = { title: "Hermes draft · Lumen" };
 
 // Server shell for the Hermes draft review surface. Loads the run from
 // agent_runs.output (where the graph's completeRun call wrote the

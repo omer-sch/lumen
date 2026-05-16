@@ -1,8 +1,8 @@
 import "server-only";
 
-import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 
+import { getAdminUserId } from "@/lib/auth/admin";
 import { getRun } from "@/lib/agents/_scaffold/run";
 import { supabaseAdmin } from "@/lib/db/client";
 import type { Json } from "@/lib/db/types";
@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 // trigger (which only fires on the status=completed transition, not on
 // subsequent updates).
 //
-// Phase 7 v0 contract: this is the minimum-viable approval — record
+// Phase 7 v0 contract: this is the minimum-viable approval, recording
 // the click. Inline bullet editing + per-section regenerate land in a
 // follow-up polish phase, since both require a persistent edit-state
 // shape that isn't worth specing today.
@@ -28,9 +28,12 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ runId: string }> },
 ) {
-  const { userId } = await auth();
+  // Admin-only for v0. Same rationale as the download route: until
+  // agent_runs carries an owner_user_id, any authed user could approve
+  // any teammate's draft. Gate by the admin allowlist.
+  const userId = await getAdminUserId();
   if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const { runId: rawRunId } = await params;
   const runId = normalizedRunId(rawRunId);
@@ -74,10 +77,14 @@ export async function POST(
     approval: nextApproval,
   };
 
+  // Two filters on the UPDATE so a concurrent status-change race
+  // can't accidentally clobber a not-completed run. status=completed
+  // is also asserted above; this is belt-and-braces.
   const { error } = await supabaseAdmin()
     .from("agent_runs")
     .update({ output: nextOutput as Json })
-    .eq("id", runId);
+    .eq("id", runId)
+    .eq("status", "completed");
   if (error) {
     return NextResponse.json(
       { error: "Failed to record approval" },

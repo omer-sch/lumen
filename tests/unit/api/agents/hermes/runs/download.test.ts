@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildRequest } from "../../../_lib/route-test-utils";
 
-const authMock = vi.hoisted(() => vi.fn());
+const getAdminUserIdMock = vi.hoisted(() => vi.fn());
 const getRunMock = vi.hoisted(() => vi.fn());
 const readFileMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@clerk/nextjs/server", () => ({ auth: authMock }));
+vi.mock("@/lib/auth/admin", () => ({ getAdminUserId: getAdminUserIdMock }));
 
 vi.mock("@/lib/agents/_scaffold/run", () => ({
   getRun: getRunMock,
@@ -24,7 +24,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 });
 
 beforeEach(() => {
-  authMock.mockReset();
+  getAdminUserIdMock.mockReset();
   getRunMock.mockReset();
   readFileMock.mockReset();
 });
@@ -48,8 +48,8 @@ const validRun = {
 };
 
 describe("GET /api/agents/hermes/runs/[runId]/download", () => {
-  it("returns 401 with no Clerk session", async () => {
-    authMock.mockResolvedValue({ userId: null });
+  it("returns 403 when the requester is not on the admin allowlist", async () => {
+    getAdminUserIdMock.mockResolvedValue(null);
     const { GET } = await import(
       "@/app/api/agents/hermes/runs/[runId]/download/route"
     );
@@ -57,12 +57,12 @@ describe("GET /api/agents/hermes/runs/[runId]/download", () => {
       buildRequest("/api/agents/hermes/runs/run-abc/download"),
       { params: Promise.resolve({ runId: "run-abc" }) },
     );
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
     expect(getRunMock).not.toHaveBeenCalled();
   });
 
   it("returns 400 for a runId that sanitizes to an empty string", async () => {
-    authMock.mockResolvedValue({ userId: "u1" });
+    getAdminUserIdMock.mockResolvedValue("u1");
     const { GET } = await import(
       "@/app/api/agents/hermes/runs/[runId]/download/route"
     );
@@ -74,7 +74,7 @@ describe("GET /api/agents/hermes/runs/[runId]/download", () => {
   });
 
   it("returns 404 when the run row doesn't exist", async () => {
-    authMock.mockResolvedValue({ userId: "u1" });
+    getAdminUserIdMock.mockResolvedValue("u1");
     getRunMock.mockResolvedValue(null);
     const { GET } = await import(
       "@/app/api/agents/hermes/runs/[runId]/download/route"
@@ -87,7 +87,7 @@ describe("GET /api/agents/hermes/runs/[runId]/download", () => {
   });
 
   it("returns 404 when the row exists but isn't a Hermes run", async () => {
-    authMock.mockResolvedValue({ userId: "u1" });
+    getAdminUserIdMock.mockResolvedValue("u1");
     getRunMock.mockResolvedValue({ ...validRun, agentId: "aria" });
     const { GET } = await import(
       "@/app/api/agents/hermes/runs/[runId]/download/route"
@@ -100,7 +100,7 @@ describe("GET /api/agents/hermes/runs/[runId]/download", () => {
   });
 
   it("returns 404 when the file is missing on disk", async () => {
-    authMock.mockResolvedValue({ userId: "u1" });
+    getAdminUserIdMock.mockResolvedValue("u1");
     getRunMock.mockResolvedValue(validRun);
     readFileMock.mockRejectedValue(new Error("ENOENT"));
     const { GET } = await import(
@@ -113,14 +113,31 @@ describe("GET /api/agents/hermes/runs/[runId]/download", () => {
     expect(res.status).toBe(404);
   });
 
+  it("path-traversal payloads sanitize away and never reach disk", async () => {
+    getAdminUserIdMock.mockResolvedValue("u1");
+    // After normalizedRunId strips non-uuid chars, "../etc/passwd" turns
+    // into "etcpasswd" which won't match any real run row.
+    getRunMock.mockResolvedValue(null);
+    const { GET } = await import(
+      "@/app/api/agents/hermes/runs/[runId]/download/route"
+    );
+    const res = await GET(
+      buildRequest("/api/agents/hermes/runs/..%2Fetc%2Fpasswd/download"),
+      { params: Promise.resolve({ runId: "../etc/passwd" }) },
+    );
+    expect(res.status).toBe(404);
+    // The sanitised runId would be "etcpasswd"; the route asked for
+    // that, not the literal traversal payload.
+    expect(getRunMock).toHaveBeenCalledWith("etcpasswd");
+  });
+
   // The happy-path readFile mock doesn't intercept the route's
-  // node:fs/promises import via vi.mock — same limitation we hit in
-  // phase 4's reindex-knowledge tests. The defensive 401/400/404
-  // contract is the part that protects users; happy-path bytes are
-  // exercised by the atelier round-trip test (which writes + reads a
-  // real .pptx) plus the planned phase-9 e2e.
+  // node:fs/promises import via vi.mock; same limitation as in
+  // reindex-knowledge tests. Defensive 403 / 400 / 404 contract is the
+  // part that protects users; happy-path bytes are exercised by the
+  // atelier round-trip test (writes + reads a real .pptx).
   it.skip("returns the bytes with the right headers on happy path", async () => {
-    authMock.mockResolvedValue({ userId: "u1" });
+    getAdminUserIdMock.mockResolvedValue("u1");
     getRunMock.mockResolvedValue(validRun);
     const fakePptx = Buffer.from([0x50, 0x4b, 0x03, 0x04, 1, 2, 3, 4]);
     readFileMock.mockResolvedValue(fakePptx);

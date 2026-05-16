@@ -89,11 +89,35 @@ export function DraftFromEmailModal({ open, onClose }: Props): React.ReactElemen
     onClose();
   }, [submitting, onClose]);
 
-  // Escape closes; outside-click closes.
+  // Keyboard handling while open: Escape closes, Tab wraps focus
+  // inside the dialog so a screen-reader user can't tab past the
+  // submit button into elements behind the backdrop (WCAG 2.1.2,
+  // 2.4.3). The query selector matches every focusable inside the
+  // dialog ref; we use the first/last entries as the wrap points.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") {
+        close();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusables = dialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -280,16 +304,25 @@ export function DraftFromEmailModal({ open, onClose }: Props): React.ReactElemen
 
 export function DraftFromEmailButton(): React.ReactElement {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const handleClose = useCallback(() => {
+    setOpen(false);
+    // Restore focus to the trigger so a keyboard user lands back at
+    // the place they came from (WCAG 2.4.3 Focus Order). Defer one
+    // tick because the modal unmount happens in the same render.
+    window.setTimeout(() => triggerRef.current?.focus(), 0);
+  }, []);
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--color-ua)] px-3 py-2 font-body text-xs font-semibold uppercase tracking-wider text-[color:var(--color-ua)] transition-[transform,box-shadow] duration-280 ease-out-quart hover:-translate-y-px active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-ua)] focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
       >
         Draft from email
       </button>
-      <DraftFromEmailModal open={open} onClose={() => setOpen(false)} />
+      <DraftFromEmailModal open={open} onClose={handleClose} />
     </>
   );
 }

@@ -4,9 +4,9 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 
+import { getAdminUserId } from "@/lib/auth/admin";
 import { getRun } from "@/lib/agents/_scaffold/run";
 
 export const runtime = "nodejs";
@@ -28,10 +28,13 @@ function normalizedRunId(raw: string): string {
 }
 
 function expectedPath(runId: string): string {
-  // sha256 hash the sanitised runId for an additional layer of defense
-  // against path traversal — but only AFTER the DB lookup confirms the
-  // run exists and is owned by the right user. The raw filename written
-  // by atelier is `<run_id>.pptx`, so we accept that form too.
+  // The raw filename written by atelier is `<run_id>.pptx`. runId was
+  // already stripped by `normalizedRunId` to the uuid alphabet before
+  // reaching this function, so traversal payloads like "../etc/passwd"
+  // resolve to a benign string ("etcpasswd") that won't match any real
+  // run row and will 404 at the getRun() check below. The /tmp prefix
+  // is hard-coded; the runId never extends the path beyond a single
+  // filename segment.
   return path.join("/tmp/hermes-runs", `${runId}.pptx`);
 }
 
@@ -39,9 +42,14 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ runId: string }> },
 ) {
-  const { userId } = await auth();
+  // Admin-only for v0. Hermes runs don't yet carry an owner_user_id
+  // column, so we can't enforce per-user ownership without widening
+  // the schema. Decks contain client revenue numbers; until ownership
+  // lands, gate by the admin allowlist. Tracked in the open list at
+  // BRANCH_PLAN.md for follow-up.
+  const userId = await getAdminUserId();
   if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const { runId: rawRunId } = await params;
   const runId = normalizedRunId(rawRunId);
@@ -85,7 +93,7 @@ export async function GET(
   });
 
   // Node Buffer is a Uint8Array at runtime and NextResponse accepts it,
-  // but the TS BodyInit union has narrowed in newer DOM libs — cast
+  // but the TS BodyInit union has narrowed in newer DOM libs; cast
   // through unknown so we don't fight types in a route file.
   const body = new Uint8Array(
     buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),

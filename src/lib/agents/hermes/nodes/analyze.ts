@@ -157,7 +157,7 @@ export async function analyze(
     queryGlobalComixTrend(intent.client, period.from, period.to),
   ]);
 
-  // Anomstack pre-pass — deterministic.
+  // Anomstack pre-pass,deterministic.
   const anomstack = runAnomstack({ networks, campaigns });
 
   // Parallel RAG retrieve for Knowledge + History.

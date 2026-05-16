@@ -131,7 +131,7 @@ export function HermesPlayground(): React.ReactElement {
           minLength={MIN_LEN}
           maxLength={MAX_LEN}
           placeholder="Hi team, could you send over the weekly review for GlobalComix..."
-          className="w-full resize-y rounded-2xl border border-[color:var(--border-glass)] bg-[color:var(--surface-card)] p-4 font-body text-sm text-cloud-white placeholder:text-[color:var(--text-muted)] focus:border-[color:var(--color-ua)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-ua)]"
+          className="w-full resize-y rounded-2xl border border-[color:var(--border-glass)] bg-[color:var(--surface-card)] p-4 font-body text-sm text-cloud-white placeholder:text-[color:var(--text-secondary)] focus:border-[color:var(--color-ua)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-ua)]"
           aria-describedby={`${textareaId}-hint`}
         />
         <p
@@ -206,7 +206,7 @@ function RunSummary({ result }: { result: RunResponse }): React.ReactElement {
       <Stat
         label="Confidence"
         value={
-          result.intent ? `${(result.intent.confidence * 100).toFixed(0)}%` : "—"
+          result.intent ? `${(result.intent.confidence * 100).toFixed(0)}%` : "..."
         }
         mono
       />

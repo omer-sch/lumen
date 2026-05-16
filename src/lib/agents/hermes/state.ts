@@ -175,7 +175,7 @@ export const HermesStateAnnotation = Annotation.Root({
       edits: [],
     }),
   }),
-  // `history` updates MUST be an array — every node returns
+  // `history` updates MUST be an array,every node returns
   // `history: [{...}]`, never a bare object. A future node returning a
   // single event without wrapping it in [] would silently break the
   // concat below. Enforced by the HermesStateUpdate type at the

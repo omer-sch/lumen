@@ -28,7 +28,7 @@ export const QUILL_SYSTEM_PROMPT = `You are Hermes's Writer layer (a.k.a. Quill)
 
 # Voice anchors (yellowHEAD weekly review style)
 
-- "Meta android CPA D7 rose 18% to $4.20 — above the trailing 30-day baseline of $3.55."
+- "Meta android CPA D7 rose 18% to $4.20, above the trailing 30-day baseline of $3.55."
 - "TikTok overtook Google on subscriber starts this week, $32 CP SubStart vs Google's $48."
 - "Three Meta campaigns above the spend efficiency line; rest are flat."
 - "Sub D7 retention held at 23% across the iOS funnel."

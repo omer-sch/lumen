@@ -18,7 +18,7 @@ export async function reviewGate(
         node: "review_gate",
         started_at: startedAt,
         ended_at: new Date().toISOString(),
-        notes: "passthrough — approval flow lives out-of-graph (phase 7)",
+        notes: "passthrough:approval flow lives out-of-graph (phase 7)",
       },
     ],
   };

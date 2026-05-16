@@ -4,12 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildRequest } from "../../../_lib/route-test-utils";
 
-const authMock = vi.hoisted(() => vi.fn());
+const getAdminUserIdMock = vi.hoisted(() => vi.fn());
 const getRunMock = vi.hoisted(() => vi.fn());
+const eqTerminalMock = vi.hoisted(() => vi.fn());
+const eqChainMock = vi.hoisted(() => vi.fn());
 const updateMock = vi.hoisted(() => vi.fn());
 const fromMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@clerk/nextjs/server", () => ({ auth: authMock }));
+vi.mock("@/lib/auth/admin", () => ({ getAdminUserId: getAdminUserIdMock }));
 vi.mock("@/lib/agents/_scaffold/run", () => ({
   getRun: getRunMock,
   startRun: vi.fn(),
@@ -22,11 +24,16 @@ vi.mock("@/lib/db/client", () => ({
 }));
 
 beforeEach(() => {
-  authMock.mockReset();
+  getAdminUserIdMock.mockReset();
   getRunMock.mockReset();
+  eqTerminalMock.mockReset();
+  eqChainMock.mockReset();
   updateMock.mockReset();
   fromMock.mockReset();
-  fromMock.mockReturnValue({ update: () => ({ eq: updateMock }) });
+  // Chain: from(...).update(...).eq("id", ...).eq("status", ...) returns a Promise.
+  eqChainMock.mockImplementation(() => ({ eq: eqTerminalMock }));
+  updateMock.mockImplementation(() => ({ eq: eqChainMock }));
+  fromMock.mockReturnValue({ update: updateMock });
 });
 
 afterEach(() => {
@@ -48,8 +55,8 @@ const completedRun = {
 };
 
 describe("POST /api/agents/hermes/runs/[runId]/approve", () => {
-  it("401 when not signed in", async () => {
-    authMock.mockResolvedValue({ userId: null });
+  it("403 when requester is not on the admin allowlist", async () => {
+    getAdminUserIdMock.mockResolvedValue(null);
     const { POST } = await import(
       "@/app/api/agents/hermes/runs/[runId]/approve/route"
     );
@@ -59,12 +66,12 @@ describe("POST /api/agents/hermes/runs/[runId]/approve", () => {
       }),
       { params: Promise.resolve({ runId: "run-abc" }) },
     );
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
     expect(getRunMock).not.toHaveBeenCalled();
   });
 
   it("404 when run doesn't exist", async () => {
-    authMock.mockResolvedValue({ userId: "u1" });
+    getAdminUserIdMock.mockResolvedValue("u1");
     getRunMock.mockResolvedValue(null);
     const { POST } = await import(
       "@/app/api/agents/hermes/runs/[runId]/approve/route"
@@ -79,7 +86,7 @@ describe("POST /api/agents/hermes/runs/[runId]/approve", () => {
   });
 
   it("404 when run isn't a Hermes run", async () => {
-    authMock.mockResolvedValue({ userId: "u1" });
+    getAdminUserIdMock.mockResolvedValue("u1");
     getRunMock.mockResolvedValue({ ...completedRun, agentId: "aria" });
     const { POST } = await import(
       "@/app/api/agents/hermes/runs/[runId]/approve/route"
@@ -94,7 +101,7 @@ describe("POST /api/agents/hermes/runs/[runId]/approve", () => {
   });
 
   it("409 when run isn't yet completed", async () => {
-    authMock.mockResolvedValue({ userId: "u1" });
+    getAdminUserIdMock.mockResolvedValue("u1");
     getRunMock.mockResolvedValue({ ...completedRun, status: "running" });
     const { POST } = await import(
       "@/app/api/agents/hermes/runs/[runId]/approve/route"
@@ -108,10 +115,10 @@ describe("POST /api/agents/hermes/runs/[runId]/approve", () => {
     expect(res.status).toBe(409);
   });
 
-  it("happy path: stamps approval and returns the timestamps", async () => {
-    authMock.mockResolvedValue({ userId: "u1" });
+  it("happy path: stamps approval, filters UPDATE on both id and status", async () => {
+    getAdminUserIdMock.mockResolvedValue("u1");
     getRunMock.mockResolvedValue(completedRun);
-    updateMock.mockResolvedValue({ error: null });
+    eqTerminalMock.mockResolvedValue({ error: null });
     const { POST } = await import(
       "@/app/api/agents/hermes/runs/[runId]/approve/route"
     );
@@ -128,12 +135,16 @@ describe("POST /api/agents/hermes/runs/[runId]/approve", () => {
     };
     expect(body.approved).toBe(true);
     expect(body.approved_by).toBe("u1");
+    // Belt-and-braces: the UPDATE filters on status=completed so a
+    // concurrent transition can't clobber a not-completed run.
+    expect(eqChainMock).toHaveBeenCalledWith("id", "run-abc");
+    expect(eqTerminalMock).toHaveBeenCalledWith("status", "completed");
   });
 
   it("500 when the Supabase update fails", async () => {
-    authMock.mockResolvedValue({ userId: "u1" });
+    getAdminUserIdMock.mockResolvedValue("u1");
     getRunMock.mockResolvedValue(completedRun);
-    updateMock.mockResolvedValue({ error: { message: "rls" } });
+    eqTerminalMock.mockResolvedValue({ error: { message: "rls" } });
     const { POST } = await import(
       "@/app/api/agents/hermes/runs/[runId]/approve/route"
     );

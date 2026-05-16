@@ -1,6 +1,6 @@
 import { HermesPlayground } from "@/components/agents/hermes/HermesPlayground";
 
-export const metadata = { title: "Hermes — Lumen" };
+export const metadata = { title: "Hermes · Lumen" };
 
 // Phase 2 playground for Hermes. Dedicated page (not via the [id] dynamic
 // route) because Hermes' UX is materially different from Aria / Max / Nova:

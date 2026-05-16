@@ -11,7 +11,7 @@ import type { CampaignRow, NetworkRow } from "@/types/dashboard";
 //   2. Percent delta vs the trailing-period baseline that ships on the
 //      NetworkRow itself (spendDelta, subD7Delta, etc). Flags when
 //      |delta| >= PCT_DELTA_THRESHOLD.
-//   3. "Best in N weeks" — deferred; requires a wider date-range query
+//   3. "Best in N weeks",deferred; requires a wider date-range query
 //      than the current dashboard slice. TODO(phase-6+).
 //
 // Output is a typed list of raw anomalies. The Analyze node hands these
@@ -119,7 +119,7 @@ function detectCpaD7VsTrailing(rows: NetworkRow[]): RawAnomaly[] {
   // The only baseline on NetworkRow is `trailingCpaD7Avg`. Use it to
   // surface networks whose current-period CPA D7 has moved materially
   // against their own trailing 30-day window. Other per-network deltas
-  // would need a wider date-range query — deferred until phase 6+.
+  // would need a wider date-range query,deferred until phase 6+.
   const anomalies: RawAnomaly[] = [];
   for (const row of rows) {
     if (!Number.isFinite(row.cpaD7) || row.cpaD7 === 0) continue;
@@ -157,7 +157,7 @@ function detectCampaignSpendDeltas(rows: CampaignRow[]): RawAnomaly[] {
       score: row.spendDelta,
       direction: row.spendDelta > 0 ? "up" : "down",
       source_query_id: "campaigns",
-      rationale: `Campaign "${row.campaign_name}" on ${row.network} spent ${row.spend.toFixed(0)} this period — a ${(row.spendDelta * 100).toFixed(0)}% move vs the previous period.`,
+      rationale: `Campaign "${row.campaign_name}" on ${row.network} spent ${row.spend.toFixed(0)} this period,a ${(row.spendDelta * 100).toFixed(0)}% move vs the previous period.`,
     });
   }
   return anomalies;

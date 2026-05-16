@@ -24,7 +24,7 @@ import {
 // to decide per-slide layout choices". v0 ships deterministic layout
 // driven entirely by Quill's slide_target assignment. The Sonnet-layout
 // pass and full reuse of src/lib/reports/export-pptx.ts (currently
-// "use client" — needs to be split into a shared core + client/server
+// "use client" and needs to be split into a shared core + client/server
 // wrappers) are queued. This implementation is a thin server-side
 // writer that produces a real .pptx the demo can download today.
 

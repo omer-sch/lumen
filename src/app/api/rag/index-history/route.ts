@@ -16,7 +16,7 @@ export const maxDuration = 60;
 //
 // The trigger sends the raw `output` jsonb; we render it to a text
 // blob here so the embedder sees something useful. Different agents
-// shape their outputs differently — Hermes will produce bullets +
+// shape their outputs differently. Hermes produces bullets +
 // findings, Aria produces image titles, etc. The defensive default
 // just stringifies the JSON; agents that want better tone retrieval
 // should land their own shape-to-text formatter and call this with a
