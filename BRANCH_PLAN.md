@@ -4,34 +4,22 @@ Hermes v0: first real Lumen agent, end to end. Paste a client email, get a yello
 
 ## Status
 
-Phase 3 complete (yellow on live-Haiku adversarial run only). Phase 4 (Analyze: BQ + Anomstack + Sonnet rank/frame) ready on STOP-gate sign-off.
+**All nine phases complete.** Branch is ready for external review + merge. Whole-branch Review Squad was deferred per Omer's autonomy directive; positioned for an external pass.
 
-Session notes:
-- Phase 0: external vault (one-time deviation, accepted).
-- Phase 1: `Sessions/first-real-agent-try/phase-1.md`.
-- Phase 2: `Sessions/first-real-agent-try/phase-2.md`.
-- Phase 3: `Sessions/first-real-agent-try/phase-3.md`.
+## Per-phase commits
 
-Phase-1 commits: `58fcba5..8d74b2d` (6 commits). RAG layer + agent scaffold.
-Phase-2 commits: `2df9839..866528c` (3 commits). LangGraph state machine + real parse_intent + playground UI + squad fixes.
-Phase-3 commits: `25ca074..3493048` (4 commits). parse_intent hardening: externalized prompt + 3 few-shot examples + period rule + low-confidence rule + memory write + adversarial fixtures + prompt caching + email-length cap + post-parse client allowlist.
-Test count: 469 → 617 (+148). All Phase 1-3 paths above the 80 percent statement-coverage floor; parse-intent.ts at 100 stmts.
-
-## Plan
-
-The branch executes nine phases under the Phase Squad protocol: one Build Agent, a parallel 5-6 agent Review Squad (Tester / Reviewer / Security / Performance / Accessibility), then a Docs Agent synthesis. STOP gate per phase.
-
-Phase map:
-0. Branch setup + prerequisite cleanup
-1. Foundation — agent scaffold + RAG (`prompts/2026-05-15-rag-scaffold.md` + Supabase setup prompt)
-2. Hermes skeleton — StateGraph + stub nodes
-3. parse_intent (real)
-4. Analyze (real, BQ + Anomstack + RAG)
-5. Quill (real, citation-bound bullets)
-6. Atelier (real `.pptx` render)
-7. review_gate UI
-8. Paste-to-draft entry point
-9. Tests, polish, docs, demo
+| Phase | Commit / range | Session note |
+|---|---|---|
+| 0 | `1fa0f61` (branch bootstrap) | external vault (one-time deviation) |
+| 1 | `58fcba5..8d74b2d` (6 commits) | `Sessions/first-real-agent-try/phase-1.md` |
+| 2 | `2df9839..866528c` (3 commits) | `Sessions/first-real-agent-try/phase-2.md` |
+| 3 | `25ca074..3493048` (4 commits) | `Sessions/first-real-agent-try/phase-3.md` |
+| 4 | `892922e` | `Sessions/first-real-agent-try/phase-4.md` |
+| 5 | `b299ac7` | `Sessions/first-real-agent-try/phase-5.md` |
+| 6 | `533cab1` | `Sessions/first-real-agent-try/phase-6.md` |
+| 7 | `c5e3400` | `Sessions/first-real-agent-try/phase-7.md` |
+| 8 | `ec8b97b` | `Sessions/first-real-agent-try/phase-8.md` |
+| 9 | (docs commit) | `Sessions/first-real-agent-try/phase-9.md` |
 
 ## Locked architecture
 
@@ -40,25 +28,38 @@ USER PASTES EMAIL
   └─ parse_intent (Haiku, function)
      └─ Analyze (Sonnet, subagent)
         └─ Quill (Sonnet, subagent)
-           └─ Atelier (Sonnet + pptxgenjs)
-              └─ review_gate (UI)
+           └─ Atelier (deterministic + pptxgenjs)
+              └─ review_gate (UI · view + approve)
                  └─ LIOR DOWNLOADS .PPTX
 ```
 
-State machine: LangGraph.js. RAG-grounded per node via `retrieve()` (Knowledge / History / Comms).
+State machine: LangGraph.js `Annotation.Root` with per-field reducers. RAG-grounded per node via `retrieve()` (Knowledge / History / Comms corpora).
 
-## Sources of truth
+## Test posture
 
-- This branch's master plan: original prompt (Omer's `Hermes v0: first real agent, end to end (with Phase Squad + Ruflo swarm)`, 2026-05-15).
-- RAG scaffold: `prompts/2026-05-15-rag-scaffold.md`.
-- Supabase setup: `prompts/2026-05-12-supabase-db-setup.md` (pending — to be added before Phase 1).
-- Brand: `.claude/skills/yellowhead-brand/SKILL.md`.
-- Product context: `CLAUDE.md`.
+- 670 unit tests + 1 documented skip across 91 files.
+- Typecheck clean.
+- Coverage on Hermes paths above the 80 percent statements floor; parse-intent.ts at 100 percent.
+
+## Open work (handed back to Omer)
+
+1. **Wire a real `ANTHROPIC_API_KEY`** so the Phase 3 live Haiku adversarial run can convert from yellow to green.
+2. **Run the Knowledge corpus backfill**: `CRON_SECRET=… LUMEN_VAULT_PATH="…/Lumen Vault" node scripts/backfill-knowledge-corpus.mjs` (with the dev server up). Acceptance: ≥ 50 chunks in `rag_chunks where corpus='knowledge'`.
+3. **Open the draft PR** if `gh` is now authenticated: `https://github.com/omer-sch/feature/first-real-agent-try` (or via the web). The branch is at the head listed in `git log`.
+4. **Record the demo** per `DEMO.md`. Link the recording from `Sessions/first-real-agent-try/phase-9.md` once captured.
+5. **Spawn the external whole-branch Review Squad** (Tester / Reviewer / Security / Performance / Accessibility) when convenient. Phase 9 lists the five concrete things a reviewer should check.
 
 ## Out of scope (this branch)
 
-Gmail OAuth, python-pptx renderer, PPTEval gate, per-user auto-approve, multi-platform (iOS / Web), cross-client RAG, Hermes confidence-retry, reranker.
+Gmail OAuth · python-pptx renderer · PPTEval gate · per-user auto-approve · multi-platform (iOS / Web for non-android workflows) · cross-client RAG · Hermes confidence-retry · reranker · SSE-streamed paste modal · inline bullet edit · per-section regenerate.
 
-## Do not merge
+## Files of note
 
-Hold the PR in draft until Phase 9 sign-off. The branch is intentionally long-running.
+- `prompts/2026-05-15-rag-scaffold.md` — Phase 1 driver.
+- `src/lib/agents/hermes/prompts/` — externalized Sonnet prompts (parse-intent, analyze, quill).
+- `src/lib/agents/hermes/anomstack.ts` — deterministic anomaly detector.
+- `src/lib/agents/hermes/nodes/` — five LangGraph nodes.
+- `src/app/(app)/agents/hermes/` — playground + run-review pages.
+- `src/app/api/agents/hermes/` — generate, runs/{id}/download, runs/{id}/approve.
+- `Sessions/first-real-agent-try/phase-*.md` — every phase's record.
+- `DEMO.md` — 90-second demo script.
