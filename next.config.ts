@@ -47,6 +47,21 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  // pptxgenjs imports `node:https` / `node:fs` for optional Node-only
+  // image fetching. Those code paths never run in the browser, but
+  // webpack still tries to resolve the imports at build time and trips
+  // on the `node:` scheme. IgnorePlugin makes any `node:*` import a
+  // no-op in the client bundle (the resourceRegExp is matched before
+  // resolution); the server bundle is untouched.
+  webpack: (config, { isServer, webpack }) => {
+    if (!isServer) {
+      config.plugins = config.plugins ?? [];
+      config.plugins.push(
+        new webpack.IgnorePlugin({ resourceRegExp: /^node:/ }),
+      );
+    }
+    return config;
+  },
 };
 
 export default withSentryConfig(nextConfig, {
