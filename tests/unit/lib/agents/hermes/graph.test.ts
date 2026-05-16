@@ -167,9 +167,12 @@ describe("buildHermesGraph", () => {
     expect(final.intent?.confidence).toBeCloseTo(0.91, 2);
     expect(final.findings).toHaveLength(1);
     expect(final.bullets).toHaveLength(1);
-    // Atelier and review_gate are still stubs through phases 5; they
-    // produce four slide placeholders and an unapproved gate.
-    expect(final.deck.slides).toHaveLength(4);
+    // Phase 6+: atelier writes a real .pptx with cover + per-target +
+    // closing. With one bullet on platform_overall: cover + one
+    // platform_overall + one channel_weekly (empty) + one
+    // campaign_breakdown (empty) + closing = 5 slides.
+    expect(final.deck.slides.length).toBeGreaterThanOrEqual(4);
+    expect(final.deck.pptx_path).toMatch(/test-run-1\.pptx$/);
     expect(final.approval.approved).toBe(false);
     // History trace has one event per node, in order.
     expect(final.history.map((h) => h.node)).toEqual([
