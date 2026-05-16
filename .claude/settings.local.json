@@ -284,7 +284,8 @@
       "Bash(sips -g pixelWidth -g pixelHeight public/avatars/aria.png public/avatars/hermes.png)",
       "Bash(sips -Z 256 public/avatars/hermes.png --out public/avatars/hermes.png)",
       "Bash(npx --yes tsx --version)",
-      "Bash(npx --yes tsx --env-file=.env.local scripts/verify-hermes-snapshot.mjs)"
+      "Bash(npx --yes tsx --env-file=.env.local scripts/verify-hermes-snapshot.mjs)",
+      "Bash(kill 93673)"
     ]
   },
   "enableAllProjectMcpServers": true,

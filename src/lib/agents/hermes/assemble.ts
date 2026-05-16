@@ -116,6 +116,21 @@ export function assembleHermesReport(args: AssembleArgs): Report {
   const platformLabel = REPORT_PLATFORM_LABEL[platform];
   const channelLabel = REPORT_CHANNEL_LABEL[channel];
 
+  // Honesty gate: when the BQ data is client-wide (every platform the
+  // client runs on, not just the intent's platform), the deck must
+  // NOT claim the platform in its section headers. Doing so would put
+  // an "iOS | Overall" badge over numbers that include Android +
+  // Web. Until the BQ pipeline gains a real platform predicate, every
+  // Hermes snapshot is client-wide and the platform claim is dropped.
+  // The intent's platform focus still surfaces through Quill bullets
+  // (which cite the platform context from the email).
+  const platformIsAuthoritative =
+    snapshot.dataScope === "platform-filtered";
+  const platformInTitle = platformIsAuthoritative ? `${platformLabel} | ` : "";
+  const channelInTitle = platformIsAuthoritative
+    ? `${channelLabel} | `
+    : `${channelLabel} | `;
+
   const sections: ReportSection[] = [];
 
   if (snapshot.platformOverall) {
@@ -123,7 +138,7 @@ export function assembleHermesReport(args: AssembleArgs): Report {
     const section: PlatformOverallSection = {
       id: "platform_overall",
       platform,
-      title: `${platformLabel} | Overall | Weekly Breakdown`,
+      title: `${platformInTitle}Overall | Weekly Breakdown`,
       summary: snapshot.platformOverall,
       bullets: platformBullets.map((b, i) => bulletToWeekly(b, i === 0)),
     };
@@ -136,7 +151,7 @@ export function assembleHermesReport(args: AssembleArgs): Report {
       id: "channel_weekly",
       platform,
       channel,
-      title: `${platformLabel} | ${channelLabel} | Weekly Breakdown`,
+      title: `${platformInTitle}${channelInTitle}Weekly Breakdown`,
       currentWeek: snapshot.channelWeekly.currentWeek,
       history: snapshot.channelWeekly.history,
       bullets: weeklyBullets.map((b, i) => bulletToWeekly(b, i === 0)),
@@ -150,7 +165,7 @@ export function assembleHermesReport(args: AssembleArgs): Report {
       id: "channel_campaign",
       platform,
       channel,
-      title: `${platformLabel} | ${channelLabel} | Campaign Breakdown`,
+      title: `${platformInTitle}${channelInTitle}Campaign Breakdown`,
       rows: snapshot.channelCampaign.rows,
       commentary: campaignBullets.length
         ? campaignBullets.map((b, i) => bulletToCommentary(b, i))
@@ -158,6 +173,16 @@ export function assembleHermesReport(args: AssembleArgs): Report {
     };
     sections.push(section);
   }
+
+  // Cover caveat: when the intent asked for a specific platform but
+  // the data is client-wide, surface that on the cover so the reader
+  // knows the headers do not silently scope. Reuses the existing
+  // filterRange slot (manual reports use it for date-range narrowing;
+  // Hermes drafts have no date narrowing because the period comes
+  // straight from intent, so the slot is otherwise free).
+  const scopeCaveat = !platformIsAuthoritative
+    ? `Focus requested: ${platformLabel} / ${channelLabel}; numbers are client-wide across platforms`
+    : undefined;
 
   const now = Date.now();
   const draftTitle = `${snapshot.clientLabel} weekly review · ${snapshot.period.label}`;
@@ -170,7 +195,7 @@ export function assembleHermesReport(args: AssembleArgs): Report {
     title: draftTitle,
     prompt: `Hermes draft from ${snapshot.clientLabel} email request`,
     period: snapshot.period.label,
-    filterRange: snapshot.period.filterRange,
+    filterRange: snapshot.period.filterRange ?? scopeCaveat,
     createdAt: now,
     updatedAt: now,
     authoredBy: "hermes",

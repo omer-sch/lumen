@@ -133,7 +133,17 @@ function networkRowToSummary(net: BQNetworkRow): WeeklySummaryRow {
   // queryGlobalComixNetworkBreakdown already computes). Everything
   // else's delta is undefined: the renderer prints the value without
   // an arrow rather than inventing a movement.
-  const cpaD7Delta = pctDelta(net.cpaD7, net.trailingCpaD7Avg);
+  //
+  // Guard against a maturing-D7-window false signal: when subD7 is 0
+  // (cohort hasn't matured for "this past week"), cpaD7 collapses to
+  // 0 via SAFE_DIVIDE, the delta-vs-trailing computes -100%, and a
+  // naive tone reads it as "cost dropped, GOOD". That's a lie: the
+  // cost didn't drop, the data isn't there yet. Force neutral + no
+  // delta in that case.
+  const d7Mature = net.subD7 > 0 && net.cpaD7 > 0;
+  const cpaD7Delta = d7Mature
+    ? pctDelta(net.cpaD7, net.trailingCpaD7Avg)
+    : undefined;
 
   return {
     label: REPORT_LABEL_FOR_BQ_NETWORK[net.network] ?? net.network,
@@ -146,7 +156,7 @@ function networkRowToSummary(net: BQNetworkRow): WeeklySummaryRow {
     cpaD7: {
       value: round(net.cpaD7, 2),
       delta: cpaD7Delta,
-      tone: toneFromDelta(cpaD7Delta, true),
+      tone: d7Mature ? toneFromDelta(cpaD7Delta, true) : "neutral",
       maturing: true,
     },
   };
@@ -164,14 +174,20 @@ function totalsFromNetworks(rows: BQNetworkRow[]): WeeklySummaryRow {
   const safe = (a: number, b: number) => (b > 0 ? a / b : 0);
   // Weighted CPA D7 vs the average of per-network trailing baselines
   // (the only "prior period" signal we have without a new query).
-  const totalCpaD7 = safe(totalSpend, totalSubD7);
+  // Same maturing-window guard as networkRowToSummary: if totalSubD7
+  // is 0, the cohort hasn't matured and we must not tone the row
+  // "good" off a -100% false delta.
+  const d7Mature = totalSubD7 > 0;
+  const totalCpaD7 = d7Mature ? safe(totalSpend, totalSubD7) : 0;
   const baselineRows = rows.filter((r) => r.trailingCpaD7Avg > 0);
   const trailingAvg =
     baselineRows.length > 0
       ? baselineRows.reduce((a, r) => a + r.trailingCpaD7Avg, 0) /
         baselineRows.length
       : 0;
-  const totalCpaD7Delta = pctDelta(totalCpaD7, trailingAvg);
+  const totalCpaD7Delta = d7Mature
+    ? pctDelta(totalCpaD7, trailingAvg)
+    : undefined;
   return {
     label: "Total",
     spend: { value: round(totalSpend, 0), tone: "neutral" },
@@ -186,7 +202,7 @@ function totalsFromNetworks(rows: BQNetworkRow[]): WeeklySummaryRow {
     cpaD7: {
       value: round(totalCpaD7, 2),
       delta: totalCpaD7Delta,
-      tone: toneFromDelta(totalCpaD7Delta, true),
+      tone: d7Mature ? toneFromDelta(totalCpaD7Delta, true) : "neutral",
       maturing: true,
     },
   };
@@ -265,6 +281,12 @@ export function buildHermesSnapshot(args: SnapshotInputs): HermesSnapshot {
       isoStart: intent.period.iso_start,
       isoEnd: intent.period.iso_end,
     },
+    // TODO(workstream-D2): extend the BQ queries with a real platform
+    // predicate (cohort _OS_name + campaign-name regex for the spend
+    // tables that lack a uniform OS column). Until then every snapshot
+    // is client-wide and the assembler omits platform claims from
+    // section titles so the deck does not lie about scope.
+    dataScope: "client-wide-all-platforms",
     platformOverall:
       platformRows.length > 0
         ? { rows: platformRows, total: totalsFromNetworks(networks) }

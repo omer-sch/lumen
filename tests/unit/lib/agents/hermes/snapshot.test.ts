@@ -115,8 +115,16 @@ describe("buildHermesSnapshot (real-data path)", () => {
   });
 
   it("derives cpaD7 delta from trailingCpaD7Avg and tones it (rise = bad on a cost metric)", () => {
+    // subD7 > 0 so the maturing-window guard does not suppress the
+    // delta; both spend and trailing baseline are real.
     const networks: BQNetworkRow[] = [
-      net({ network: "Meta", spend: 1000, cpaD7: 75, trailingCpaD7Avg: 50 }),
+      net({
+        network: "Meta",
+        spend: 1000,
+        subD7: 13,
+        cpaD7: 75,
+        trailingCpaD7Avg: 50,
+      }),
     ];
     const snap = buildHermesSnapshot({
       intent: intent({ channels: ["meta"] }),
@@ -126,6 +134,47 @@ describe("buildHermesSnapshot (real-data path)", () => {
     const row = snap.platformOverall!.rows[0];
     expect(row.cpaD7.delta).toBe(50); // (75 - 50) / 50 = +50%
     expect(row.cpaD7.tone).toBe("bad"); // cost rose
+  });
+
+  it("suppresses cpaD7 delta + tone when subD7 has not matured (no false-good)", () => {
+    // The bug this test pins: subD7 = 0 (cohort not matured for "this
+    // past week") collapses cpaD7 to 0 via SAFE_DIVIDE; without the
+    // guard the delta computes -100% vs the trailing baseline and the
+    // row tones "good" (cost dropped, GOOD!) when in reality the data
+    // isn't there yet.
+    const networks: BQNetworkRow[] = [
+      net({
+        network: "Meta",
+        spend: 5000,
+        subStart: 100,
+        subD0: 25,
+        subD7: 0, // not matured
+        cpaD7: 0, // collapses to 0
+        trailingCpaD7Avg: 60,
+      }),
+    ];
+    const snap = buildHermesSnapshot({
+      intent: intent({ channels: ["meta"] }),
+      networks,
+      campaigns: [],
+    });
+    const row = snap.platformOverall!.rows[0];
+    expect(row.cpaD7.value).toBe(0);
+    expect(row.cpaD7.delta).toBeUndefined();
+    expect(row.cpaD7.tone).toBe("neutral");
+    expect(row.cpaD7.maturing).toBe(true);
+    // Totals row inherits the same guard.
+    expect(snap.platformOverall!.total.cpaD7.delta).toBeUndefined();
+    expect(snap.platformOverall!.total.cpaD7.tone).toBe("neutral");
+  });
+
+  it("marks dataScope as client-wide-all-platforms (BQ has no platform filter today)", () => {
+    const snap = buildHermesSnapshot({
+      intent: intent({ platforms: ["ios"] }),
+      networks: [net({ network: "Meta", spend: 100 })],
+      campaigns: [],
+    });
+    expect(snap.dataScope).toBe("client-wide-all-platforms");
   });
 
   it("leaves volume-metric deltas undefined when there's no prior-period BQ data", () => {

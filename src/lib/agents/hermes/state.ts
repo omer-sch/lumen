@@ -133,6 +133,16 @@ export type HermesSnapshot = {
     isoStart?: string | null;
     isoEnd?: string | null;
   };
+  /** Describes the scope of the data in the snapshot vs. what the intent
+   *  asked for. "client-wide-all-platforms" means BQ returned numbers
+   *  across every platform the client runs on, not just the intent's
+   *  platform. The warehouse spend tables do not expose a uniform OS
+   *  column at the No-Breakdown grain so the snapshot can't filter
+   *  honestly. "platform-filtered" is the future state once the BQ
+   *  pipeline gains a real platform predicate. The assembler uses this
+   *  to decide whether the deck headers can claim the intent's platform
+   *  or have to stay generic. */
+  dataScope: "client-wide-all-platforms" | "platform-filtered";
   platformOverall: {
     rows: WeeklySummaryRow[];
     total: WeeklySummaryRow;

@@ -44,6 +44,25 @@ export function CampaignBreakdown({
     1,
   );
 
+  // Hermes-drafted reports populate spend / installs / CPI from BQ but
+  // leave the sub-funnel columns (SubStart / CP SubStart / Sub D0 /
+  // CPA D0 / Sub D7 / CPA D7) at 0 because BQ's campaign-cohort join
+  // is unreliable. Rendering eight $0 columns next to real spend
+  // numbers reads as "campaigns have no subs" instead of "we can't
+  // attribute subs to campaigns" (a worse lie than just hiding the
+  // columns). Manual reports populate the full set so the
+  // check is per-render: hide only when EVERY row is zero across the
+  // sub-funnel.
+  const hasSubFunnelData = rows.some(
+    (r) =>
+      r.substart > 0 ||
+      r.cpSubstart > 0 ||
+      r.subD0 > 0 ||
+      r.cpaD0 > 0 ||
+      (r.subD7 ?? 0) > 0 ||
+      (r.cpaD7 ?? 0) > 0,
+  );
+
   // Continuation slides can carry just rows or just commentary; the layout
   // step decides what fits. Both halves render independently so a missing
   // half doesn't leave a header band hanging.
@@ -72,19 +91,21 @@ export function CampaignBreakdown({
                 Campaign
               </th>
               {(
-                [
-                  "Spend",
-                  "Installs",
-                  "CPI",
-                  "SubStart",
-                  "CP SubStart",
-                  "%Δ",
-                  "Sub D0",
-                  "CPA D0",
-                  "%Δ",
-                  "Sub D7",
-                  "CPA D7",
-                ] as const
+                hasSubFunnelData
+                  ? ([
+                      "Spend",
+                      "Installs",
+                      "CPI",
+                      "SubStart",
+                      "CP SubStart",
+                      "%Δ",
+                      "Sub D0",
+                      "CPA D0",
+                      "%Δ",
+                      "Sub D7",
+                      "CPA D7",
+                    ] as const)
+                  : (["Spend", "Installs", "CPI"] as const)
               ).map((h, i) => (
                 <th
                   key={`${h}-${i}`}
@@ -105,6 +126,7 @@ export function CampaignBreakdown({
                 maxCost={maxCost}
                 compact={compact}
                 cellPad={cellPad}
+                showSubFunnel={hasSubFunnelData}
               />
             ))}
           </tbody>
@@ -186,12 +208,18 @@ function CampaignTableRow({
   maxCost,
   compact = false,
   cellPad,
+  showSubFunnel = true,
 }: {
   row: CampaignRow;
   maxSpend: number;
   maxCost: number;
   compact?: boolean;
   cellPad: string;
+  /** When false, the SubStart / CP SubStart / Sub D0 / CPA D0 / Sub D7 /
+   *  CPA D7 columns and their delta chips are skipped. The callout
+   *  arrow (which normally rides on CPA D7) shifts onto CPI in that
+   *  case so a Hermes-drafted highlight still has somewhere to land. */
+  showSubFunnel?: boolean;
 }) {
   const callout = row.highlight;
   return (
@@ -221,44 +249,60 @@ function CampaignTableRow({
       <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
         {row.installs.toLocaleString()}
       </td>
-      <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
-        ${row.cpi.toFixed(2)}
-      </td>
-      <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
-        {row.substart}
-      </td>
-      <td className={cn("text-right tabular-nums", cellPad)} style={costTint(row.cpSubstart, maxCost)}>
-        ${row.cpSubstart.toFixed(2)}
-      </td>
-      <td className={cn("text-right tabular-nums", cellPad)}>
-        <DeltaChip delta={row.cpSubstartDelta} polarity="down-good" compact={compact} />
-      </td>
-      <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
-        {row.subD0}
-      </td>
-      <td className={cn("text-right tabular-nums", cellPad)} style={costTint(row.cpaD0, maxCost)}>
-        ${row.cpaD0.toFixed(2)}
-      </td>
-      <td className={cn("text-right tabular-nums", cellPad)}>
-        <DeltaChip delta={row.cpaD0Delta} polarity="down-good" compact={compact} />
-      </td>
-      <td className={cn("text-right tabular-nums text-[color:var(--text-light-secondary)]", cellPad)}>
-        {row.subD7 === null ? "—" : row.subD7}
-      </td>
       <td
         className={cn(
-          "relative text-right tabular-nums",
-          compact ? "py-1 pl-1.5 pr-5" : "py-2.5 pl-2 pr-7",
+          "relative text-right tabular-nums text-[color:var(--text-light-primary)]",
+          showSubFunnel
+            ? cellPad
+            : compact
+              ? "py-1 pl-1.5 pr-5"
+              : "py-2.5 pl-2 pr-7",
         )}
-        style={row.cpaD7 !== null ? costTint(row.cpaD7, maxCost) : undefined}
       >
-        {row.cpaD7 === null ? (
-          <span className="text-[color:var(--text-light-muted)]">—</span>
-        ) : (
-          `$${row.cpaD7.toFixed(2)}`
+        ${row.cpi.toFixed(2)}
+        {!showSubFunnel && callout && (
+          <CalloutArrow color={callout} compact={compact} />
         )}
-        {callout && <CalloutArrow color={callout} compact={compact} />}
       </td>
+      {showSubFunnel && (
+        <>
+          <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
+            {row.substart}
+          </td>
+          <td className={cn("text-right tabular-nums", cellPad)} style={costTint(row.cpSubstart, maxCost)}>
+            ${row.cpSubstart.toFixed(2)}
+          </td>
+          <td className={cn("text-right tabular-nums", cellPad)}>
+            <DeltaChip delta={row.cpSubstartDelta} polarity="down-good" compact={compact} />
+          </td>
+          <td className={cn("text-right tabular-nums text-[color:var(--text-light-primary)]", cellPad)}>
+            {row.subD0}
+          </td>
+          <td className={cn("text-right tabular-nums", cellPad)} style={costTint(row.cpaD0, maxCost)}>
+            ${row.cpaD0.toFixed(2)}
+          </td>
+          <td className={cn("text-right tabular-nums", cellPad)}>
+            <DeltaChip delta={row.cpaD0Delta} polarity="down-good" compact={compact} />
+          </td>
+          <td className={cn("text-right tabular-nums text-[color:var(--text-light-secondary)]", cellPad)}>
+            {row.subD7 === null ? "—" : row.subD7}
+          </td>
+          <td
+            className={cn(
+              "relative text-right tabular-nums",
+              compact ? "py-1 pl-1.5 pr-5" : "py-2.5 pl-2 pr-7",
+            )}
+            style={row.cpaD7 !== null ? costTint(row.cpaD7, maxCost) : undefined}
+          >
+            {row.cpaD7 === null ? (
+              <span className="text-[color:var(--text-light-muted)]">—</span>
+            ) : (
+              `$${row.cpaD7.toFixed(2)}`
+            )}
+            {callout && <CalloutArrow color={callout} compact={compact} />}
+          </td>
+        </>
+      )}
     </tr>
   );
 }

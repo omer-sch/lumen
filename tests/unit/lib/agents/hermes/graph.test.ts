@@ -340,7 +340,13 @@ describe("buildHermesGraph", () => {
       1,
     );
 
-    // Assembled report headers reflect the intent, not the old defaults.
+    // Assembled report headers reflect the intent at the data layer
+    // (platform / channel fields are still set so future
+    // platform-filtered runs render correctly) but the human-readable
+    // titles do NOT claim the intent's platform because BQ data is
+    // currently client-wide across platforms; see snapshot.ts
+    // dataScope. The scopeCaveat surfaces on the cover so the reader
+    // knows what they're looking at.
     const [reportArg] = upsertReportMock.mock.calls[0];
     const platformSection = reportArg.sections.find(
       (s: { id: string }) => s.id === "platform_overall",
@@ -349,10 +355,15 @@ describe("buildHermesGraph", () => {
       (s: { id: string }) => s.id === "channel_weekly",
     );
     expect(platformSection.platform).toBe("ios");
-    expect(platformSection.title).toMatch(/iOS \| Overall/);
+    expect(platformSection.title).toMatch(/Overall \| Weekly Breakdown/);
+    expect(platformSection.title).not.toMatch(/iOS/);
     expect(weeklySection.platform).toBe("ios");
     expect(weeklySection.channel).toBe("tiktok");
-    expect(weeklySection.title).toMatch(/iOS \| TikTok/);
+    expect(weeklySection.title).toMatch(/TikTok \| Weekly Breakdown/);
+    expect(weeklySection.title).not.toMatch(/iOS/);
+    // Cover scope caveat: the intent asked for iOS / TikTok but the
+    // data is client-wide; the cover line announces that honestly.
+    expect(reportArg.filterRange).toMatch(/iOS.*TikTok.*client-wide/);
 
     // Trust-contract guard: none of the deleted mock-fixture values
     // (Facebook $6,230, -28.7% substart, $22.41 cpSubstart) appear in
