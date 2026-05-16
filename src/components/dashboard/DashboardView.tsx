@@ -78,8 +78,15 @@ function DashboardInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, bounds?.earliest, bounds?.latest, windowEmpty]);
 
+  // Viewport-fit layout. The dashboard is sized to the visible page
+  // minus the TopBar (h-16 = 4rem) and the main's vertical padding
+  // (py-5 sm / md:py-6 md+). Header + KPI strip are shrink-0; the
+  // trend row consumes the remaining height via flex-1 min-h-0 so
+  // the chart never spills past the bottom of the page. The
+  // min-h-[40rem] floor stops the layout collapsing into illegibility
+  // on very short viewports -- body scroll engages below that.
   return (
-    <div className="flex flex-col gap-3 md:gap-4">
+    <div className="flex h-[calc(100dvh-6.5rem)] min-h-[40rem] flex-col gap-3 md:h-[calc(100dvh-7rem)] md:gap-4">
       <DashboardHeader />
       {mode === "ai" ? (
         <AIModeView />
@@ -385,20 +392,22 @@ function MyDashboard({
   if (loading) {
     return (
       <div
-        className="flex flex-col gap-3 md:gap-4"
+        className="flex flex-1 min-h-0 flex-col gap-3 md:gap-4"
         data-loading
         data-testid="dashboard-loading"
       >
-        <section className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${gridCols}`}>
+        <section
+          className={`grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 ${gridCols}`}
+        >
           {slots.map((_, i) => (
             <KpiCardSkeleton key={`kpi-skel-${i}`} />
           ))}
         </section>
-        <section className="grid grid-cols-1 gap-3 lg:grid-cols-5 lg:gap-4">
+        <section className="grid grid-cols-1 gap-3 lg:grid-cols-5 lg:gap-4 flex-1 min-h-0">
           <div className="lg:col-span-3">
             <TrendChartSkeleton />
           </div>
-          <Skeleton className="h-72 w-full rounded-lg lg:col-span-2" />
+          <Skeleton className="h-full w-full rounded-lg lg:col-span-2" />
         </section>
       </div>
     );
@@ -439,13 +448,18 @@ function MyDashboard({
     visibleKpis.find((k) => k.id === id) ?? visibleKpis[0];
 
   return (
-    <div className="flex flex-col gap-3 md:gap-4" data-live>
+    <div
+      className="flex flex-1 min-h-0 flex-col gap-3 md:gap-4"
+      data-live
+    >
       {/* KPI strip — equal tiles in a row on lg+, each with its own
           sparkline. Column count adapts to coverage so missing metrics
           don't leave empty slots. The hero (yellow glow) follows the
           first slot wherever it lands so the brand "yellow is
           intentional" rule still holds. */}
-      <section className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${gridCols}`}>
+      <section
+        className={`grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 ${gridCols}`}
+      >
         {slots.map((activeId, i) => {
           const kpi = kpiById(activeId);
           // Extended metrics are optional on TrendPoint; coerce undefined
@@ -499,8 +513,10 @@ function MyDashboard({
       {/* Trend chart + network breakdown — side-by-side on lg+ so the
           dashboard fits in one viewport. Chart takes 3/5, breakdown
           gets 2/5 so the stacked network cards have room to breathe.
-          Stacks on smaller screens. */}
-      <section className="grid grid-cols-1 gap-3 lg:grid-cols-5 lg:gap-4">
+          Stacks on smaller screens. flex-1 + min-h-0 hands the
+          remaining viewport height to this row so the chart never
+          spills past the bottom. */}
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-5 lg:gap-4 flex-1 min-h-0">
         <div className="lg:col-span-3">
           {errors.trend ? (
             <SectionError

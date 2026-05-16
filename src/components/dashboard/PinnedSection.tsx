@@ -30,7 +30,7 @@ export function PinnedSection() {
   return (
     <section
       aria-label="Pinned views"
-      className="flex flex-col gap-4"
+      className="flex shrink-0 flex-col gap-4"
       data-testid="pinned-section"
     >
       <header className="flex items-end justify-between gap-3">

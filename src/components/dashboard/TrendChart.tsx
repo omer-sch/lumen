@@ -287,7 +287,7 @@ export function TrendChart({
         )}
       </div>
 
-      <div className="relative w-full flex-1 min-h-[14rem]">
+      <div className="relative w-full flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={chartData}
