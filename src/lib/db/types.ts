@@ -397,6 +397,42 @@ export type Database = {
           },
         ]
       }
+      client_contacts: {
+        Row: {
+          client_id: string
+          created_at: string
+          email: string
+          id: string
+          is_primary: boolean
+          name: string
+          notes: string | null
+          role: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          email: string
+          id?: string
+          is_primary?: boolean
+          name: string
+          notes?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          email?: string
+          id?: string
+          is_primary?: boolean
+          name?: string
+          notes?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pinned_tiles: {
         Row: {
           chart_config_json: Json
