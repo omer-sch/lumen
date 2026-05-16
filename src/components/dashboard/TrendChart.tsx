@@ -291,7 +291,7 @@ export function TrendChart({
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={chartData}
-            margin={{ top: 8, right: 92, bottom: 8, left: 0 }}
+            margin={{ top: 8, right: 12, bottom: 8, left: 0 }}
           >
             <defs>
               <linearGradient id="trend-maturity-fade" x1="0" y1="0" x2="1" y2="0">
@@ -433,6 +433,8 @@ function EndOfLineLabels({
   chartData: Array<Record<string, number | string>>;
 }) {
   const props = chartProps as {
+    width?: number;
+    offset?: { left?: number; right?: number };
     xAxisMap?: Record<
       string,
       {
@@ -445,6 +447,15 @@ function EndOfLineLabels({
   const xAxis = Object.values(props.xAxisMap ?? {})[0];
   const yAxis = Object.values(props.yAxisMap ?? {})[0];
   if (!xAxis || !yAxis) return null;
+
+  // Right edge of the plot area in px. We anchor labels here (textAnchor=
+  // "end") so they grow leftward into the chart instead of reserving a
+  // wide right margin. A short connector line ties each label back to
+  // its data endpoint so the network-to-line mapping stays clear when
+  // the label sits inside the chart area.
+  const chartWidth = props.width ?? 0;
+  const rightOffset = props.offset?.right ?? 0;
+  const rightEdge = chartWidth - rightOffset - 2;
 
   type LabelEntry = {
     network: string;
@@ -494,21 +505,23 @@ function EndOfLineLabels({
   return (
     <g pointerEvents="none" data-testid="trend-end-labels">
       {entries.map((e) => {
-        const labelX = e.px + 6;
-        const nudged = Math.abs(e.y - e.dataY) > 0.5;
+        // Always draw a connector from the data endpoint to the
+        // right-anchored label position. When the label happens to sit
+        // right on top of its endpoint (rare, only when the last data
+        // point is already at the right edge) the connector is a 0-px
+        // hairline and visually disappears.
+        const labelX = rightEdge;
         return (
           <g key={e.network}>
-            {nudged && (
-              <line
-                x1={e.px + 2}
-                y1={e.dataY}
-                x2={labelX - 1}
-                y2={e.y}
-                stroke={e.color}
-                strokeOpacity={0.5}
-                strokeWidth={1}
-              />
-            )}
+            <line
+              x1={e.px + 2}
+              y1={e.dataY}
+              x2={labelX - 1}
+              y2={e.y}
+              stroke={e.color}
+              strokeOpacity={0.5}
+              strokeWidth={1}
+            />
             <text
               x={labelX}
               y={e.y}
@@ -517,6 +530,7 @@ function EndOfLineLabels({
               fontWeight={800}
               fontFamily="var(--font-display)"
               alignmentBaseline="middle"
+              textAnchor="end"
             >
               {e.network}
             </text>
