@@ -56,13 +56,13 @@ export function ActionItemsInput({
           <label
             htmlFor="action-items-input"
             className="font-body text-sm font-medium"
-            style={{ color: "var(--text-primary, #ffffff)" }}
+            style={{ color: "var(--text-primary)" }}
           >
             What did you do this week?
           </label>
           <span
             className="font-body text-xs"
-            style={{ color: "var(--text-muted, rgba(255,255,255,0.5))" }}
+            style={{ color: "var(--text-muted)" }}
           >
             optional
           </span>
@@ -71,7 +71,7 @@ export function ActionItemsInput({
       {hint ? (
         <div
           className="font-body text-xs leading-relaxed"
-          style={{ color: "var(--text-muted, rgba(255,255,255,0.5))" }}
+          style={{ color: "var(--text-muted)" }}
         >
           {hint}
         </div>
@@ -90,8 +90,8 @@ export function ActionItemsInput({
           disabled && "opacity-60 cursor-not-allowed",
         )}
         style={{
-          borderColor: "var(--surface-line, rgba(255,255,255,0.15))",
-          color: "var(--text-primary, #ffffff)",
+          borderColor: "var(--border-default)",
+          color: "var(--text-primary)",
         }}
       />
     </div>

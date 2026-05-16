@@ -120,7 +120,7 @@ export function ReportDocument({
               className="-mx-8 sm:-mx-12 rounded-xl px-8 py-10 sm:px-12 sm:py-14"
               style={{
                 background: "var(--surface-base)",
-                color: "var(--text-on-dark, #ffffff)",
+                color: "var(--color-white)",
               }}
             >
               <div
@@ -132,7 +132,7 @@ export function ReportDocument({
               {chapter.divider.subtitle ? (
                 <div
                   className="mt-3 font-body text-sm sm:text-base"
-                  style={{ color: "var(--color-brand)" }}
+                  style={{ color: "var(--color-yellow)" }}
                 >
                   {chapter.divider.subtitle}
                 </div>
@@ -171,7 +171,7 @@ export function ReportDocument({
           className="-mx-8 sm:-mx-12 rounded-xl px-8 py-10 sm:px-12 sm:py-14 text-center"
           style={{
             background: "var(--surface-base)",
-            color: "var(--text-on-dark, #ffffff)",
+            color: "var(--color-white)",
           }}
         >
           <div
@@ -183,7 +183,7 @@ export function ReportDocument({
           {report.closer.subtitle ? (
             <div
               className="mt-3 font-body text-sm sm:text-base"
-              style={{ color: "var(--color-brand)" }}
+              style={{ color: "var(--color-yellow)" }}
             >
               {report.closer.subtitle}
             </div>

@@ -57,8 +57,8 @@ export function ProseBlockView({ block, compact }: Props) {
               <span
                 className="mr-2 inline-flex items-center rounded-sm px-1.5 py-0.5 align-middle font-bold"
                 style={{
-                  background: "var(--color-brand, #FFDD0C)",
-                  color: "var(--text-light-primary, #0A1428)",
+                  background: "var(--color-yellow)",
+                  color: "var(--text-light-primary)",
                   fontSize: compact ? "10px" : "11px",
                   letterSpacing: "0.05em",
                   textTransform: "uppercase",
