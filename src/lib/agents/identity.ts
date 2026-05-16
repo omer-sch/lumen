@@ -6,7 +6,7 @@
  * are only needed by the Agents page).
  */
 
-export type AgentId = "aria" | "max" | "nova";
+export type AgentId = "aria" | "max" | "nova" | "hermes";
 
 export type AgentIdentity = {
   id: AgentId;
@@ -15,6 +15,10 @@ export type AgentIdentity = {
   avatarUrl: string;
 };
 
+// Hermes joins the lineup in v0.5. The avatar file lands in workstream
+// B (FLUX-generated, mint accent matching UA team color); the path is
+// pinned here so byline rendering compiles in chunk 1. Until the file
+// is generated, the next/image fallback serves a transparent square.
 export const AGENT_IDENTITIES: Record<AgentId, AgentIdentity> = {
   aria: {
     id: "aria",
@@ -33,6 +37,12 @@ export const AGENT_IDENTITIES: Record<AgentId, AgentIdentity> = {
     name: "Nova",
     role: "Report Writer",
     avatarUrl: "/avatars/nova.png",
+  },
+  hermes: {
+    id: "hermes",
+    name: "Hermes",
+    role: "Report Drafter",
+    avatarUrl: "/avatars/hermes.png",
   },
 };
 

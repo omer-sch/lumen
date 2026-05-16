@@ -441,6 +441,86 @@ export type Database = {
           },
         ]
       }
+      reports: {
+        Row: {
+          agent_run_id: string | null
+          audit: Json
+          authored_by: string
+          client: string
+          client_label: string
+          closing: Json
+          cover: Json
+          created_at: string
+          filter_range: string | null
+          id: string
+          owner_user_id: string
+          period: string
+          period_end: string | null
+          period_start: string | null
+          prompt: string | null
+          sections: Json
+          shared_with: Json
+          source: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          agent_run_id?: string | null
+          audit?: Json
+          authored_by?: string
+          client: string
+          client_label: string
+          closing?: Json
+          cover?: Json
+          created_at?: string
+          filter_range?: string | null
+          id?: string
+          owner_user_id: string
+          period: string
+          period_end?: string | null
+          period_start?: string | null
+          prompt?: string | null
+          sections?: Json
+          shared_with?: Json
+          source?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          agent_run_id?: string | null
+          audit?: Json
+          authored_by?: string
+          client?: string
+          client_label?: string
+          closing?: Json
+          cover?: Json
+          created_at?: string
+          filter_range?: string | null
+          id?: string
+          owner_user_id?: string
+          period?: string
+          period_end?: string | null
+          period_start?: string | null
+          prompt?: string | null
+          sections?: Json
+          shared_with?: Json
+          source?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_agent_run_id_fkey"
+            columns: ["agent_run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rag_chunks: {
         Row: {
           chunk_id: string

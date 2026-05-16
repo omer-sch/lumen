@@ -133,7 +133,7 @@ export type Agent = {
  * speech bubble; only the key number should be marked.
  */
 export const AGENT_PLAYGROUND: Record<
-  "aria" | "max" | "nova",
+  "aria" | "max" | "nova" | "hermes",
   { costThisWeek: string; greeting: string; toolkit: AgentToolkit }
 > = {
   aria: {
@@ -178,6 +178,21 @@ export const AGENT_PLAYGROUND: Record<
         { name: "Reports", icon: "FileText" },
         { name: "Memory", icon: "Brain" },
         { name: "Voice", icon: "MessageCircle" },
+      ],
+    },
+  },
+  hermes: {
+    costThisWeek: "$0.04",
+    greeting:
+      "Hey, I'm Hermes. I read your inbox for client report requests and draft a yellowHEAD weekly review on the spot. **Cost per draft: under 10 cents** on a warm cache.",
+    toolkit: {
+      sentence:
+        "When a recognised client emails you with a report request, I parse the intent, pull the right BigQuery slice, find the story worth telling, and draft a citation-bound report you can review and send.",
+      tools: [
+        { name: "Gmail watch", icon: "Mail" },
+        { name: "BigQuery", icon: "Database" },
+        { name: "Reports", icon: "FileText" },
+        { name: "Memory", icon: "Brain" },
       ],
     },
   },
