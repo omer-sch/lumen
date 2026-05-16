@@ -57,27 +57,31 @@ export function RegenerateSectionButton({
     }
   }, [busy, onRegenerated, originalRunId, reportId, slideTarget]);
 
+  // Accessibility note: the button sits on the white report card
+  // (--surface-light-card), not on the navy dashboard. Earlier draft
+  // used mint text on white which read at 1.6:1 contrast, failing AA.
+  // Filled-mint with navy text (the brand's primary action shape from
+  // tailwind.config.ts) lands at >= 7:1. Focus ring offset is the
+  // light card surface so the ring is visible on the actual backdrop.
+  const label = `Regenerate ${slideTarget.replaceAll("_", " ")} section`;
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-end gap-1" aria-live="polite">
       <button
         type="button"
         onClick={handleClick}
         disabled={busy}
-        aria-live="polite"
-        aria-label={
-          busy
-            ? `Regenerating ${slideTarget.replace("_", " ")} section`
-            : `Regenerate ${slideTarget.replace("_", " ")} section`
-        }
+        aria-busy={busy}
+        aria-label={busy ? `${label} (in progress)` : label}
         className={cn(
           "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-body text-[11px] font-semibold uppercase tracking-wider transition-[transform,box-shadow,opacity] duration-280 ease-out-quart",
-          "border border-[color:var(--color-ua)]/40 text-[color:var(--color-ua)]",
-          "hover:-translate-y-px hover:bg-[color:var(--tint-ua-soft)]",
-          "disabled:cursor-not-allowed disabled:opacity-60",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-ua)] focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
+          "bg-[color:var(--color-ua)] text-navy shadow-mint",
+          "hover:-translate-y-px active:scale-[0.97]",
+          "disabled:cursor-not-allowed disabled:opacity-70",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-ua)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--surface-light-card)]",
         )}
       >
         <RefreshCw
+          aria-hidden
           className={cn("h-3 w-3", busy && "animate-spin")}
           strokeWidth={2.25}
         />

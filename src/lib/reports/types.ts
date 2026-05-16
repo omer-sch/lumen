@@ -263,4 +263,11 @@ export type ReportAuditEntry =
       after: string;
       at: string;
       by: string;
+    }
+  | {
+      kind: "edit_title";
+      before: string;
+      after: string;
+      at: string;
+      by: string;
     };

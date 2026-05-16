@@ -1,4 +1,4 @@
-import type { ReportAuditEntry, ReportSection } from "./types";
+import type { Report, ReportAuditEntry, ReportSection } from "./types";
 
 // Section-level diff for the edit audit log. The PUT /api/reports/[id]
 // handler calls this before upserting so the row picks up an "edit"
@@ -67,4 +67,27 @@ export function diffSectionsForAudit(
   }
 
   return entries;
+}
+
+// Full-report diff that also catches the cover title edit (Reviewer
+// caught this gap in v0.5-A: ReportCoverHeader writes through setTitle
+// which mutates report.title, not any section, so a pure section diff
+// missed it). Returns one entry per change.
+export function diffReportForAudit(
+  prior: Pick<Report, "title" | "sections">,
+  next: Pick<Report, "title" | "sections">,
+  by: string,
+): ReportAuditEntry[] {
+  const at = new Date().toISOString();
+  const entries: ReportAuditEntry[] = [];
+  if (prior.title !== next.title) {
+    entries.push({
+      kind: "edit_title",
+      before: truncate(prior.title),
+      after: truncate(next.title),
+      at,
+      by,
+    });
+  }
+  return [...entries, ...diffSectionsForAudit(prior.sections, next.sections, by)];
 }

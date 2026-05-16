@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { diffSectionsForAudit } from "@/lib/reports/audit";
+import { diffReportForAudit, diffSectionsForAudit } from "@/lib/reports/audit";
 import type { ReportSection } from "@/lib/reports/types";
 
 function platformSection(over: Partial<ReportSection> = {}): ReportSection {
@@ -58,11 +58,48 @@ describe("diffSectionsForAudit", () => {
     expect(entries[0].before).toBe("(absent)");
   });
 
+  it("does not audit unchanged title via the full-report diff", () => {
+    const s = platformSection();
+    expect(
+      diffReportForAudit(
+        { title: "Same", sections: [s] },
+        { title: "Same", sections: [s] },
+        "user-1",
+      ),
+    ).toEqual([]);
+  });
+
+  it("emits an edit_title audit entry when only the title changed", () => {
+    const s = platformSection();
+    const entries = diffReportForAudit(
+      { title: "Old title", sections: [s] },
+      { title: "New title", sections: [s] },
+      "user-1",
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0].kind).toBe("edit_title");
+    if (entries[0].kind !== "edit_title") throw new Error("kind narrow");
+    expect(entries[0].before).toBe("Old title");
+    expect(entries[0].after).toBe("New title");
+  });
+
+  it("emits both edit_title and section edits when both changed", () => {
+    const prior = platformSection({ title: "Section old" });
+    const next = platformSection({ title: "Section new" });
+    const entries = diffReportForAudit(
+      { title: "Report old", sections: [prior] },
+      { title: "Report new", sections: [next] },
+      "user-1",
+    );
+    expect(entries).toHaveLength(2);
+    expect(entries[0].kind).toBe("edit_title");
+    expect(entries[1].kind).toBe("edit");
+  });
+
   it("truncates long snippets so audit rows stay manageable", () => {
     const longBullet = "x".repeat(2000);
     const prior = platformSection();
     const next = platformSection({
-      // @ts-expect-error: we are intentionally bloating the section
       bullets: [{ text: longBullet }],
     });
     const entries = diffSectionsForAudit([prior], [next], "user-1");

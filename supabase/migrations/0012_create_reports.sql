@@ -22,8 +22,14 @@
 -- so the chunk-1 build stays green even if the migration hasn't been
 -- applied to the dev project yet.
 
+-- id is text (not uuid) because both the manual generateReport() path
+-- and the Hermes Atelier path produce client-shaped ids like
+-- "rpt_<uuid>" today. A uuid column would reject those at insert; a
+-- migration that strips the prefix everywhere is a bigger refactor
+-- and the trade-off (lose uuid type checks at the DB) is fine because
+-- ids are still generated via crypto.randomUUID() in code.
 create table public.reports (
-  id              uuid        primary key default gen_random_uuid(),
+  id              text        primary key,
   owner_user_id   text        not null,
   client          text        not null,
   client_label    text        not null,

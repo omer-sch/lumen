@@ -475,7 +475,7 @@ export type Database = {
           cover?: Json
           created_at?: string
           filter_range?: string | null
-          id?: string
+          id: string
           owner_user_id: string
           period: string
           period_end?: string | null

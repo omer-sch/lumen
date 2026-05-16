@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/auth/require-user";
 import { isSupabaseConfigured } from "@/lib/env.server";
-import { diffSectionsForAudit } from "@/lib/reports/audit";
+import { diffReportForAudit } from "@/lib/reports/audit";
 import {
   deleteReport,
   getReportForUser,
@@ -115,9 +115,12 @@ export async function PUT(
   const prior = await getReportForUser(parsed.data.id, authResult.userId);
   const newEntries =
     prior != null
-      ? diffSectionsForAudit(
-          prior.sections,
-          parsed.data.sections as ReportSection[],
+      ? diffReportForAudit(
+          prior,
+          {
+            title: parsed.data.title,
+            sections: parsed.data.sections as ReportSection[],
+          },
           authResult.userId,
         )
       : [];

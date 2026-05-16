@@ -278,7 +278,8 @@
       "Bash(lsof -nP -iTCP:3000 -iTCP:3001 -sTCP:LISTEN)",
       "Bash(jobs -p)",
       "Bash(LUMEN_APP_URL=http://localhost:3000 LUMEN_VAULT_PATH='/Users/omer/Documents/Claude/Projects/yellow head/Lumen Vault' node --env-file=.env.local scripts/backfill-knowledge-corpus.mjs)",
-      "Bash(awk '/create table.*agent_reports/,/^[^ ]/{print NR\": \"$0; if \\(/^\\\\\\);/\\) exit}' supabase/migrations/0001_init_schema.sql)"
+      "Bash(awk '/create table.*agent_reports/,/^[^ ]/{print NR\": \"$0; if \\(/^\\\\\\);/\\) exit}' supabase/migrations/0001_init_schema.sql)",
+      "Bash(set -o pipefail)"
     ]
   },
   "enableAllProjectMcpServers": true,
