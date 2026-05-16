@@ -7,9 +7,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const retrieveMock = vi.hoisted(() => vi.fn());
+const networkBreakdownMock = vi.hoisted(() => vi.fn());
+const campaignsMock = vi.hoisted(() => vi.fn());
+const trendMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/rag/retrieve", () => ({
   retrieve: retrieveMock,
+}));
+
+vi.mock("@/lib/globalcomix-queries", () => ({
+  queryGlobalComixNetworkBreakdown: networkBreakdownMock,
+  queryGlobalComixCampaigns: campaignsMock,
+  queryGlobalComixTrend: trendMock,
 }));
 
 class FakeAnthropic {
@@ -24,6 +33,9 @@ beforeEach(async () => {
   vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
   fake.messages.create.mockReset();
   retrieveMock.mockReset();
+  networkBreakdownMock.mockReset();
+  campaignsMock.mockReset();
+  trendMock.mockReset();
   retrieveMock.mockResolvedValue({
     chunks: [],
     citations: [],
@@ -31,6 +43,12 @@ beforeEach(async () => {
     latency_ms: 0,
     query_embedding_cost_usd: 0,
   });
+  // Analyze pulls these three; empty arrays produce 0 anomalies, the
+  // Sonnet rank-and-frame call (second messages.create) returns no
+  // findings; the graph still completes.
+  networkBreakdownMock.mockResolvedValue([]);
+  campaignsMock.mockResolvedValue([]);
+  trendMock.mockResolvedValue([]);
   const mod = await import("@/lib/agents/_scaffold/model");
   mod.__setAnthropicClientForTesting(fake as never);
 });
@@ -69,6 +87,19 @@ function mockHaikuResponse(input: unknown) {
   };
 }
 
+function mockAnalyzeResponse(findings: unknown[] = []) {
+  return {
+    content: [
+      {
+        type: "tool_use",
+        name: "rank_findings",
+        id: "toolu_analyze",
+        input: { findings },
+      },
+    ],
+  };
+}
+
 describe("buildHermesGraph", () => {
   it("HERMES_NODE_ORDER pins the five-node linear order", async () => {
     const { HERMES_NODE_ORDER } = await import(
@@ -83,10 +114,20 @@ describe("buildHermesGraph", () => {
     ]);
   });
 
-  it("runs end to end with a real parse_intent (mocked Haiku) + stub nodes", async () => {
-    fake.messages.create.mockResolvedValueOnce(
-      mockHaikuResponse(TOOL_USE_INTENT),
-    );
+  it("runs end to end with parse_intent + real analyze (both mocked Anthropic)", async () => {
+    fake.messages.create
+      .mockResolvedValueOnce(mockHaikuResponse(TOOL_USE_INTENT))
+      .mockResolvedValueOnce(
+        mockAnalyzeResponse([
+          {
+            kind: "info",
+            claim_template: "Quiet week.",
+            source_query_id: "network_breakdown",
+            citations: [],
+            severity: "low",
+          },
+        ]),
+      );
     const { buildHermesGraph } = await import(
       "@/lib/agents/hermes/graph"
     );
@@ -98,7 +139,9 @@ describe("buildHermesGraph", () => {
 
     expect(final.intent?.client).toBe("globalcomix");
     expect(final.intent?.confidence).toBeCloseTo(0.91, 2);
-    // Stubs filled in shape-correct placeholders.
+    // Phase 4 analyze returns findings shape from the model; Quill /
+    // Atelier / review_gate are still stubs and produce one bullet,
+    // four slide placeholders, and an unapproved gate respectively.
     expect(final.findings).toHaveLength(1);
     expect(final.bullets).toHaveLength(1);
     expect(final.deck.slides).toHaveLength(4);
@@ -114,9 +157,9 @@ describe("buildHermesGraph", () => {
   });
 
   it("calls Comms retrieve before invoking Haiku", async () => {
-    fake.messages.create.mockResolvedValueOnce(
-      mockHaikuResponse(TOOL_USE_INTENT),
-    );
+    fake.messages.create
+      .mockResolvedValueOnce(mockHaikuResponse(TOOL_USE_INTENT))
+      .mockResolvedValueOnce(mockAnalyzeResponse([]));
     const { buildHermesGraph } = await import(
       "@/lib/agents/hermes/graph"
     );
@@ -131,9 +174,9 @@ describe("buildHermesGraph", () => {
 
   it("recovers when Comms retrieve fails (non-load-bearing in v0)", async () => {
     retrieveMock.mockRejectedValueOnce(new Error("RAG offline"));
-    fake.messages.create.mockResolvedValueOnce(
-      mockHaikuResponse(TOOL_USE_INTENT),
-    );
+    fake.messages.create
+      .mockResolvedValueOnce(mockHaikuResponse(TOOL_USE_INTENT))
+      .mockResolvedValueOnce(mockAnalyzeResponse([]));
     const { buildHermesGraph } = await import(
       "@/lib/agents/hermes/graph"
     );

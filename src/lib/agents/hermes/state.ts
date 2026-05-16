@@ -47,16 +47,28 @@ export type Context = {
   comms: ContextChunk[];
 };
 
-// ---------- Findings (Analyze output, stubbed in chunk 1) ----------
+// ---------- Findings (Analyze output) ----------
 
-export type Finding = {
-  kind: "anomaly" | "trend" | "highlight" | "info";
-  claim_template: string;
-  delta?: number;
-  source_query_id: string;
-  citations: Array<{ source_path: string; chunk_id: string }>;
-  severity: "low" | "medium" | "high";
-};
+export const FindingSchema = z.object({
+  kind: z.enum(["anomaly", "trend", "highlight", "info"]),
+  claim_template: z.string().min(1),
+  delta: z.number().nullable().optional(),
+  source_query_id: z.string().min(1),
+  citations: z
+    .array(
+      z.object({
+        source_path: z.string(),
+        chunk_id: z.string(),
+      }),
+    )
+    .default([]),
+  severity: z.enum(["low", "medium", "high"]),
+});
+export type Finding = z.infer<typeof FindingSchema>;
+
+export const FindingsResponseSchema = z.object({
+  findings: z.array(FindingSchema).max(20),
+});
 
 // ---------- Bullets (Quill output, stubbed in chunk 1) ----------
 
