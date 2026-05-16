@@ -6,6 +6,8 @@ import type {
   ReportChapter,
 } from "@/lib/reports/types";
 
+import { parseActionItems, type ActionItem } from "../action-items";
+import { summarizeFreshness, type FreshnessSummary } from "../freshness";
 import {
   writeCampaignBreakdown,
   writePlatformOverall,
@@ -127,6 +129,13 @@ export async function buildChapter(args: {
   platform: Platform;
   options: ComposeOptions;
   dataIsPlatformFiltered: boolean;
+  /** Optional freshness summary (Phase 3). When populated, the
+   *  platform-overall writer surfaces per-network caveats. */
+  freshness?: FreshnessSummary;
+  /** Optional structured action items (Phase 3). The
+   *  campaign-breakdown writer weaves them into matching family
+   *  prose as `<> AI:` callouts. */
+  actionItems?: ActionItem[];
 }): Promise<ChapterBuildResult | null> {
   const platformNetworks = networksForPlatform(
     args.ready,
@@ -137,11 +146,14 @@ export async function buildChapter(args: {
 
   const platformLabel = PLATFORM_LABEL[args.platform];
 
-  // 1) Platform overall prose (cross-channel synthesis).
+  // 1) Platform overall prose (cross-channel synthesis). Phase 3
+  // optionally threads in the freshness summary so the writer can
+  // weave caveats into the relevant channel's block.
   const overallRes = await writePlatformOverall({
     ready: args.ready,
     networks: platformNetworks.slice().sort((a, b) => b.spend - a.spend),
     options: args.options,
+    freshness: args.freshness,
   });
 
   const sections: (
@@ -189,6 +201,7 @@ export async function buildChapter(args: {
         ready: args.ready,
         bqNetworkNames: bqNames,
         options: args.options,
+        actionItems: args.actionItems,
       }),
     ]);
 
@@ -332,6 +345,14 @@ export async function buildWeeklyReviewGlobalcomix(args: {
     ? [...PLATFORM_ORDER]
     : [pickSinglePlatform(args.intent)];
 
+  // Phase 3 context shared across every chapter: freshness summary
+  // (pure inspection of ReadyData.provenance + per-network sparseness)
+  // and parsed action items (free-form notes from
+  // options.actionNotes). Both empty by default; callers that don't
+  // pass actionNotes simply emit no action callouts in prose.
+  const freshness = summarizeFreshness(args.ready);
+  const actionItems = parseActionItems(args.options.actionNotes, args.ready);
+
   const chapters: ReportChapter[] = [];
   const citations: ProseCitation[][] = [];
   let unclosedTotal = 0;
@@ -345,6 +366,8 @@ export async function buildWeeklyReviewGlobalcomix(args: {
       platform,
       options: args.options,
       dataIsPlatformFiltered: args.dataIsPlatformFiltered,
+      freshness,
+      actionItems,
     });
     if (!built) continue;
     chapters.push(built.chapter);

@@ -58,6 +58,11 @@ type GenerateInput = {
   from: Date;
   to: Date;
   client: string;
+  /** Phase 3 action notes from the ActionItemsInput textarea. The
+   *  string is forwarded to composeReport.options.actionNotes when
+   *  USE_SMART_REPORTS=live; ignored on the legacy snapshot-only
+   *  path. */
+  actionNotes?: string;
 };
 
 const TITLE_SOFT_LIMIT = 90;
@@ -136,7 +141,7 @@ function defaultIntentFor({
 }
 
 export async function generateReport(input: GenerateInput): Promise<Report> {
-  const { prompt, from, to, client } = input;
+  const { prompt, from, to, client, actionNotes } = input;
 
   if (!clientHasReportData(client)) {
     throw new Error(
@@ -172,7 +177,10 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
       readyData: ready,
       intent,
       ownerUserId: "mock-user-1",
-      options: { template: "single-channel-weekly" },
+      options: {
+        template: "single-channel-weekly",
+        actionNotes: actionNotes,
+      },
     });
     const titleSeed = deriveTitleSeed(prompt);
     const week = isoWeek(to);

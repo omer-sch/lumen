@@ -12,10 +12,17 @@ import type {
   ReportSection,
 } from "@/lib/reports/types";
 
+import { parseActionItems } from "./action-items";
 import {
   summarizeCitationCoverage,
   validateCitations,
 } from "./citation-validator";
+// summarizeFreshness is invoked from the multi-section template
+// (templates/weekly-review-globalcomix.ts) rather than directly here;
+// the single-channel-weekly path doesn't carry a platform-overall
+// section so it doesn't need the import. The re-export below makes
+// the helper available to external callers (notifications, future
+// surfaces) without going through the template.
 import {
   writeCampaignBreakdown,
   writeCloser,
@@ -128,11 +135,22 @@ async function composeSingleChannelWeekly(args: {
     history: readyData.history.networks,
   });
 
+  // Action items (Phase 3): parse user-supplied notes into structured
+  // items classified against ReadyData.campaigns. Empty array when
+  // the user supplied no notes; the writer simply omits action
+  // callouts in that case.
+  const actionItems = parseActionItems(options.actionNotes, readyData);
+
   // Run both writers in parallel. Each returns ProseBlock[] +
   // per-block citations + diagnostics; we aggregate after.
   const [weeklyResult, campaignResult] = await Promise.all([
     writeWeeklyBreakdown({ ready: readyData, bqNetworkNames: bqNames, options }),
-    writeCampaignBreakdown({ ready: readyData, bqNetworkNames: bqNames, options }),
+    writeCampaignBreakdown({
+      ready: readyData,
+      bqNetworkNames: bqNames,
+      options,
+      actionItems,
+    }),
   ]);
 
   // Citation validator. Phase 1 trust contract: every prose block with
@@ -381,3 +399,10 @@ export type {
 } from "./types";
 export { parseHighlightMarkup } from "./highlight-markup";
 export { extractCitations, validateCitations } from "./citation-validator";
+export { summarizeFreshness, freshnessAsContextString } from "./freshness";
+export {
+  parseActionItems,
+  classifyActionLine,
+  groupActionItemsByFamily,
+  actionItemsAsContextString,
+} from "./action-items";

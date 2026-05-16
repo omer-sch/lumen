@@ -8,10 +8,11 @@ import { cn } from "@/lib/utils";
 //   - "good"  yellow background, bold text (positive callout)
 //   - "bad"   pink   background, bold text (negative callout)
 //
-// Phase 3 will add a third "arrow" token that links the phrase to a
-// specific row in the campaign table; the regex below stays
-// permissive enough to ignore unknown placeholder kinds without
-// crashing.
+// Phase 3 adds inline `<> AI:` action-item callouts that the
+// prose-writer emits when the user pasted action notes that match
+// the relevant family. We split those out of the prose into a
+// rendered "action" chunk styled as a yellow pill prefix; the
+// trailing text reads as plain copy.
 
 type Props = {
   block: ProseBlockData;
@@ -23,7 +24,10 @@ type Props = {
 const PLACEHOLDER_RE = /\[\[highlight:(\d+)\]\]/g;
 
 export function ProseBlockView({ block, compact }: Props) {
-  const segments = splitOnPlaceholders(block.text, block.highlights);
+  // Phase 3: split the prose text on `<> AI:` action callouts FIRST.
+  // Each callout becomes a separate paragraph rendered with a yellow
+  // pill prefix; the surrounding prose flows around them.
+  const paragraphs = splitOnActionCallouts(block.text);
   return (
     <div className={cn("flex flex-col", compact ? "gap-1" : "gap-2")}>
       {block.heading ? (
@@ -37,38 +41,110 @@ export function ProseBlockView({ block, compact }: Props) {
           {block.heading}
         </div>
       ) : null}
-      <p
-        className={cn(
-          "font-body leading-relaxed",
-          compact ? "text-[12px]" : "text-sm",
-        )}
-        style={{ color: "var(--text-light-secondary)" }}
-      >
-        {segments.map((seg, i) =>
-          seg.kind === "text" ? (
-            <span key={i}>{seg.text}</span>
-          ) : (
-            <mark
-              key={i}
-              className="px-1 py-0.5 rounded-sm font-semibold"
-              style={{
-                background:
-                  seg.token.kind === "good"
-                    ? "rgba(255, 221, 12, 0.35)"
-                    : "rgba(248, 134, 115, 0.32)",
-                color:
-                  seg.token.kind === "good"
-                    ? "var(--text-light-primary)"
-                    : "var(--text-light-primary)",
-              }}
-            >
-              {seg.token.text}
-            </mark>
-          ),
-        )}
-      </p>
+      {paragraphs.map((para, pIdx) => {
+        const segments = splitOnPlaceholders(para.text, block.highlights);
+        return (
+          <p
+            key={pIdx}
+            className={cn(
+              "font-body leading-relaxed",
+              compact ? "text-[12px]" : "text-sm",
+              para.kind === "action" && "pl-0",
+            )}
+            style={{ color: "var(--text-light-secondary)" }}
+          >
+            {para.kind === "action" ? (
+              <span
+                className="mr-2 inline-flex items-center rounded-sm px-1.5 py-0.5 align-middle font-bold"
+                style={{
+                  background: "var(--color-brand, #FFDD0C)",
+                  color: "var(--text-light-primary, #0A1428)",
+                  fontSize: compact ? "10px" : "11px",
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {"<> AI"}
+              </span>
+            ) : null}
+            {segments.map((seg, i) =>
+              seg.kind === "text" ? (
+                <span key={i}>{seg.text}</span>
+              ) : (
+                <mark
+                  key={i}
+                  className="px-1 py-0.5 rounded-sm font-semibold"
+                  style={{
+                    background:
+                      seg.token.kind === "good"
+                        ? "rgba(255, 221, 12, 0.35)"
+                        : "rgba(248, 134, 115, 0.32)",
+                    color: "var(--text-light-primary)",
+                  }}
+                >
+                  {seg.token.text}
+                </mark>
+              ),
+            )}
+          </p>
+        );
+      })}
     </div>
   );
+}
+
+// Split prose on `<> AI:` callout markers. Each callout becomes a
+// separate paragraph entry tagged kind="action"; surrounding text
+// becomes kind="prose". Matches the renderer style in the Week 18
+// reference deck where action callouts are visually distinct rows
+// rather than inline tokens.
+type Paragraph = { kind: "prose" | "action"; text: string };
+const ACTION_CALLOUT_RE = /<>\s*AI:\s*/g;
+
+function splitOnActionCallouts(input: string): Paragraph[] {
+  if (typeof input !== "string" || input.length === 0) {
+    return [{ kind: "prose", text: input ?? "" }];
+  }
+  // The regex eats the literal `<> AI:` token; what remains on each
+  // side of a match is the surrounding prose. Anything that comes
+  // AFTER a match (up to the next match or end of string) is the
+  // action sentence.
+  const matches: number[] = [];
+  ACTION_CALLOUT_RE.lastIndex = 0;
+  for (
+    let m = ACTION_CALLOUT_RE.exec(input);
+    m != null;
+    m = ACTION_CALLOUT_RE.exec(input)
+  ) {
+    matches.push(m.index + m[0].length);
+  }
+  if (matches.length === 0) {
+    return [{ kind: "prose", text: input }];
+  }
+
+  const out: Paragraph[] = [];
+  const firstMatchStart = matches[0];
+  // The prose chunk that comes BEFORE the first <> AI: marker.
+  // Trimmed so a leading newline doesn't produce an empty paragraph.
+  // Find the actual `<>` index (the match index minus token length)
+  // by scanning back.
+  const firstMarkerIdx = input.slice(0, firstMatchStart).lastIndexOf("<>");
+  const preProse = input
+    .slice(0, firstMarkerIdx >= 0 ? firstMarkerIdx : firstMatchStart)
+    .trim();
+  if (preProse.length > 0) out.push({ kind: "prose", text: preProse });
+
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i];
+    const nextMarkerIdx =
+      i + 1 < matches.length
+        ? input.slice(0, matches[i + 1]).lastIndexOf("<>")
+        : input.length;
+    const action = input.slice(start, nextMarkerIdx).trim();
+    if (action.length > 0) out.push({ kind: "action", text: action });
+  }
+
+  return out;
 }
 
 type Segment =

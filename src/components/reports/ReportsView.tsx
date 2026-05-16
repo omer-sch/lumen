@@ -31,6 +31,7 @@ import { generateReportAction } from "@/app/(app)/reports/actions";
 import { clientHasReportData, findClient } from "@/lib/mock/clients";
 import { useReports } from "@/lib/reports/store";
 import type { Report } from "@/lib/reports/types";
+import { ActionItemsInput } from "./ActionItemsInput";
 import { ReportDocument } from "./ReportDocument";
 import { ReportCarousel } from "./carousel/ReportCarousel";
 import { ReportDeckOffscreen } from "./ReportDeckOffscreen";
@@ -111,6 +112,12 @@ function ReportsInner({ preloadedReport }: ReportsViewProps) {
   }, [activeReport?.id]);
 
   const [generateError, setGenerateError] = useState<string | null>(null);
+  // Phase 3: free-form analyst notes ("what did you do this week?").
+  // Forwarded to composeReport.options.actionNotes when
+  // USE_SMART_REPORTS=live; ignored on the legacy snapshot-only path,
+  // so this still works under the default off mode (it just doesn't
+  // surface anything in the deck).
+  const [actionNotes, setActionNotes] = useState("");
   const handleGenerate = async (input: string) => {
     const q = (input ?? prompt).trim();
     if (!q || generating) return;
@@ -128,10 +135,13 @@ function ReportsInner({ preloadedReport }: ReportsViewProps) {
       fromIso: from.toISOString(),
       toIso: to.toISOString(),
       client,
+      actionNotes: actionNotes.trim() || undefined,
     });
     if (result.ok) {
       setDraft(result.report);
       save(result.report);
+      // Don't clear actionNotes -- the user might generate a second
+      // draft with the same notes. They can clear it manually.
     } else {
       setGenerateError(result.error);
     }
@@ -329,6 +339,12 @@ function ReportsInner({ preloadedReport }: ReportsViewProps) {
               generating={generating}
               onGenerate={handleGenerate}
               disabled={!clientHasReportData(client)}
+            />
+            <ActionItemsInput
+              value={actionNotes}
+              onChange={setActionNotes}
+              hint="Paste a quick list of what you did this week. Lumen will weave matching notes into the relevant campaign-breakdown paragraphs."
+              disabled={generating}
             />
           </>
         ) : (

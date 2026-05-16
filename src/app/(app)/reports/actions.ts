@@ -14,6 +14,13 @@ export type GenerateReportActionInput = {
   fromIso: string;
   toIso: string;
   client: string;
+  /** Optional analyst notes ("What did you do this week?"). The
+   *  server forwards these to Smart Reports's action-items parser
+   *  which classifies each line against ReadyData.campaigns and
+   *  asks the prose-writer to weave them into the matching family's
+   *  paragraph as `<> AI:` callouts. Empty / undefined when the
+   *  user left the textarea blank. */
+  actionNotes?: string;
 };
 
 export type GenerateReportActionResult =
@@ -34,6 +41,7 @@ export async function generateReportAction(
       from,
       to,
       client: input.client,
+      actionNotes: input.actionNotes,
     });
     return { ok: true, report };
   } catch (err) {

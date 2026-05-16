@@ -7,11 +7,17 @@ import { getAnthropicClient, pickModel } from "@/lib/agents/_scaffold/model";
 import type { ReadyData, WeeklyHistoryRow } from "@/lib/analyst/types";
 import type { NetworkRow as BQNetworkRow } from "@/types/dashboard";
 
+import { actionItemsAsContextString } from "./action-items";
+import type { ActionItem } from "./action-items";
 import { extractCitations } from "./citation-validator";
 import {
   countUnclosedTags,
   parseHighlightMarkup,
 } from "./highlight-markup";
+import {
+  freshnessAsContextString,
+  type FreshnessSummary,
+} from "./freshness";
 import type {
   ComposeOptions,
   ProseBlock,
@@ -241,6 +247,11 @@ export async function writeCampaignBreakdown(args: {
   ready: ReadyData;
   bqNetworkNames: readonly string[];
   options: ComposeOptions;
+  /** Optional structured action items the prose-writer should weave
+   *  into prose as `<> AI:` callouts on the matching family. Empty
+   *  when the user pasted no notes; the writer simply omits action
+   *  callouts in that case. */
+  actionItems?: ActionItem[];
 }): Promise<CampaignWriteResult> {
   const groups = groupCampaignsByFamily(args.ready, args.bqNetworkNames);
   if (groups.length === 0) {
@@ -259,6 +270,7 @@ export async function writeCampaignBreakdown(args: {
   const userMessage = buildCampaignUserMessage({
     ready: args.ready,
     groups,
+    actionItems: args.actionItems ?? [],
   });
 
   const resp = await getAnthropicClient().messages.create({
@@ -369,6 +381,11 @@ export async function writePlatformOverall(args: {
    *  set because the BQ queries are client-wide. */
   networks: BQNetworkRow[];
   options: ComposeOptions;
+  /** Optional freshness summary the writer surfaces as channel-scoped
+   *  caveats ("Google results are still incomplete..."). When the
+   *  summary has no issues, the writer's user message omits the
+   *  freshness block entirely and the LLM doesn't see it. */
+  freshness?: FreshnessSummary;
 }): Promise<PlatformOverallWriteResult> {
   if (args.networks.length === 0) {
     return {
@@ -386,6 +403,7 @@ export async function writePlatformOverall(args: {
   const userMessage = buildPlatformOverallUserMessage({
     ready: args.ready,
     networks: args.networks,
+    freshness: args.freshness,
   });
 
   const resp = await getAnthropicClient().messages.create({
@@ -594,8 +612,9 @@ function buildWeeklyUserMessage(args: {
 function buildPlatformOverallUserMessage(args: {
   ready: ReadyData;
   networks: BQNetworkRow[];
+  freshness?: FreshnessSummary;
 }): string {
-  return [
+  const parts: string[] = [
     `Client: ${args.ready.clientLabel}`,
     `Period: ${args.ready.period.isoStart} to ${args.ready.period.isoEnd}`,
     "",
@@ -603,16 +622,28 @@ function buildPlatformOverallUserMessage(args: {
     JSON.stringify(args.networks, null, 2),
     "",
     `Provenance queryIds available for citation: ${args.ready.provenance.queryIds.join(", ")}`,
+  ];
+  if (args.freshness?.hasIssues) {
+    parts.push(
+      "",
+      "<freshness>",
+      freshnessAsContextString(args.freshness),
+      "</freshness>",
+    );
+  }
+  parts.push(
     "",
-    "Write one prose paragraph per channel that ran spend. Optionally lead with a single cross-channel opening synthesis when the pattern is clear. Call write_platform_overall.",
-  ].join("\n");
+    "Write one prose paragraph per channel that ran spend. Optionally lead with a single cross-channel opening synthesis when the pattern is clear. Weave any freshness caveats into the relevant channel's block. Call write_platform_overall.",
+  );
+  return parts.join("\n");
 }
 
 function buildCampaignUserMessage(args: {
   ready: ReadyData;
   groups: { family: string; totalSpend: number; rows: ReadyData["campaigns"] }[];
+  actionItems: ActionItem[];
 }): string {
-  return [
+  const parts: string[] = [
     `Client: ${args.ready.clientLabel}`,
     `Period: ${args.ready.period.isoStart} to ${args.ready.period.isoEnd}`,
     "",
@@ -639,7 +670,18 @@ function buildCampaignUserMessage(args: {
     ),
     "",
     `Provenance queryIds available for citation: ${args.ready.provenance.queryIds.join(", ")}`,
+  ];
+  if (args.actionItems.length > 0) {
+    parts.push(
+      "",
+      "<actions>",
+      actionItemsAsContextString(args.actionItems),
+      "</actions>",
+    );
+  }
+  parts.push(
     "",
-    "Write one prose block per family. Call write_campaign_breakdown.",
-  ].join("\n");
+    "Write one prose block per family. When an action item matches a family, weave it in as a `<> AI:` callout. Call write_campaign_breakdown.",
+  );
+  return parts.join("\n");
 }
