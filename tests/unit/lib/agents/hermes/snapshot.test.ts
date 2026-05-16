@@ -75,9 +75,23 @@ function camp(over: Partial<BQCampaignRow>): BQCampaignRow {
 
 describe("buildHermesSnapshot (real-data path)", () => {
   it("returns one platformOverall row per BQ network with the BQ values verbatim", () => {
+    // subD7 set above the cohort-maturity threshold (10) so cpaD7 is
+    // emitted as a real value, not suppressed by the maturity gate.
     const networks: BQNetworkRow[] = [
-      net({ network: "TikTok", spend: 4321, subStart: 50, cpaD7: 12.5 }),
-      net({ network: "Facebook", spend: 9876, subStart: 100, cpaD7: 30 }),
+      net({
+        network: "TikTok",
+        spend: 4321,
+        subStart: 50,
+        subD7: 25,
+        cpaD7: 12.5,
+      }),
+      net({
+        network: "Facebook",
+        spend: 9876,
+        subStart: 100,
+        subD7: 40,
+        cpaD7: 30,
+      }),
     ];
     const snap = buildHermesSnapshot({
       intent: intent({ channels: ["tiktok"] }),
@@ -136,20 +150,21 @@ describe("buildHermesSnapshot (real-data path)", () => {
     expect(row.cpaD7.tone).toBe("bad"); // cost rose
   });
 
-  it("suppresses cpaD7 delta + tone when subD7 has not matured (no false-good)", () => {
-    // The bug this test pins: subD7 = 0 (cohort not matured for "this
-    // past week") collapses cpaD7 to 0 via SAFE_DIVIDE; without the
-    // guard the delta computes -100% vs the trailing baseline and the
-    // row tones "good" (cost dropped, GOOD!) when in reality the data
-    // isn't there yet.
+  it("suppresses cpaD7 (value=null, no delta, neutral tone) when subD7 is below the maturity threshold", () => {
+    // The bug this pins: a small subD7 (recent period, cohort still
+    // open) makes spend / subD7 a four-figure outlier ($21k per
+    // acquisition on $4k spend). The renderer reads it as real and a
+    // CSM sees "catastrophic costs". The threshold (10 sub_d7) is
+    // tunable in snapshot.ts; below it we emit null + maturing so
+    // the cell renders as "—" with no delta arrow.
     const networks: BQNetworkRow[] = [
       net({
         network: "Meta",
         spend: 5000,
         subStart: 100,
         subD0: 25,
-        subD7: 0, // not matured
-        cpaD7: 0, // collapses to 0
+        subD7: 2, // below the threshold of 10
+        cpaD7: 2500, // would render as "$2,500 per sub" without the guard
         trailingCpaD7Avg: 60,
       }),
     ];
@@ -159,11 +174,12 @@ describe("buildHermesSnapshot (real-data path)", () => {
       campaigns: [],
     });
     const row = snap.platformOverall!.rows[0];
-    expect(row.cpaD7.value).toBe(0);
+    expect(row.cpaD7.value).toBeNull();
     expect(row.cpaD7.delta).toBeUndefined();
     expect(row.cpaD7.tone).toBe("neutral");
     expect(row.cpaD7.maturing).toBe(true);
-    // Totals row inherits the same guard.
+    // Totals row inherits the same guard via the SUM of subD7.
+    expect(snap.platformOverall!.total.cpaD7.value).toBeNull();
     expect(snap.platformOverall!.total.cpaD7.delta).toBeUndefined();
     expect(snap.platformOverall!.total.cpaD7.tone).toBe("neutral");
   });

@@ -13,6 +13,16 @@ import type {
 
 import type { HermesSnapshot, Intent } from "./state";
 
+// D7 cohort is considered matured when at least this many conversions
+// have completed the 7-day window. Below this threshold, dividing
+// spend by sub_d7 produces statistical garbage (a single subscriber
+// makes the per-conversion cost a four-figure outlier) that misleads
+// readers. We suppress the value with `maturing: true` instead so the
+// renderer prints an em-dash and no delta arrow. Tune if the team
+// prefers a different threshold; 10 picks the lowest count where a
+// per-cohort average is stable enough to compare across periods.
+const COHORT_D7_MATURITY_THRESHOLD = 10;
+
 // Snapshot builder. Reads the BigQuery rows Analyze already fetched
 // (networks, campaigns, trend) and shapes them into the
 // WeeklySummaryRow / CampaignRow tables the deck renderer expects.
@@ -134,13 +144,15 @@ function networkRowToSummary(net: BQNetworkRow): WeeklySummaryRow {
   // else's delta is undefined: the renderer prints the value without
   // an arrow rather than inventing a movement.
   //
-  // Guard against a maturing-D7-window false signal: when subD7 is 0
-  // (cohort hasn't matured for "this past week"), cpaD7 collapses to
-  // 0 via SAFE_DIVIDE, the delta-vs-trailing computes -100%, and a
-  // naive tone reads it as "cost dropped, GOOD". That's a lie: the
-  // cost didn't drop, the data isn't there yet. Force neutral + no
-  // delta in that case.
-  const d7Mature = net.subD7 > 0 && net.cpaD7 > 0;
+  // Cohort-maturity gate: when subD7 is below the maturity threshold,
+  // cpaD7 from spend / subD7 is dominated by a tiny denominator and
+  // produces values like $21k per acquisition on a $4k spend. The
+  // renderer reads it as real and a CSM sees "catastrophic costs".
+  // Suppress with `value: null, maturing: true` so the cell prints
+  // as an em-dash. Same idea protects against the false-good case
+  // when subD7 = 0 (cpaD7 collapses to 0 via SAFE_DIVIDE; without
+  // this guard the delta would compute -100% and tone "good").
+  const d7Mature = net.subD7 >= COHORT_D7_MATURITY_THRESHOLD;
   const cpaD7Delta = d7Mature
     ? pctDelta(net.cpaD7, net.trailingCpaD7Avg)
     : undefined;
@@ -154,7 +166,7 @@ function networkRowToSummary(net: BQNetworkRow): WeeklySummaryRow {
     cpSubstart: { value: round(net.cpSubStart, 2), tone: "neutral" },
     cpaD0: { value: round(net.cpaD0, 2), tone: "neutral" },
     cpaD7: {
-      value: round(net.cpaD7, 2),
+      value: d7Mature ? round(net.cpaD7, 2) : null,
       delta: cpaD7Delta,
       tone: d7Mature ? toneFromDelta(cpaD7Delta, true) : "neutral",
       maturing: true,
@@ -172,12 +184,11 @@ function totalsFromNetworks(rows: BQNetworkRow[]): WeeklySummaryRow {
   const totalSubD0 = sum("subD0");
   const totalSubD7 = sum("subD7");
   const safe = (a: number, b: number) => (b > 0 ? a / b : 0);
-  // Weighted CPA D7 vs the average of per-network trailing baselines
-  // (the only "prior period" signal we have without a new query).
-  // Same maturing-window guard as networkRowToSummary: if totalSubD7
-  // is 0, the cohort hasn't matured and we must not tone the row
-  // "good" off a -100% false delta.
-  const d7Mature = totalSubD7 > 0;
+  // Same cohort-maturity gate as the per-row case, applied to the
+  // SUM of subD7. Stricter total threshold is unnecessary: if no
+  // single network had >=10 conversions we'd already have suppressed
+  // every row, so the total cell suppressing is the right echo.
+  const d7Mature = totalSubD7 >= COHORT_D7_MATURITY_THRESHOLD;
   const totalCpaD7 = d7Mature ? safe(totalSpend, totalSubD7) : 0;
   const baselineRows = rows.filter((r) => r.trailingCpaD7Avg > 0);
   const trailingAvg =
@@ -200,7 +211,7 @@ function totalsFromNetworks(rows: BQNetworkRow[]): WeeklySummaryRow {
     },
     cpaD0: { value: round(safe(totalSpend, totalSubD0), 2), tone: "neutral" },
     cpaD7: {
-      value: round(totalCpaD7, 2),
+      value: d7Mature ? round(totalCpaD7, 2) : null,
       delta: totalCpaD7Delta,
       tone: d7Mature ? toneFromDelta(totalCpaD7Delta, true) : "neutral",
       maturing: true,

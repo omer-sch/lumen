@@ -109,7 +109,14 @@ export function CampaignBreakdown({
               ).map((h, i) => (
                 <th
                   key={`${h}-${i}`}
-                  className={cn("border-b text-right font-semibold uppercase tracking-[0.08em] text-[color:var(--text-light-muted)]", headerPad, headerText)}
+                  // whitespace-nowrap so "Installs", "SubStart", "Sub D7"
+                  // etc. cannot break mid-word when overflow-x-auto on
+                  // the outer container narrows the table.
+                  className={cn(
+                    "whitespace-nowrap border-b text-right font-semibold uppercase tracking-[0.08em] text-[color:var(--text-light-muted)]",
+                    headerPad,
+                    headerText,
+                  )}
                   style={{ borderColor: "var(--surface-light-line)" }}
                 >
                   {h}

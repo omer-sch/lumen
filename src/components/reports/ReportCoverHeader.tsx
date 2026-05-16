@@ -7,7 +7,6 @@ import { REPORT_BRAND } from "@/lib/reports/brand";
 import { coverTitleSizing } from "@/lib/reports/layout";
 import type { Report } from "@/lib/reports/types";
 import { EditableText } from "./EditableText";
-import { SampleDataBanner } from "./SampleDataBanner";
 
 type ReportCoverHeaderProps = {
   report: Report;
@@ -193,17 +192,21 @@ export function ReportCoverHeader({
         )}
       </div>
 
-      {/* 5. Author byline */}
-      <AgentByline
-        agentId={report.authoredBy ?? "nova"}
-        prefix="Drafted by"
-        size="md"
-        tone={isCarousel ? "dark" : "light"}
-        className={isCarousel ? "mt-1" : "pt-1"}
-      />
-
-      {/* 6. Sample-data disclosure banner */}
-      <SampleDataBanner tone={isCarousel ? "dark" : "light"} className="mt-1" />
+      {/* 5. Author byline.
+       *    Manual decks have no AI author (the user prompted the
+       *    builder, the builder pulled BQ, no agent in the loop)
+       *    so the byline slot stays empty. Hermes (and any other
+       *    agent-drafted source we add later) keeps its byline.
+       *    The Nova default is gone; honesty over a placeholder. */}
+      {report.source !== "manual" && (
+        <AgentByline
+          agentId={report.authoredBy ?? "hermes"}
+          prefix="Drafted by"
+          size="md"
+          tone={isCarousel ? "dark" : "light"}
+          className={isCarousel ? "mt-1" : "pt-1"}
+        />
+      )}
     </div>
   );
 }

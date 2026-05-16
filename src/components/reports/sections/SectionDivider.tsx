@@ -18,6 +18,12 @@ type SectionDividerProps = {
    *  divider so the section content fits the 16:9 frame; Document mode
    *  keeps the generous padding and big type. */
   compact?: boolean;
+  /** When true, skips the top-right platform / channel pill. Manual
+   *  reports set this because their intent.platforms + intent.channels
+   *  are hardcoded defaults; rendering "ANDROID · META" on every cover
+   *  would claim a scope the user did not pick. The icon-only avatars
+   *  on the left + the section title still render. */
+  suppressPill?: boolean;
 };
 
 const PLATFORM_LABEL: Record<Platform, string> = {
@@ -47,6 +53,7 @@ export function SectionDivider({
   subtitle,
   continuation,
   compact = false,
+  suppressPill = false,
 }: SectionDividerProps) {
   // Left-side avatars: icon-only badges (the brand glyph IS the label).
   // The full word still lives in the top-right pill so users learn the
@@ -128,50 +135,54 @@ export function SectionDivider({
       {/* Platform/channel anchor pill in the top-right. Icon + name pair
        *  for each platform / channel; the icon-only avatars on the left
        *  are the same glyphs without the text. This is the carousel half
-       *  of the "don't create text-only slides" anti-pattern remedy. */}
-      <span
-        className={cn(
-          "absolute inline-flex items-center rounded-full font-body font-bold uppercase tracking-[0.14em]",
-          compact ? "right-4 top-3 gap-1.5 py-0.5 pl-1 pr-2 text-[9px]" : "right-6 top-6 gap-2 py-1 pl-1.5 pr-3 text-[10px]",
-        )}
-        style={{
-          background: "rgba(255,221,12,0.12)",
-          color: "var(--color-yellow)",
-          border: "1px solid rgba(255,221,12,0.30)",
-        }}
-      >
+       *  of the "don't create text-only slides" anti-pattern remedy.
+       *  whitespace-nowrap on the label spans so a narrow surface (the
+       *  carousel cover at compact sizes) cannot break "META" mid-word. */}
+      {!suppressPill && (
         <span
           className={cn(
-            "grid place-items-center rounded-full",
-            compact ? "h-4 w-4" : "h-5 w-5",
+            "absolute inline-flex items-center whitespace-nowrap rounded-full font-body font-bold uppercase tracking-[0.14em]",
+            compact ? "right-4 top-3 gap-1.5 py-0.5 pl-1 pr-2 text-[9px]" : "right-6 top-6 gap-2 py-1 pl-1.5 pr-3 text-[10px]",
           )}
-          style={iconBadgeStyle(platform)}
+          style={{
+            background: "rgba(255,221,12,0.12)",
+            color: "var(--color-yellow)",
+            border: "1px solid rgba(255,221,12,0.30)",
+          }}
         >
-          <PlatformChannelIcon
-            name={platform}
-            className={compact ? "h-2.5 w-2.5" : "h-3 w-3"}
-          />
+          <span
+            className={cn(
+              "grid place-items-center rounded-full",
+              compact ? "h-4 w-4" : "h-5 w-5",
+            )}
+            style={iconBadgeStyle(platform)}
+          >
+            <PlatformChannelIcon
+              name={platform}
+              className={compact ? "h-2.5 w-2.5" : "h-3 w-3"}
+            />
+          </span>
+          <span className="whitespace-nowrap">{PLATFORM_LABEL[platform]}</span>
+          {channel && (
+            <>
+              <span aria-hidden className="opacity-50">·</span>
+              <span
+                className={cn(
+                  "grid place-items-center rounded-full",
+                  compact ? "h-4 w-4" : "h-5 w-5",
+                )}
+                style={iconBadgeStyle(channel)}
+              >
+                <PlatformChannelIcon
+                  name={channel}
+                  className={compact ? "h-2.5 w-2.5" : "h-3 w-3"}
+                />
+              </span>
+              <span className="whitespace-nowrap">{CHANNEL_LABEL[channel]}</span>
+            </>
+          )}
         </span>
-        <span>{PLATFORM_LABEL[platform]}</span>
-        {channel && (
-          <>
-            <span aria-hidden className="opacity-50">·</span>
-            <span
-              className={cn(
-                "grid place-items-center rounded-full",
-                compact ? "h-4 w-4" : "h-5 w-5",
-              )}
-              style={iconBadgeStyle(channel)}
-            >
-              <PlatformChannelIcon
-                name={channel}
-                className={compact ? "h-2.5 w-2.5" : "h-3 w-3"}
-              />
-            </span>
-            <span>{CHANNEL_LABEL[channel]}</span>
-          </>
-        )}
-      </span>
+      )}
       {showPartAnnotation && continuation && (
         <span
           className={cn(

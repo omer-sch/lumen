@@ -227,36 +227,31 @@ function buildCoverSlide(pres: Pptx, report: Report) {
     color: hex(REPORT_BRAND.yellow),
   });
 
-  // Byline — "Drafted by Nova" parity with the on-screen cover. The agent
-  // identity is on the report record; if missing (legacy) we still surface
-  // Nova so the surface stays consistent.
-  slide.addText("Drafted by Nova · Reports analyst", {
-    x: 0.6,
-    y: 5.85,
-    w: 12,
-    h: 0.3,
-    fontFace: REPORT_BRAND.fontBody,
-    fontSize: 11,
-    color: "BFC7D6",
-  });
-
-  // Sample-data disclosure. Mirrors the on-screen banner so a PPTX export
-  // carries the same disclosure as the shared link and the PDF.
-  slide.addText(
-    "SAMPLE REPORT: FIGURES SHOWN ARE ILLUSTRATIVE, NOT LIVE BIGQUERY DATA.",
-    {
+  // Byline. Manual decks omit it (no AI author in the loop, user
+  // prompted the BQ-backed builder directly). Hermes decks credit
+  // Hermes. Source check matches the DOM cover.
+  if (report.source !== "manual") {
+    const authoredBy = report.authoredBy ?? "hermes";
+    const bylineName =
+      authoredBy === "hermes"
+        ? "Hermes · Report Drafter"
+        : authoredBy === "nova"
+          ? "Nova · Report Writer"
+          : `${authoredBy.charAt(0).toUpperCase()}${authoredBy.slice(1)}`;
+    slide.addText(`Drafted by ${bylineName}`, {
       x: 0.6,
-      y: 6.3,
+      y: 5.85,
       w: 12,
-      h: 0.35,
+      h: 0.3,
       fontFace: REPORT_BRAND.fontBody,
-      fontSize: 9,
-      bold: true,
-      color: hex(REPORT_BRAND.yellow),
-      fill: { color: "33270C" },
-      margin: 0.08,
-    },
-  );
+      fontSize: 11,
+      color: "BFC7D6",
+    });
+  }
+
+  // SAMPLE-data banner deleted (Hermes + manual both produce real BQ
+  // decks now). The banner was a phase-1 disclosure for the mock era
+  // and is actively harmful on real-data covers.
 
   // Footer (no Part X of Y on the cover slide).
   slide.addText("Lumen Reports", {
@@ -293,13 +288,19 @@ function buildPlatformOverallSlide(
   pptSlide.background = { color: hex(REPORT_BRAND.lightSurface) };
   paintTitleBand(pptSlide, slide.title);
   paintPlatformBadges(pptSlide, slide.platform);
-  paintPlatformChip(pptSlide, slide.platform);
+  if (!report.suppressPlatformChannelPills) {
+    paintPlatformChip(pptSlide, slide.platform);
+  }
 
   const cursor = makeCursor(CONTENT_START_Y);
 
   if (slide.summary) {
     const rows = [...slide.summary.rows, slide.summary.total];
-    const colW = [1.4, 1.5, 1.4, 1.3, 1.3, 1.6, 1.3, 1.3];
+    // Widened "CP SubStart" column from 1.6 to 1.7 + "Spend" / "CPA"
+    // columns from 1.3-1.4 to 1.45 so the headers do not wrap in the
+    // weekly summary block. Total table width stays within slide
+    // bounds (~12.2 inches).
+    const colW = [1.4, 1.45, 1.45, 1.35, 1.35, 1.7, 1.45, 1.45];
     const tableW = sum(colW);
     const tableRows = [
       headerRow(
@@ -341,14 +342,20 @@ function buildChannelWeeklySlide(
   pptSlide.background = { color: hex(REPORT_BRAND.lightSurface) };
   paintTitleBand(pptSlide, slide.title);
   paintPlatformBadges(pptSlide, slide.platform, slide.channel);
-  paintPlatformChip(pptSlide, slide.platform, slide.channel);
+  if (!report.suppressPlatformChannelPills) {
+    paintPlatformChip(pptSlide, slide.platform, slide.channel);
+  }
 
   const cursor = makeCursor(CONTENT_START_Y);
 
   // Current-week single-row table sits above the history table. Same
   // columns as the platform-overall summary so the eye can compare.
   if (slide.currentWeek) {
-    const colW = [1.4, 1.5, 1.4, 1.3, 1.3, 1.6, 1.3, 1.3];
+    // Widened "CP SubStart" column from 1.6 to 1.7 + "Spend" / "CPA"
+    // columns from 1.3-1.4 to 1.45 so the headers do not wrap in the
+    // weekly summary block. Total table width stays within slide
+    // bounds (~12.2 inches).
+    const colW = [1.4, 1.45, 1.45, 1.35, 1.35, 1.7, 1.45, 1.45];
     const tableW = sum(colW);
     const tableRows = [
       headerRow(
@@ -371,7 +378,11 @@ function buildChannelWeeklySlide(
   }
 
   if (slide.history.length > 0) {
-    const colW = [0.7, 1.7, 0.85, 0.85, 0.65, 0.85, 0.95, 0.8, 0.8, 0.8, 0.85];
+    // Widened to fit "SubStart" / "Sub D7" / "CPA D7" / "Installs"
+    // headers without wrap. Range column stays generous (3 of these
+    // share the row); Spend column trimmed since it always renders
+    // short ("$66k" / "$5.9k").
+    const colW = [0.65, 1.55, 0.85, 0.95, 0.7, 0.95, 1.0, 0.8, 0.85, 0.85, 0.95];
     const tableW = sum(colW);
     const tableRows = [
       headerRow(
@@ -431,7 +442,9 @@ function buildChannelCampaignSlide(
   pptSlide.background = { color: hex(REPORT_BRAND.lightSurface) };
   paintTitleBand(pptSlide, slide.title);
   paintPlatformBadges(pptSlide, slide.platform, slide.channel);
-  paintPlatformChip(pptSlide, slide.platform, slide.channel);
+  if (!report.suppressPlatformChannelPills) {
+    paintPlatformChip(pptSlide, slide.platform, slide.channel);
+  }
 
   const cursor = makeCursor(CONTENT_START_Y);
 
@@ -441,7 +454,11 @@ function buildChannelCampaignSlide(
   let tableTopY: number | null = null;
 
   if (slide.rows.length > 0) {
-    const colW = [3.0, 0.85, 0.7, 0.65, 0.75, 0.85, 0.6, 0.7, 0.7, 0.6, 0.7, 0.9];
+    // Widened from the prior set so headers like "SubStart" /
+    // "Sub D7" / "CPA D7" do not break mid-word. The Campaign column
+    // shrinks slightly to compensate; campaign names wrap inside
+    // their cell, which is the cheaper trade-off.
+    const colW = [2.4, 0.85, 0.85, 0.7, 0.95, 1.0, 0.65, 0.8, 0.85, 0.65, 0.8, 0.95];
     const tableW = sum(colW);
     const tableRows = [
       headerRow(
@@ -836,7 +853,10 @@ function paintPlatformChip(
   platform: "android" | "ios" | "web",
   channel?: "meta" | "google" | "tiktok" | "asa" | "search",
 ) {
-  const w = channel ? 2.4 : 1.55;
+  // Bumped from 2.4 / 1.55 so "META" + variants can't be squeezed
+  // narrow enough for pptx to break the text mid-word. Same fix the
+  // DOM side gets via whitespace-nowrap in SectionDivider.
+  const w = channel ? 2.7 : 1.85;
   const x = SLIDE_W - PAGE_RIGHT_MARGIN - w;
   const y = 0.3;
   const h = 0.4;
@@ -869,7 +889,9 @@ function paintPlatformChip(
     ? (CHANNEL_LABEL[channel] ?? channel.toUpperCase())
     : "";
 
-  const labelW = channel ? 0.8 : w - (cursorX - x) - 0.1;
+  // Bumped from 0.8 to 1.0 so "TikTok" (longest channel label) does
+  // not wrap inside the pill.
+  const labelW = channel ? 1.0 : w - (cursorX - x) - 0.1;
   slide.addText(platformLabel, {
     x: cursorX,
     y,
@@ -1200,19 +1222,31 @@ function bodyCell(text: string, opts?: CellOpts) {
  */
 function metricCell(
   m: MetricValue,
-  opts: { polarity: "up-good" | "down-good"; bold?: boolean; format: (v: number | string) => string },
+  opts: { polarity: "up-good" | "down-good"; bold?: boolean; format: (v: number | string | null) => string },
 ) {
-  const valueText = opts.format(m.value);
+  // Null + maturing renders as an em-dash with no delta arrow and no
+  // tone (the cohort-maturity gate in snapshot.ts suppresses cells
+  // that would otherwise show $21k-per-acquisition). Numeric values
+  // render normally with their delta if present.
+  const isSuppressed = m.value === null;
+  const valueText = isSuppressed ? "—" : opts.format(m.value);
   const chunks: TextChunk[] = [
     {
       text: valueText,
       options: {
         bold: opts.bold ?? false,
-        color: hex(REPORT_BRAND.textPrimary),
+        color: isSuppressed
+          ? TEXT_MUTED_HEX
+          : hex(REPORT_BRAND.textPrimary),
       },
     },
   ];
-  if (typeof m.delta === "number" && Number.isFinite(m.delta) && m.delta !== 0) {
+  if (
+    !isSuppressed &&
+    typeof m.delta === "number" &&
+    Number.isFinite(m.delta) &&
+    m.delta !== 0
+  ) {
     const up = m.delta > 0;
     const good = opts.polarity === "up-good" ? up : !up;
     const arrow = up ? " ▲ " : " ▼ ";
@@ -1315,20 +1349,23 @@ function campaignRowToCells(r: CampaignRow) {
 // Number formatting + small helpers
 // ---------------------------------------------------------------------------
 
-function fmtMoney(v: number | string): string {
+function fmtMoney(v: number | string | null): string {
+  if (v === null) return "—";
   if (typeof v !== "number") return String(v);
   if (!Number.isFinite(v)) return "—";
   if (v >= 1000) return `$${Math.round(v).toLocaleString()}`;
   return `$${v.toFixed(2)}`;
 }
 
-function fmtMoneyExact(v: number | string): string {
+function fmtMoneyExact(v: number | string | null): string {
+  if (v === null) return "—";
   if (typeof v !== "number") return String(v);
   if (!Number.isFinite(v)) return "—";
   return `$${v.toFixed(2)}`;
 }
 
-function fmtCount(v: number | string): string {
+function fmtCount(v: number | string | null): string {
+  if (v === null) return "—";
   if (typeof v !== "number") return String(v);
   if (!Number.isFinite(v)) return "—";
   if (v >= 1000) return v.toLocaleString();

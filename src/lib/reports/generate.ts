@@ -226,6 +226,11 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
     clientLabel: c.name,
     authoredBy: "nova",
     source: "manual",
+    // platforms + channels in the default intent are hardcoded
+    // Android / Meta until the manual builder UI exposes pickers
+    // (TODO at top of file); suppress the platform / channel pills
+    // so the deck does not claim a scope the user did not pick.
+    suppressPlatformChannelPills: true,
     sections,
   };
 }

@@ -114,6 +114,7 @@ export function ReportDocument({
           readOnly={readOnly}
           updateSection={updateSection}
           regenerateContext={regenerateContext}
+          suppressPlatformChannelPills={report.suppressPlatformChannelPills}
         />
       ))}
 
@@ -140,6 +141,7 @@ function SectionRenderer({
   readOnly,
   updateSection,
   regenerateContext,
+  suppressPlatformChannelPills,
 }: {
   section: ReportSection;
   readOnly?: boolean;
@@ -148,6 +150,7 @@ function SectionRenderer({
     patch: Partial<ReportSection>,
   ) => void;
   regenerateContext?: RegenerateContext;
+  suppressPlatformChannelPills?: boolean;
 }) {
   const regenerateButton =
     regenerateContext &&
@@ -171,6 +174,7 @@ function SectionRenderer({
             platform={section.platform}
             title={PLATFORM_TITLE[section.platform]}
             subtitle={SUBTITLE_FOR.platform_overall}
+            suppressPill={suppressPlatformChannelPills}
           />
           {regenerateButton}
         </div>
@@ -188,6 +192,7 @@ function SectionRenderer({
             channel={section.channel}
             title={CHANNEL_TITLE[section.channel]}
             subtitle={SUBTITLE_FOR.channel_weekly}
+            suppressPill={suppressPlatformChannelPills}
           />
           {regenerateButton}
         </div>
@@ -209,6 +214,7 @@ function SectionRenderer({
             channel={section.channel}
             title={CHANNEL_TITLE[section.channel]}
             subtitle={SUBTITLE_FOR.channel_campaign}
+            suppressPill={suppressPlatformChannelPills}
           />
           {regenerateButton}
         </div>

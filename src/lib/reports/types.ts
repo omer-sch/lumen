@@ -61,7 +61,12 @@ export type Channel = "meta" | "google" | "tiktok" | "asa" | "search";
 export type CalloutColor = "pink" | "orange" | "blue" | "green" | "violet";
 
 export type MetricValue = {
-  value: number | string;
+  /** `null` means the metric was deliberately suppressed (e.g. an
+   *  immature D7 cohort that would produce statistical garbage). The
+   *  renderer prints null + maturing as an em-dash with no delta arrow
+   *  and no tone. Consumers that need a numeric value should typeguard
+   *  on `typeof value === "number"`. */
+  value: number | string | null;
   /** Week-over-week % change. Positive = went up. */
   delta?: number;
   /** Drives the arrow color. Cost metrics flip the polarity: a drop in
@@ -241,6 +246,15 @@ export type Report = {
   /** Set on Hermes-drafted reports; links back to agent_runs for trace
    *  view and per-section regenerate. */
   agentRunId?: string | null;
+  /** Manual reports default intent.platforms + intent.channels to
+   *  Android / Meta because the builder UI does not capture them yet.
+   *  When this flag is true, the cover and section dividers suppress
+   *  the platform / channel pills so the deck does not claim a scope
+   *  the user did not pick. Set by generateReport() in the manual
+   *  path; left unset (falsy) for Hermes where the platform / channel
+   *  came from the email and is a real signal. Drop when the pickers
+   *  ship in the manual builder UI. */
+  suppressPlatformChannelPills?: boolean;
   /** Display name of the recognised contact ("Emily Foster"), shown
    *  as "Prepared for ..." on the cover when set. Populated by Atelier
    *  from state.contact (see chunk B4). */
