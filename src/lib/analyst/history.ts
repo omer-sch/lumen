@@ -85,12 +85,28 @@ export async function fetchTrailingWeeks(
 
   // Parallel fetch. The per-query Redis cache absorbs repeats, so this
   // is at most four cold BQ trips on the first ever run for a given
-  // client + period anchor.
+  // client + period anchor. Failures are caught per-week so one bad
+  // BQ trip doesn't drop the other three; the failed week is logged
+  // (not silenced) so we notice when this becomes a pattern.
   const results = await Promise.all(
-    ranges.map((r) =>
-      queryGlobalComixNetworkBreakdown(args.client, r.isoStart, r.isoEnd)
-        .catch(() => [] as NetworkRow[]),
-    ),
+    ranges.map(async (r) => {
+      try {
+        return await queryGlobalComixNetworkBreakdown(
+          args.client,
+          r.isoStart,
+          r.isoEnd,
+        );
+      } catch (err) {
+        console.warn({
+          event: "analyst.history.week_fetch_failed",
+          client: args.client,
+          isoStart: r.isoStart,
+          isoEnd: r.isoEnd,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return [] as NetworkRow[];
+      }
+    }),
   );
 
   const rows: WeeklyHistoryRow[] = [];
@@ -108,6 +124,15 @@ export async function fetchTrailingWeeks(
       });
     }
   }
+  console.info({
+    event: "analyst.history.fetched",
+    client: args.client,
+    periodIsoStart: args.periodIsoStart,
+    weeks: ranges.length,
+    weekRanges: ranges.map((r) => `${r.isoStart}..${r.isoEnd}`),
+    totalRows: rows.length,
+    perWeekRows: results.map((r) => r.length),
+  });
   return rows;
 }
 

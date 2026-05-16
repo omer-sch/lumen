@@ -5,6 +5,7 @@ import { traceable } from "langsmith/traceable";
 import { getReadyData } from "@/lib/analyst";
 import { runAnomstack, type RawAnomaly } from "@/lib/analyst/anomstack";
 import { enrichCampaignRow } from "@/lib/analyst/campaign-classifier";
+import { fetchTrailingWeeks } from "@/lib/analyst/history";
 import type { AnalystFinding, ReadyData } from "@/lib/analyst/types";
 import { getAnthropicClient, pickModel } from "@/lib/agents/_scaffold/model";
 import { serverEnv } from "@/lib/env.server";
@@ -308,11 +309,26 @@ export async function analyze(
     counts = re.counts;
   } else {
     // Existing path. Atlas fetch: reuse cached BQ query functions; the
-    // traced wrappers are no-ops when LangSmith tracing is off.
-    const [rawNetworks, rawCampaigns, rawTrend] = await Promise.all([
+    // traced wrappers are no-ops when LangSmith tracing is off. The
+    // trailing-week history walk also fires here -- previously it was
+    // skipped in shadow/off mode which left state.snapshot.channelWeekly.history
+    // empty even though the downstream smart-reports compose path re-
+    // fetched the same data anyway. Pulling here surfaces the trailing
+    // table on the snapshot Hermes attaches to the run trace.
+    const [rawNetworks, rawCampaigns, rawTrend, trailing] = await Promise.all([
       tracedQueryNetworks(intent.client, period.from, period.to),
       tracedQueryCampaigns(intent.client, period.from, period.to),
       tracedQueryTrend(intent.client, period.from, period.to),
+      fetchTrailingWeeks({
+        client: intent.client,
+        periodIsoStart: period.from,
+      }).catch((err) => {
+        console.warn({
+          event: "hermes.analyze.history_fetch_failed",
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return [] as ReadyData["history"]["networks"];
+      }),
     ]);
     networks = rawNetworks;
     // EnrichedCampaignRow widens BQ CampaignRow with the classifier
@@ -321,6 +337,12 @@ export async function analyze(
     // and downstream consumers (snapshot, atelier) read one shape.
     campaigns = rawCampaigns.map(enrichCampaignRow);
     trend = rawTrend;
+    history = trailing;
+    console.info({
+      event: "hermes.analyze.history_rows",
+      rolloutMode,
+      rows: trailing.length,
+    });
 
     const anomstack = runAnomstack({
       networks,

@@ -168,7 +168,12 @@ describe("analyze node", () => {
     const update = await analyze(baseState());
     expect(update.findings).toHaveLength(1);
     expect(update.findings?.[0].severity).toBe("high");
-    expect(networkBreakdownMock).toHaveBeenCalledTimes(1);
+    // 1 current-period call + HISTORY_WEEKS (4) trailing-week calls =
+    // 5 networkBreakdown calls in shadow/off mode. The trailing pulls
+    // were added so state.snapshot.channelWeekly.history is populated
+    // for the Hermes run trace even when USE_SHARED_ANALYST stays
+    // shadow (previously only the live path filled history).
+    expect(networkBreakdownMock).toHaveBeenCalledTimes(5);
     expect(campaignsMock).toHaveBeenCalledTimes(1);
     expect(trendMock).toHaveBeenCalledTimes(1);
     expect(fake.messages.create).toHaveBeenCalledTimes(1);

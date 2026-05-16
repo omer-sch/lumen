@@ -57,6 +57,32 @@ const TO = "@to";
  * `No Breakdown` rows (the column lives on slices that aren't aggregable
  * the same way), so we fall back to `campaign_id` for display.
  */
+// Each per-network spend table exposes campaign_name a little
+// differently:
+//   - dwh_apple_globalcomix_adjust: `campaign_name` (correct)
+//   - dwh_google_ads_globalcomix_adjust: `campaign_name` (verified
+//     non-null on the No Breakdown slice by
+//     scripts/discover-globalcomix-campaign-names.ts -- 35 names)
+//   - dwh_tik_tok_globalcomix_adjust: `campaign_name` (verified -- 22)
+//   - dwh_fb2_globalcomix_adjust: column is misspelled `campagin_name`
+//     in the warehouse schema. Aliased to `campaign_name` here so the
+//     UNION shape stays uniform; if the row's value is NULL the outer
+//     COALESCE in _queryGlobalComixCampaigns falls back to campaign_id
+//     (numeric).
+//
+// Previous version returned `NULL AS campaign_name` for everything
+// except Apple, so the Campaigns table on Meta / Google / TikTok rows
+// rendered campaign_id (numeric). With this map the human-readable
+// name flows through wherever the underlying table provides one.
+const CAMPAIGN_NAME_COLUMN_BY_TABLE: Record<string, string> = {
+  dwh_apple_globalcomix_adjust: "campaign_name",
+  dwh_google_ads_globalcomix_adjust: "campaign_name",
+  dwh_tik_tok_globalcomix_adjust: "campaign_name",
+  // The trailing "AS campaign_name" alias normalises the column name
+  // out of the typoed Meta column.
+  dwh_fb2_globalcomix_adjust: "campagin_name AS campaign_name",
+};
+
 function buildSpendSubquery(client: string): string {
   const cfg = getMultiSourceConfig(client);
   const dedupe = cfg.spendDedupePredicate;
@@ -64,11 +90,13 @@ function buildSpendSubquery(client: string): string {
   const legs = cfg.spendSources
     .map((src) => {
       const fq = qualifyTable(src.table);
-      // Only `dwh_apple_globalcomix_adjust` carries a usable `campaign_name`
-      // on its `No Breakdown` rows; the other three sources project NULL so
-      // the UNION column shape stays uniform. The Campaigns page falls back
-      // to `campaign_id` when name is missing.
-      const isApple = src.table === "dwh_apple_globalcomix_adjust";
+      // Resolve the campaign_name column expression for this source.
+      // Tables not in the map (e.g. a future onboarded source) fall
+      // back to NULL so the SQL still parses; once the table's schema
+      // is verified, add an entry to CAMPAIGN_NAME_COLUMN_BY_TABLE.
+      const campaignNameExpr =
+        CAMPAIGN_NAME_COLUMN_BY_TABLE[src.table] ??
+        "CAST(NULL AS STRING) AS campaign_name";
       // Every source carries clicks, impressions, num_ftd7 on the `No
       // Breakdown` slice — pulled here so the unified subquery feeds the
       // engagement KPI tiles (CTR, CPM, CPC) and the FTD column on the
@@ -82,7 +110,7 @@ function buildSpendSubquery(client: string): string {
         impressions,
         COALESCE(num_ftd7, 0) AS ftd_d7,
         campaign_id,
-        ${isApple ? "campaign_name" : "CAST(NULL AS STRING) AS campaign_name"}
+        ${campaignNameExpr}
       FROM ${fq}
       WHERE (${dedupe})`;
     })
