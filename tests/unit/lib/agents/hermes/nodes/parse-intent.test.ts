@@ -7,9 +7,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const retrieveMock = vi.hoisted(() => vi.fn());
+const getContactByEmailMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/rag/retrieve", () => ({
   retrieve: retrieveMock,
+}));
+
+vi.mock("@/lib/contacts", () => ({
+  getContactByEmail: getContactByEmailMock,
 }));
 
 class FakeAnthropic {
@@ -69,6 +74,8 @@ beforeEach(async () => {
   fake.messages.create.mockReset();
   retrieveMock.mockReset();
   retrieveMock.mockResolvedValue(emptyRetrieve());
+  getContactByEmailMock.mockReset();
+  getContactByEmailMock.mockResolvedValue(null);
   const mod = await import("@/lib/agents/_scaffold/model");
   mod.__setAnthropicClientForTesting(fake as never);
 });
@@ -255,5 +262,81 @@ describe("parseIntent", () => {
     });
     expect(update.intent?.client).toBe("globalcomix");
     expect(update.intent?.doubts).toEqual([]);
+  });
+
+  it("stamps state.contact when the body carries a recognised email", async () => {
+    fake.messages.create.mockResolvedValueOnce(mockHaiku(CANONICAL_INTENT));
+    getContactByEmailMock.mockResolvedValueOnce({
+      id: "ctc-1",
+      clientId: "globalcomix",
+      name: "Emily Foster",
+      email: "emily@globalcomix.com",
+      role: "Head of Growth",
+      isPrimary: true,
+      notes: null,
+    });
+    const bodyWithSignature = `${CANONICAL_FIXTURE}\nemily@globalcomix.com`;
+    const { parseIntent } = await import(
+      "@/lib/agents/hermes/nodes/parse-intent"
+    );
+    const update = await parseIntent({
+      email_text: bodyWithSignature,
+      run_id: "run-contact-1",
+      intent: null,
+      context: { knowledge: [], history: [], comms: [] },
+      findings: [],
+      bullets: [],
+      user_id: null,
+      snapshot: null,
+      contact: null,
+      deck: { pptx_path: null, slides: [], report_id: null },
+      approval: {
+        approved: false,
+        approved_by: null,
+        approved_at: null,
+        edits: [],
+      },
+      history: [],
+    });
+    expect(getContactByEmailMock).toHaveBeenCalledWith(
+      "emily@globalcomix.com",
+    );
+    expect(update.contact?.name).toBe("Emily Foster");
+    expect(update.contact?.clientId).toBe("globalcomix");
+    expect(update.history?.[0].notes).toMatch(/contact=Emily Foster/);
+  });
+
+  it("returns contact=null and still completes when the lookup throws", async () => {
+    fake.messages.create.mockResolvedValueOnce(mockHaiku(CANONICAL_INTENT));
+    getContactByEmailMock.mockRejectedValueOnce(
+      new Error("Supabase unreachable"),
+    );
+    const bodyWithSignature = `${CANONICAL_FIXTURE}\nemily@globalcomix.com`;
+    const { parseIntent } = await import(
+      "@/lib/agents/hermes/nodes/parse-intent"
+    );
+    const update = await parseIntent({
+      email_text: bodyWithSignature,
+      run_id: "run-contact-fail",
+      intent: null,
+      context: { knowledge: [], history: [], comms: [] },
+      findings: [],
+      bullets: [],
+      user_id: null,
+      snapshot: null,
+      contact: null,
+      deck: { pptx_path: null, slides: [], report_id: null },
+      approval: {
+        approved: false,
+        approved_by: null,
+        approved_at: null,
+        edits: [],
+      },
+      history: [],
+    });
+    // Run still completes with a typed intent; contact is null.
+    expect(update.intent?.client).toBe("globalcomix");
+    expect(update.contact).toBeNull();
+    expect(update.history?.[0].notes).toMatch(/contact=unknown/);
   });
 });

@@ -328,7 +328,12 @@ export default async function HermesProfilePage() {
                       {c.email}
                     </td>
                     <td className="px-4 py-2 text-[color:var(--text-secondary)]">
-                      {c.role ?? "..."}
+                      {c.role ?? (
+                        <>
+                          <span className="sr-only">Role not set</span>
+                          <span aria-hidden>...</span>
+                        </>
+                      )}
                     </td>
                     <td className="px-4 py-2 text-[color:var(--text-secondary)]">
                       {c.clientId}
@@ -387,7 +392,12 @@ export default async function HermesProfilePage() {
                         {formatRunTimestamp(r.startedAt)}
                       </td>
                       <td className="px-4 py-2 text-[color:var(--text-secondary)]">
-                        {r.client ?? "..."}
+                        {r.client ?? (
+                          <>
+                            <span className="sr-only">Client not set</span>
+                            <span aria-hidden>...</span>
+                          </>
+                        )}
                       </td>
                       <td className="px-4 py-2">
                         <span
@@ -412,7 +422,8 @@ export default async function HermesProfilePage() {
                           </Link>
                         ) : (
                           <span className="font-body text-xs text-[color:var(--text-muted)]">
-                            ...
+                            <span className="sr-only">No report</span>
+                            <span aria-hidden>...</span>
                           </span>
                         )}
                       </td>
