@@ -1,0 +1,87 @@
+{
+  "_meta": {
+    "name": "recent-period",
+    "description": "Six networks. Unity Ads is a clear spend outlier (z-score fires). Meta cpa_d7 has moved +75% vs its trailing baseline (percent-delta fires). Other cpa_d7 values are spread enough that none cross the z-score threshold. All cohorts mature (subD7 >= 10).",
+    "periodIsoStart": "2026-05-01",
+    "periodIsoEnd": "2026-05-07"
+  },
+  "networks": [
+    {
+      "network": "Meta",
+      "spend": 100, "share": 0.07, "installs": 10, "clicks": 200, "impressions": 5000,
+      "ftdD7": 12, "subStart": 12, "subD0": 10, "subD7": 30,
+      "cpi": 10.0, "cpSubStart": 8.33, "cpaD0": 10.0, "cpaD7": 350.0,
+      "ctr": 0.04, "cpm": 20.0, "cpc": 0.5,
+      "roasD7": 0.3, "roasD14": 0.4, "roasD30": 0.5, "roasD90": 0.6,
+      "payersD7": 20, "retD7": 0.4, "trailingCpaD7Avg": 200.0
+    },
+    {
+      "network": "Google",
+      "spend": 110, "share": 0.08, "installs": 11, "clicks": 220, "impressions": 5500,
+      "ftdD7": 11, "subStart": 11, "subD0": 9, "subD7": 25,
+      "cpi": 10.0, "cpSubStart": 10.0, "cpaD0": 12.22, "cpaD7": 150.0,
+      "ctr": 0.04, "cpm": 20.0, "cpc": 0.5,
+      "roasD7": 0.35, "roasD14": 0.45, "roasD30": 0.55, "roasD90": 0.65,
+      "payersD7": 18, "retD7": 0.42, "trailingCpaD7Avg": 148.0
+    },
+    {
+      "network": "TikTok",
+      "spend": 90, "share": 0.06, "installs": 9, "clicks": 180, "impressions": 4500,
+      "ftdD7": 9, "subStart": 9, "subD0": 7, "subD7": 22,
+      "cpi": 10.0, "cpSubStart": 10.0, "cpaD0": 12.86, "cpaD7": 200.0,
+      "ctr": 0.04, "cpm": 20.0, "cpc": 0.5,
+      "roasD7": 0.3, "roasD14": 0.4, "roasD30": 0.5, "roasD90": 0.6,
+      "payersD7": 15, "retD7": 0.4, "trailingCpaD7Avg": 205.0
+    },
+    {
+      "network": "Apple",
+      "spend": 100, "share": 0.07, "installs": 10, "clicks": 200, "impressions": 5000,
+      "ftdD7": 10, "subStart": 10, "subD0": 8, "subD7": 24,
+      "cpi": 10.0, "cpSubStart": 10.0, "cpaD0": 12.5, "cpaD7": 180.0,
+      "ctr": 0.04, "cpm": 20.0, "cpc": 0.5,
+      "roasD7": 0.32, "roasD14": 0.42, "roasD30": 0.52, "roasD90": 0.62,
+      "payersD7": 16, "retD7": 0.41, "trailingCpaD7Avg": 185.0
+    },
+    {
+      "network": "AppLovin",
+      "spend": 110, "share": 0.08, "installs": 11, "clicks": 220, "impressions": 5500,
+      "ftdD7": 11, "subStart": 11, "subD0": 9, "subD7": 26,
+      "cpi": 10.0, "cpSubStart": 10.0, "cpaD0": 12.22, "cpaD7": 220.0,
+      "ctr": 0.04, "cpm": 20.0, "cpc": 0.5,
+      "roasD7": 0.31, "roasD14": 0.41, "roasD30": 0.51, "roasD90": 0.61,
+      "payersD7": 17, "retD7": 0.4, "trailingCpaD7Avg": 215.0
+    },
+    {
+      "network": "Unity Ads",
+      "spend": 1000, "share": 0.64, "installs": 100, "clicks": 2000, "impressions": 50000,
+      "ftdD7": 100, "subStart": 100, "subD0": 80, "subD7": 200,
+      "cpi": 10.0, "cpSubStart": 10.0, "cpaD0": 12.5, "cpaD7": 100.0,
+      "ctr": 0.04, "cpm": 20.0, "cpc": 0.5,
+      "roasD7": 0.3, "roasD14": 0.4, "roasD30": 0.5, "roasD90": 0.6,
+      "payersD7": 150, "retD7": 0.4, "trailingCpaD7Avg": 105.0
+    }
+  ],
+  "campaigns": [
+    {
+      "campaign_id": "c_big_mover",
+      "campaign_name": "Spring Push (Meta)",
+      "network": "Meta",
+      "spend": 1500, "installs": 150, "cpi": 10.0, "roas": 0.3,
+      "spendDelta": 0.6
+    },
+    {
+      "campaign_id": "c_collapse",
+      "campaign_name": "Old Awareness (Google)",
+      "network": "Google",
+      "spend": 200, "installs": 20, "cpi": 10.0, "roas": 0.4,
+      "spendDelta": -0.45
+    },
+    {
+      "campaign_id": "c_quiet",
+      "campaign_name": "Steady Performer (TikTok)",
+      "network": "TikTok",
+      "spend": 500, "installs": 50, "cpi": 10.0, "roas": 0.35,
+      "spendDelta": 0.05
+    }
+  ]
+}

@@ -1,16 +1,24 @@
 // Layer 2 (lib unit). File under test:
-// src/lib/agents/hermes/anomstack.ts. Pure function over typed inputs;
-// tests are straightforward synthetic fixtures.
+// src/lib/analyst/anomstack.ts (moved from
+// src/lib/agents/hermes/anomstack.ts in the shared-analyst PR).
+// Pure function over typed inputs; tests are straightforward synthetic
+// fixtures. The anomalies-array shape is preserved verbatim from the
+// pre-move file, so every assertion below still holds; new assertions
+// for the AnalystFinding lift live in tests/unit/lib/analyst/.
 import { describe, expect, it } from "vitest";
 
 import {
   PCT_DELTA_THRESHOLD,
   Z_THRESHOLD,
   runAnomstack,
-} from "@/lib/agents/hermes/anomstack";
+} from "@/lib/analyst/anomstack";
 import type { CampaignRow, NetworkRow } from "@/types/dashboard";
 
 function makeNetwork(over: Partial<NetworkRow>): NetworkRow {
+  // Default subD7=20 keeps the test population above the
+  // COHORT_D7_MATURITY_THRESHOLD (10) so the cpa_d7 detectors fire
+  // without per-row overrides. Tests that want to exercise the
+  // suppression path pass subD7 explicitly.
   return {
     network: "meta",
     spend: 1000,
@@ -31,7 +39,7 @@ function makeNetwork(over: Partial<NetworkRow>): NetworkRow {
     retD7: 0.2,
     subStart: 10,
     subD0: 8,
-    subD7: 5,
+    subD7: 20,
     cpSubStart: 100,
     cpaD0: 125,
     cpaD7: 200,
@@ -192,6 +200,7 @@ describe("runAnomstack — percent-delta detectors", () => {
       z_score: 0,
       percent_delta_network: 0,
       percent_delta_campaign: 0,
+      suppressed_by_cohort_gate: 0,
     });
   });
 });

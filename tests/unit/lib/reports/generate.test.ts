@@ -10,11 +10,36 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const networksMock = vi.hoisted(() => vi.fn());
 const campaignsMock = vi.hoisted(() => vi.fn());
 const trendMock = vi.hoisted(() => vi.fn());
+const dataAsOfMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/globalcomix-queries", () => ({
   queryGlobalComixNetworkBreakdown: networksMock,
   queryGlobalComixCampaigns: campaignsMock,
   queryGlobalComixTrend: trendMock,
+  // dataAsOf is queried by the shared analyst for the freshness stamp
+  // on ReadyData.provenance. Default to a stable date so the
+  // bqCacheAgeSeconds computation is deterministic in tests.
+  queryGlobalComixDataAsOf: dataAsOfMock,
+}));
+
+// The shared analyst's knowledge module wraps retrieve() behind the
+// USE_ANALYST_KNOWLEDGE flag. Default is "off" -> []; mock the module
+// so the manual-builder tests never touch Supabase regardless.
+vi.mock("@/lib/rag/retrieve", () => ({
+  retrieve: vi.fn().mockResolvedValue({
+    chunks: [],
+    citations: [],
+    chunks_returned: 0,
+    latency_ms: 0,
+    query_embedding_cost_usd: 0,
+  }),
+}));
+
+// Force the analyst cache wrapper to fall through to the loader so
+// the test never tries to talk to Upstash.
+vi.mock("@/lib/cache/redis", () => ({
+  cacheEnabled: () => false,
+  redis: null,
 }));
 
 const FROM = new Date("2026-04-27T00:00:00Z");
@@ -68,7 +93,9 @@ beforeEach(() => {
   networksMock.mockReset();
   campaignsMock.mockReset();
   trendMock.mockReset();
+  dataAsOfMock.mockReset();
   trendMock.mockResolvedValue([]);
+  dataAsOfMock.mockResolvedValue("2026-05-03");
 });
 
 afterEach(() => {

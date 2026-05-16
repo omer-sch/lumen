@@ -3,21 +3,37 @@
 // src/lib/agents/hermes/nodes/analyze.ts. BQ queries, retrieve, and
 // Anthropic are mocked. Verifies the orchestration: fetch -> Anomstack
 // -> retrieve -> Sonnet -> typed Findings.
+//
+// USE_SHARED_ANALYST is forced to "off" for the existing-path tests
+// so the default shadow-mode parallel call to getReadyData (which
+// would double-hit the BQ mocks) does not interfere with the
+// call-count assertions below. Setting process.env directly so it is
+// in place before the module under test reads it via serverEnv.
+process.env.USE_SHARED_ANALYST = "off";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const networkBreakdownMock = vi.hoisted(() => vi.fn());
 const campaignsMock = vi.hoisted(() => vi.fn());
 const trendMock = vi.hoisted(() => vi.fn());
+const dataAsOfMock = vi.hoisted(() => vi.fn());
 const retrieveMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/globalcomix-queries", () => ({
   queryGlobalComixNetworkBreakdown: networkBreakdownMock,
   queryGlobalComixCampaigns: campaignsMock,
   queryGlobalComixTrend: trendMock,
+  queryGlobalComixDataAsOf: dataAsOfMock,
 }));
 
 vi.mock("@/lib/rag/retrieve", () => ({
   retrieve: retrieveMock,
+}));
+
+// Redis off so any analyst-layer cache wrapper falls through.
+vi.mock("@/lib/cache/redis", () => ({
+  cacheEnabled: () => false,
+  redis: null,
 }));
 
 class FakeAnthropic {

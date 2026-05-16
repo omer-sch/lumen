@@ -11,17 +11,14 @@ import type {
   NetworkRow as BQNetworkRow,
 } from "@/types/dashboard";
 
+import { COHORT_D7_MATURITY_THRESHOLD } from "@/lib/analyst/maturity-gates";
+
 import type { HermesSnapshot, Intent } from "./state";
 
-// D7 cohort is considered matured when at least this many conversions
-// have completed the 7-day window. Below this threshold, dividing
-// spend by sub_d7 produces statistical garbage (a single subscriber
-// makes the per-conversion cost a four-figure outlier) that misleads
-// readers. We suppress the value with `maturing: true` instead so the
-// renderer prints an em-dash and no delta arrow. Tune if the team
-// prefers a different threshold; 10 picks the lowest count where a
-// per-cohort average is stable enough to compare across periods.
-const COHORT_D7_MATURITY_THRESHOLD = 10;
+// COHORT_D7_MATURITY_THRESHOLD lifted to src/lib/analyst/maturity-gates.ts
+// so anomstack, comparisons, and this file consult one constant. The
+// behavior here is unchanged: when sub_d7 is below the threshold the
+// cell renders as null with maturing=true (an em-dash in the deck).
 
 // Snapshot builder. Reads the BigQuery rows Analyze already fetched
 // (networks, campaigns, trend) and shapes them into the

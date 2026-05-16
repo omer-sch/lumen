@@ -1,0 +1,42 @@
+{
+  "_meta": {
+    "name": "recent-period",
+    "explanation": "Hand-authored expected output for the recent-period input fixture. Each entry below is what the analyst SHOULD emit when run against the matching input file."
+  },
+  "expectedFindings": [
+    {
+      "detector": "z_score",
+      "metric": "spend",
+      "target": "Unity Ads",
+      "direction": "up",
+      "rationale": "Spend 1000 is ~2.04 standard deviations above the 6-network mean (~252). Just above Z_THRESHOLD = 2.0."
+    },
+    {
+      "detector": "percent_delta",
+      "metric": "cpa_d7",
+      "target": "Meta",
+      "direction": "up",
+      "rationale": "CPA D7 of 350 vs trailing 30-day baseline of 200 = +75% move. Above PCT_DELTA_THRESHOLD = 25%. Meta sub_d7 = 30 clears COHORT_D7_MATURITY_THRESHOLD = 10."
+    },
+    {
+      "detector": "percent_delta",
+      "metric": "spend",
+      "target": "c_big_mover",
+      "direction": "up",
+      "rationale": "Spring Push campaign spend moved +60% vs prior period. Above PCT_DELTA_THRESHOLD."
+    },
+    {
+      "detector": "percent_delta",
+      "metric": "spend",
+      "target": "c_collapse",
+      "direction": "down",
+      "rationale": "Old Awareness campaign spend moved -45% vs prior period. Above PCT_DELTA_THRESHOLD."
+    }
+  ],
+  "expectedCounts": {
+    "z_score": 1,
+    "percent_delta_network": 1,
+    "percent_delta_campaign": 2,
+    "suppressed_by_cohort_gate": 0
+  }
+}

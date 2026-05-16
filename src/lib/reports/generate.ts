@@ -1,13 +1,10 @@
 import "server-only";
 
-import {
-  queryGlobalComixCampaigns,
-  queryGlobalComixNetworkBreakdown,
-  queryGlobalComixTrend,
-} from "@/lib/globalcomix-queries";
+import { getReadyData } from "@/lib/analyst";
+import type { Intent } from "@/lib/analyst/types";
 import { buildHermesSnapshot } from "@/lib/agents/hermes/snapshot";
 import { clientHasReportData, findClient } from "@/lib/mock/clients";
-import type { Intent } from "@/lib/agents/hermes/state";
+
 import { isoWeek } from "./week";
 import type {
   ChannelCampaignSection,
@@ -18,22 +15,28 @@ import type {
 } from "./types";
 
 // Manual report generator. Used by the /reports surface "Generate
-// report" button. Was a hardcoded-fixture stub until the Hermes
-// snapshot rewrite proved out the real-BQ path; this file now calls
-// the same buildHermesSnapshot() Hermes uses so manual and agent
-// drafts ship from the same trust contract: every numeric value
-// traces back to a specific BQ query.
+// report" button. Pulls BQ rows + maturity-gated analytics through
+// the shared analyst (src/lib/analyst), then feeds the rows into the
+// same buildHermesSnapshot() Hermes uses so manual and agent drafts
+// ship from the same trust contract: every numeric value traces back
+// to a specific BQ query.
 //
 // What's different from the Hermes path:
 //   * source: "manual" + authoredBy: "nova" instead of "hermes".
 //   * Period comes from form inputs (the existing date-range picker)
 //     instead of an intent the LLM parsed from an email body.
-//   * The Hermes Intent shape needs platforms + channels; the manual
-//     builder doesn't ask for either yet, so we hardcode the default
-//     to Android / Meta to match the prior manual-report scope.
+//   * The Intent shape needs platforms + channels; the manual builder
+//     doesn't ask for either yet, so we hardcode the default to
+//     Android / Meta to match the prior manual-report scope.
 //     TODO(reports-ui): add platform + channel pickers to the
 //     manual builder so the user can scope the deck explicitly.
 //     Remove this hardcode when the pickers ship.
+//   * Cutover: this file now calls getReadyData(intent) instead of
+//     queryGlobalComix* directly. ReadyData carries the same BQ rows
+//     plus analyst findings + provenance; the manual builder ignores
+//     the findings for now (the renderer does not surface them yet)
+//     and only reads networks/campaigns/trend. Single source of truth
+//     for analytics data going forward.
 
 const fmtDay = (d: Date) =>
   d.toLocaleDateString("en-US", {
@@ -144,18 +147,18 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
     from,
     to,
   );
-  const isoStart = fmtIso(weekStart);
-  const isoEnd = fmtIso(weekEnd);
 
-  // Same BQ trio Analyze pulls. The query layer is already cached so
-  // a repeat manual run within the cache TTL is near-free.
-  const [networks, campaigns, trend] = await Promise.all([
-    queryGlobalComixNetworkBreakdown(client, isoStart, isoEnd),
-    queryGlobalComixCampaigns(client, isoStart, isoEnd),
-    queryGlobalComixTrend(client, isoStart, isoEnd),
-  ]);
-
+  // Single trip through the shared analyst. ISO bounds come off the
+  // resolved period inside the intent (defaultIntentFor calls fmtIso
+  // on weekStart/weekEnd); getReadyData reads them from intent.period. ReadyData has the same
+  // BQ rows the prior direct queries returned plus the analyst's
+  // findings + provenance; the manual flow only reads the rows for
+  // now. The per-query BQ cache layer underneath means a repeat
+  // manual run within the cache TTL is still near-free.
   const intent = defaultIntentFor({ client, period, weekStart, weekEnd });
+  const ready = await getReadyData(intent);
+  const { networks, campaigns, trend } = ready;
+
   const snapshot = buildHermesSnapshot({
     intent,
     networks,

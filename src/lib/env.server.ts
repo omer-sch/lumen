@@ -153,6 +153,40 @@ export const serverEnv = {
       read("LUMEN_APP_URL", { optional: true }) ?? "http://localhost:3000"
     );
   },
+  /**
+   * Rollout knob for the shared analyst module
+   * (src/lib/analyst/index.ts). Three states:
+   *   - "off":    Hermes uses its existing in-house path; shared analyst
+   *               is not called. Emergency rollback.
+   *   - "shadow": Hermes uses its existing in-house path for the real
+   *               output. Shared analyst is ALSO called in parallel and
+   *               the two outputs are logged side by side under
+   *               [analyst:shadow]. No behavior change. This is the
+   *               default while we audit shadow logs.
+   *   - "live":   Shared analyst becomes the source of truth. Hermes
+   *               feeds Sonnet from the cached ReadyData. Flip after a
+   *               week of shadow logs prove the two agree.
+   * Default: "shadow".
+   */
+  get USE_SHARED_ANALYST() {
+    const raw =
+      read("USE_SHARED_ANALYST", { optional: true }) || "shadow";
+    if (raw !== "off" && raw !== "shadow" && raw !== "live") {
+      throw new Error(
+        `USE_SHARED_ANALYST must be "off" | "shadow" | "live", got ${raw}`,
+      );
+    }
+    return raw;
+  },
+  /**
+   * Optional knob for the analyst knowledge module
+   * (src/lib/analyst/knowledge.ts). Default unset, which makes the
+   * module return []. Flip to "on" once the knowledge corpus is
+   * populated to delegate to src/lib/rag/retrieve.ts.
+   */
+  get USE_ANALYST_KNOWLEDGE() {
+    return read("USE_ANALYST_KNOWLEDGE", { optional: true }) || "off";
+  },
 } as const;
 
 // True when LangSmith tracing is opt-in and credentials are present.

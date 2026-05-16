@@ -1,0 +1,53 @@
+{
+  "_meta": {
+    "name": "mid-window",
+    "description": "Three-network mid-window snapshot. All values within tight bounds; all deltas below PCT_DELTA_THRESHOLD; no campaigns crossing thresholds. Anomstack should emit zero anomalies (negative-case test).",
+    "periodIsoStart": "2026-04-21",
+    "periodIsoEnd": "2026-04-27"
+  },
+  "networks": [
+    {
+      "network": "Meta",
+      "spend": 1000, "share": 0.34, "installs": 100, "clicks": 2000, "impressions": 50000,
+      "ftdD7": 100, "subStart": 100, "subD0": 80, "subD7": 50,
+      "cpi": 10.0, "cpSubStart": 10.0, "cpaD0": 12.5, "cpaD7": 200.0,
+      "ctr": 0.04, "cpm": 20.0, "cpc": 0.5,
+      "roasD7": 0.3, "roasD14": 0.4, "roasD30": 0.5, "roasD90": 0.6,
+      "payersD7": 30, "retD7": 0.4, "trailingCpaD7Avg": 205.0
+    },
+    {
+      "network": "Google",
+      "spend": 950, "share": 0.32, "installs": 95, "clicks": 1900, "impressions": 47500,
+      "ftdD7": 95, "subStart": 95, "subD0": 76, "subD7": 48,
+      "cpi": 10.0, "cpSubStart": 10.0, "cpaD0": 12.5, "cpaD7": 198.0,
+      "ctr": 0.04, "cpm": 20.0, "cpc": 0.5,
+      "roasD7": 0.31, "roasD14": 0.41, "roasD30": 0.51, "roasD90": 0.61,
+      "payersD7": 28, "retD7": 0.41, "trailingCpaD7Avg": 200.0
+    },
+    {
+      "network": "TikTok",
+      "spend": 1020, "share": 0.34, "installs": 102, "clicks": 2040, "impressions": 51000,
+      "ftdD7": 102, "subStart": 102, "subD0": 82, "subD7": 52,
+      "cpi": 10.0, "cpSubStart": 10.0, "cpaD0": 12.44, "cpaD7": 202.0,
+      "ctr": 0.04, "cpm": 20.0, "cpc": 0.5,
+      "roasD7": 0.3, "roasD14": 0.4, "roasD30": 0.5, "roasD90": 0.6,
+      "payersD7": 31, "retD7": 0.4, "trailingCpaD7Avg": 203.0
+    }
+  ],
+  "campaigns": [
+    {
+      "campaign_id": "c_steady_a",
+      "campaign_name": "Steady A (Meta)",
+      "network": "Meta",
+      "spend": 800, "installs": 80, "cpi": 10.0, "roas": 0.3,
+      "spendDelta": 0.02
+    },
+    {
+      "campaign_id": "c_steady_b",
+      "campaign_name": "Steady B (Google)",
+      "network": "Google",
+      "spend": 750, "installs": 75, "cpi": 10.0, "roas": 0.31,
+      "spendDelta": -0.04
+    }
+  ]
+}

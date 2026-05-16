@@ -1,0 +1,13 @@
+{
+  "_meta": {
+    "name": "mid-window",
+    "explanation": "Negative case: every metric is within tight bounds and no delta crosses the percent-delta threshold. Anomstack should emit zero anomalies. Important to lock in the false-positive floor."
+  },
+  "expectedFindings": [],
+  "expectedCounts": {
+    "z_score": 0,
+    "percent_delta_network": 0,
+    "percent_delta_campaign": 0,
+    "suppressed_by_cohort_gate": 0
+  }
+}

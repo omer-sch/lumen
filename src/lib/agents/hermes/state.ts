@@ -16,27 +16,13 @@ import type {
 //     from the LLM, API-route request bodies, and persistence.
 
 // ---------- Intent (parse_intent output) ----------
-
-export const IntentSchema = z.object({
-  client: z.string().min(1),
-  platforms: z.array(z.enum(["android", "ios", "web"])).min(1),
-  channels: z
-    .array(z.enum(["meta", "google", "tiktok", "apple_search_ads", "applovin"]))
-    .min(1),
-  period: z.object({
-    label: z.string(),
-    iso_start: z.string().nullable(),
-    iso_end: z.string().nullable(),
-  }),
-  // focus + doubts are tolerant of Haiku omitting them. Either Zod path
-  // (.nullable().optional() / .default([])) matches what the tool
-  // schema declares optional. Phase 3's adversarial fixtures lock this
-  // contract in further.
-  focus: z.string().nullable().optional(),
-  confidence: z.number().min(0).max(1),
-  doubts: z.array(z.string()).default([]),
-});
-export type Intent = z.infer<typeof IntentSchema>;
+//
+// IntentSchema + Intent moved to src/lib/analyst/types.ts so non-Hermes
+// consumers (manual reports, future notifications) can import it
+// without pulling the LangGraph runtime. Re-exported here so every
+// existing import path keeps working.
+export { IntentSchema, type Intent } from "@/lib/analyst/types";
+import type { Intent } from "@/lib/analyst/types";
 
 // ---------- Context (RAG-retrieved chunks per source) ----------
 

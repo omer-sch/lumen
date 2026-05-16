@@ -2,7 +2,11 @@ import "server-only";
 
 import { traceable } from "langsmith/traceable";
 
+import { getReadyData } from "@/lib/analyst";
+import { runAnomstack, type RawAnomaly } from "@/lib/analyst/anomstack";
+import type { AnalystFinding, ReadyData } from "@/lib/analyst/types";
 import { getAnthropicClient, pickModel } from "@/lib/agents/_scaffold/model";
+import { serverEnv } from "@/lib/env.server";
 import {
   queryGlobalComixCampaigns,
   queryGlobalComixNetworkBreakdown,
@@ -30,7 +34,6 @@ const tracedQueryTrend = traceable(
   { name: "bq.trend", run_type: "tool", tags: ["bigquery"] },
 );
 
-import { runAnomstack, type RawAnomaly } from "../anomstack";
 import { ANALYZE_SYSTEM_PROMPT } from "../prompts/analyze.prompt";
 import { buildHermesSnapshot } from "../snapshot";
 import {
@@ -44,6 +47,18 @@ import {
 // Analyze: cached BQ fetch -> Anomstack deterministic detector -> Sonnet
 // rank-and-frame with parallel Knowledge + History RAG. The model never
 // invents anomalies the data didn't surface; it ranks and frames.
+//
+// Three modes, gated by USE_SHARED_ANALYST (default "shadow"):
+//   - "off":    Existing path only. The shared analyst at
+//               src/lib/analyst is never called. Emergency rollback.
+//   - "shadow": Existing path runs as the source of truth. The shared
+//               analyst is also called in parallel and a structured
+//               [analyst:shadow] log entry compares the two
+//               anomaly lists. No behavior change.
+//   - "live":   The shared analyst is the source of truth. The BQ
+//               rows + anomaly list this node feeds to Sonnet come
+//               from getReadyData(intent); the existing in-house BQ
+//               trio + runAnomstack are not re-fetched.
 
 const TOOL_NAME = "rank_findings";
 
@@ -149,10 +164,88 @@ function buildUserMessage(args: {
   return parts.join("\n");
 }
 
+// ── Shadow-mode comparison helpers ─────────────────────────────────────
+//
+// Anomstack output (RawAnomaly[]) and ReadyData.anomalies
+// (AnalystFinding[]) have different shapes. We normalise both to a
+// stable key so the log entry can show added / removed / common entries
+// without a per-detector schema. Key shape:
+//
+//   `{detector}|{metric}|{target}|{direction}`
+//
+// target = network for network-level findings, campaign_id for
+// campaign-level. Two different metrics on the same target produce
+// different keys, which is what we want.
+
+function rawAnomalyKey(a: RawAnomaly): string {
+  const target = a.campaign_id ?? a.network;
+  return `${a.detector}|${a.metric}|${target}|${a.direction}`;
+}
+
+function analystFindingKey(f: AnalystFinding): string {
+  const d = f.details as {
+    detector?: string;
+    metric?: string;
+    network?: string;
+    campaign_id?: string;
+    direction?: string;
+  };
+  const target = d.campaign_id ?? d.network ?? "?";
+  return `${d.detector ?? "?"}|${d.metric ?? "?"}|${target}|${d.direction ?? "?"}`;
+}
+
+function logShadowDiff(args: {
+  runId: string | null;
+  client: string;
+  isoStart: string;
+  isoEnd: string;
+  oldAnomalies: RawAnomaly[];
+  newReadyData: ReadyData;
+  startedAtMs: number;
+}): void {
+  const oldKeys = new Set(args.oldAnomalies.map(rawAnomalyKey));
+  const newKeys = new Set(args.newReadyData.anomalies.map(analystFindingKey));
+  const added: string[] = [];
+  const removed: string[] = [];
+  for (const k of newKeys) if (!oldKeys.has(k)) added.push(k);
+  for (const k of oldKeys) if (!newKeys.has(k)) removed.push(k);
+
+  // One JSON line per run. Grep `[analyst:shadow]` to pull every entry
+  // out of the structured log aggregator (or stdout in dev).
+  console.info({
+    event: "analyst.shadow",
+    tag: "[analyst:shadow]",
+    runId: args.runId,
+    client: args.client,
+    periodIsoStart: args.isoStart,
+    periodIsoEnd: args.isoEnd,
+    old: {
+      anomalyCount: args.oldAnomalies.length,
+      keys: Array.from(oldKeys).sort(),
+    },
+    new: {
+      findingCount: args.newReadyData.anomalies.length,
+      keys: Array.from(newKeys).sort(),
+    },
+    diff: {
+      added: added.sort(),
+      removed: removed.sort(),
+      identical: added.length === 0 && removed.length === 0,
+    },
+    provenance: {
+      cacheKey: args.newReadyData.provenance.cacheKey,
+      queryIds: args.newReadyData.provenance.queryIds,
+      bqCacheAgeSeconds: args.newReadyData.provenance.bqCacheAgeSeconds,
+    },
+    latency_ms: Date.now() - args.startedAtMs,
+  });
+}
+
 export async function analyze(
   state: HermesState,
 ): Promise<HermesStateUpdate> {
   const startedAt = new Date().toISOString();
+  const startedAtMs = Date.now();
   if (!state.intent) {
     return {
       findings: [],
@@ -172,19 +265,91 @@ export async function analyze(
     intent.period.iso_start,
     intent.period.iso_end,
   );
+  const rolloutMode = serverEnv.USE_SHARED_ANALYST;
 
-  // Atlas fetch: reuse existing cached BQ query functions. The
-  // traced wrappers above are no-ops when LangSmith tracing is off.
-  const [networks, campaigns, trend] = await Promise.all([
-    tracedQueryNetworks(intent.client, period.from, period.to),
-    tracedQueryCampaigns(intent.client, period.from, period.to),
-    tracedQueryTrend(intent.client, period.from, period.to),
-  ]);
+  // BQ rows + anomaly list, branching by rollout mode.
+  //
+  // "live": both come from getReadyData (single trip through the
+  //         shared analyst, no double-fetch).
+  // "off" / "shadow": the existing tracedQuery* + runAnomstack path.
+  //         "shadow" additionally fires getReadyData in parallel and
+  //         emits a [analyst:shadow] log diff (no behavior change).
+  let networks: ReadyData["networks"];
+  let campaigns: ReadyData["campaigns"];
+  let trend: ReadyData["trend"];
+  let rawAnomalies: RawAnomaly[];
+  let counts: ReturnType<typeof runAnomstack>["counts"];
 
-  // Anomstack pre-pass,deterministic.
-  const anomstack = runAnomstack({ networks, campaigns });
+  if (rolloutMode === "live") {
+    const ready = await getReadyData(intent);
+    networks = ready.networks;
+    campaigns = ready.campaigns;
+    trend = ready.trend;
+    // Sonnet's tool prompt expects the RawAnomaly shape (free-form
+    // `rationale` string, the existing JSON shape it has been trained
+    // against in fixtures). Re-running anomstack on ReadyData's
+    // already-fetched networks/campaigns is cheap (single-digit ms,
+    // pure compute) and avoids a lossy adapter from AnalystFinding.
+    const re = runAnomstack({
+      networks,
+      campaigns,
+      periodIsoStart: period.from,
+      periodIsoEnd: period.to,
+    });
+    rawAnomalies = re.anomalies;
+    counts = re.counts;
+  } else {
+    // Existing path. Atlas fetch: reuse cached BQ query functions; the
+    // traced wrappers are no-ops when LangSmith tracing is off.
+    [networks, campaigns, trend] = await Promise.all([
+      tracedQueryNetworks(intent.client, period.from, period.to),
+      tracedQueryCampaigns(intent.client, period.from, period.to),
+      tracedQueryTrend(intent.client, period.from, period.to),
+    ]);
 
-  // Parallel RAG retrieve for Knowledge + History.
+    const anomstack = runAnomstack({
+      networks,
+      campaigns,
+      periodIsoStart: period.from,
+      periodIsoEnd: period.to,
+    });
+    rawAnomalies = anomstack.anomalies;
+    counts = anomstack.counts;
+
+    if (rolloutMode === "shadow") {
+      // Fire-and-log; never block the real path. The shared analyst's
+      // getReadyData hits the same Redis-cached BQ keys, so the extra
+      // work is cache reads and analyst computation, not a second BQ
+      // round-trip.
+      getReadyData(intent)
+        .then((newReadyData) =>
+          logShadowDiff({
+            runId: state.run_id ?? null,
+            client: intent.client,
+            isoStart: period.from,
+            isoEnd: period.to,
+            oldAnomalies: rawAnomalies,
+            newReadyData,
+            startedAtMs,
+          }),
+        )
+        .catch((err) => {
+          console.warn({
+            event: "analyst.shadow.error",
+            tag: "[analyst:shadow]",
+            runId: state.run_id ?? null,
+            client: intent.client,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        });
+    }
+  }
+
+  // Parallel RAG retrieve for Knowledge + History. Hermes keeps its
+  // own retrieve() call regardless of rollout mode because the LLM
+  // ranker downstream expects ContextChunk shapes; ReadyData's
+  // knowledgeChunks is the analyst-layer projection and a future PR
+  // will reconcile the two.
   const channelHint = intent.channels.join(" ");
   const [knowledgeResult, historyResult] = await Promise.all([
     retrieve({
@@ -255,7 +420,7 @@ export async function analyze(
           network: { rows: networks.length },
           campaigns: { rows: campaigns.length },
           trend: { points: trend.length },
-          anomalies: anomstack.anomalies,
+          anomalies: rawAnomalies,
           knowledge: knowledgeChunks,
           history: historyChunks,
           period,
@@ -298,7 +463,7 @@ export async function analyze(
         node: "analyze",
         started_at: startedAt,
         ended_at: endedAt,
-        notes: `anomalies=${anomstack.anomalies.length} findings=${findings.length} snapshot=${snapshot.platformOverall ? "present" : "skipped"} (z=${anomstack.counts.z_score} pct_net=${anomstack.counts.percent_delta_network} pct_camp=${anomstack.counts.percent_delta_campaign})`,
+        notes: `mode=${rolloutMode} anomalies=${rawAnomalies.length} findings=${findings.length} snapshot=${snapshot.platformOverall ? "present" : "skipped"} (z=${counts.z_score} pct_net=${counts.percent_delta_network} pct_camp=${counts.percent_delta_campaign} suppressed=${counts.suppressed_by_cohort_gate})`,
       },
     ],
   };
