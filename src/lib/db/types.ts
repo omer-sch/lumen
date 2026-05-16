@@ -441,6 +441,42 @@ export type Database = {
           },
         ]
       }
+      rag_chunks: {
+        Row: {
+          chunk_id: string
+          content: string
+          corpus: string
+          created_at: string
+          embedding: string
+          id: string
+          metadata: Json
+          source_path: string
+          updated_at: string
+        }
+        Insert: {
+          chunk_id: string
+          content: string
+          corpus: string
+          created_at?: string
+          embedding: string
+          id?: string
+          metadata?: Json
+          source_path: string
+          updated_at?: string
+        }
+        Update: {
+          chunk_id?: string
+          content?: string
+          corpus?: string
+          created_at?: string
+          embedding?: string
+          id?: string
+          metadata?: Json
+          source_path?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       reports: {
         Row: {
           agent_run_id: string | null
@@ -521,48 +557,32 @@ export type Database = {
           },
         ]
       }
-      rag_chunks: {
-        Row: {
-          chunk_id: string
-          content: string
-          corpus: string
-          created_at: string
-          embedding: string
-          id: string
-          metadata: Json
-          source_path: string
-          updated_at: string
-        }
-        Insert: {
-          chunk_id: string
-          content: string
-          corpus: string
-          created_at?: string
-          embedding: string
-          id?: string
-          metadata?: Json
-          source_path: string
-          updated_at?: string
-        }
-        Update: {
-          chunk_id?: string
-          content?: string
-          corpus?: string
-          created_at?: string
-          embedding?: string
-          id?: string
-          metadata?: Json
-          source_path?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      match_rag_chunks: {
+        Args: {
+          filter_channel?: string
+          filter_client?: string
+          filter_date_from?: string
+          filter_date_to?: string
+          filter_platform?: string
+          filter_tags?: string[]
+          match_corpus: string
+          match_count?: number
+          query_embedding: string
+        }
+        Returns: {
+          chunk_id: string
+          content: string
+          id: string
+          metadata: Json
+          similarity: number
+          source_path: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
