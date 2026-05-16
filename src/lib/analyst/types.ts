@@ -6,6 +6,8 @@ import type {
   NetworkRow as BQNetworkRow,
 } from "@/types/dashboard";
 
+import type { CampaignClassification } from "./campaign-classifier";
+
 // Shared analyst module types.
 //
 // Three layers:
@@ -180,6 +182,45 @@ export type PeriodOverPeriod = {
   baselineSampleSize?: number;
 };
 
+// ── Weekly history (multi-week trailing context) ───────────────────────
+
+// One row per (network, trailing-week) pair. The Weekly Breakdown slide
+// stacks these on top of the current period so a reader sees three or
+// four trailing weeks of context without reading prose.
+//
+// Period-agnostic: the week label and number are derived from the row's
+// own iso dates, never from a hardcoded reference. weekIsoStart /
+// weekIsoEnd / weekNumber together fully describe the window; weekLabel
+// is the prebuilt human form so consumers don't all re-derive it.
+export type WeeklyHistoryRow = {
+  /** Network the row is about ("Meta" / "Google" / "TikTok" / "Apple"). */
+  network: string;
+  /** ISO start (inclusive) of this trailing week. */
+  weekIsoStart: string;
+  /** ISO end (inclusive) of this trailing week. */
+  weekIsoEnd: string;
+  /** ISO-8601 week number, derived from the row's own end date. */
+  weekNumber: number;
+  /** Pre-built deck label, e.g. "Apr 27 to May 3 (Week 18)". Consumers
+   *  may override this when their renderer wants a different format,
+   *  but the default is the deck-style label. */
+  weekLabel: string;
+  /** Full BQ NetworkRow for this trailing week. Same metric vocabulary
+   *  as ReadyData.networks so a downstream consumer can read both with
+   *  one type. */
+  metrics: BQNetworkRow;
+};
+
+// ── Enriched campaign row (BQ + classifier output) ─────────────────────
+
+// CampaignRow widened with the family / geo / campaignType / platform
+// derived from the GlobalComix naming convention. The classifier never
+// touches BQ; it's a pure regex over campaign_name. Falls back to
+// `family: "Other"` for names that don't match the pattern, so a
+// misshaped name reads as a real ("Other") group rather than being
+// silently dropped.
+export type EnrichedCampaignRow = BQCampaignRow & CampaignClassification;
+
 // ── Knowledge ──────────────────────────────────────────────────────────
 
 // Anonymous chunk shape used by the analyst layer. Distinct from
@@ -229,8 +270,21 @@ export type ReadyData = {
   };
 
   networks: BQNetworkRow[];
-  campaigns: BQCampaignRow[];
+  /** Campaign rows widened with family / geo / campaignType derived from
+   *  the GlobalComix naming convention. The underlying BQ shape (id /
+   *  name / network / spend / installs / cpi / roas / spendDelta) is
+   *  preserved so consumers that don't care about the classification can
+   *  still type as `CampaignRow`. */
+  campaigns: EnrichedCampaignRow[];
   trend: BQTrendPointByNetwork[];
+
+  /** Trailing-week context, anchored to `period.isoStart`. Flat rows
+   *  (one per network per week); consumers filter by `network` when they
+   *  need a single channel's history. Empty array when the anchor is
+   *  unparseable or every trailing fetch returned no rows; never null. */
+  history: {
+    networks: WeeklyHistoryRow[];
+  };
 
   anomalies: AnalystFinding[];
   rankings: Rankings;

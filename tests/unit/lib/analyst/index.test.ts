@@ -116,7 +116,21 @@ describe("getReadyData", () => {
     expect(r.period.isoEnd).toBe("2026-05-07");
     expect(r.networks).toHaveLength(3);
     expect(r.campaigns).toHaveLength(2);
+    // Campaigns are enriched with classifier output. The mock names are
+    // single-letter (don't match the canonical pattern) so every row
+    // falls back to "Other"; the assertion below verifies the fields
+    // exist regardless of name shape.
+    for (const c of r.campaigns) {
+      expect(typeof c.family).toBe("string");
+      expect(typeof c.geo).toBe("string");
+      expect(typeof c.campaignType).toBe("string");
+    }
     expect(r.trend).toEqual([]);
+    // History is fetched in parallel with the current-period BQ trio.
+    // With HISTORY_WEEKS=4 trailing weeks and 3 networks per week
+    // (the same network mock returns the same rows on every shifted
+    // call) we expect 12 rows.
+    expect(r.history.networks).toHaveLength(4 * 3);
     expect(Array.isArray(r.anomalies)).toBe(true);
     expect(r.rankings.topCampaignsBySpend.rows).toHaveLength(2);
     expect(r.rankings.topCampaignsBySpend.partial).toBe(true); // requested 5, have 2

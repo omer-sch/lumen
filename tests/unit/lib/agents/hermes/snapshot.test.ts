@@ -252,4 +252,112 @@ describe("buildHermesSnapshot (real-data path)", () => {
     expect(snap.channelWeekly).toBeNull(); // but the per-channel slice is gone
     expect(snap.channelCampaign).toBeNull();
   });
+
+  it("projects ReadyData.history into channelWeekly.history for the active channel only", () => {
+    // Three trailing weeks across two networks. Only the TikTok rows
+    // should land in channelWeekly.history when the intent's channel
+    // is tiktok; the Meta rows go to other sections (or nowhere, for
+    // an intent that doesn't include Meta).
+    const trailing = [
+      {
+        network: "TikTok",
+        weekIsoStart: "2026-04-13",
+        weekIsoEnd: "2026-04-19",
+        weekNumber: 16,
+        weekLabel: "Apr 13 to Apr 19 (Week 16)",
+        metrics: net({
+          network: "TikTok",
+          spend: 1500,
+          subStart: 50,
+          subD7: 25,
+          cpaD7: 60,
+        }),
+      },
+      {
+        network: "TikTok",
+        weekIsoStart: "2026-04-20",
+        weekIsoEnd: "2026-04-26",
+        weekNumber: 17,
+        weekLabel: "Apr 20 to Apr 26 (Week 17)",
+        metrics: net({
+          network: "TikTok",
+          spend: 1800,
+          subStart: 60,
+          subD7: 30,
+          cpaD7: 60,
+        }),
+      },
+      // Meta row: should NOT appear in channelWeekly.history for a
+      // tiktok-scoped intent.
+      {
+        network: "Meta",
+        weekIsoStart: "2026-04-20",
+        weekIsoEnd: "2026-04-26",
+        weekNumber: 17,
+        weekLabel: "Apr 20 to Apr 26 (Week 17)",
+        metrics: net({
+          network: "Meta",
+          spend: 9000,
+          subStart: 100,
+          subD7: 40,
+          cpaD7: 225,
+        }),
+      },
+    ];
+    const networks: BQNetworkRow[] = [
+      net({ network: "TikTok", spend: 2000, subStart: 70, subD7: 35, cpaD7: 57 }),
+    ];
+
+    const snap = buildHermesSnapshot({
+      intent: intent({ channels: ["tiktok"] }),
+      networks,
+      campaigns: [],
+      history: trailing,
+    });
+
+    expect(snap.channelWeekly).not.toBeNull();
+    expect(snap.channelWeekly?.history).toHaveLength(2);
+    // Oldest-first ordering.
+    expect(snap.channelWeekly?.history?.[0].label).toBe("Week 16");
+    expect(snap.channelWeekly?.history?.[1].label).toBe("Week 17");
+    // No Meta row leaks in.
+    expect(
+      snap.channelWeekly?.history?.find((r) =>
+        r.range.includes("Apr 20") && r.spend === 9000,
+      ),
+    ).toBeUndefined();
+  });
+
+  it("suppresses subD7/cpaD7 in a history row when subD7 is below the cohort-maturity threshold", () => {
+    const trailing = [
+      {
+        network: "TikTok",
+        weekIsoStart: "2026-04-13",
+        weekIsoEnd: "2026-04-19",
+        weekNumber: 16,
+        weekLabel: "Apr 13 to Apr 19 (Week 16)",
+        metrics: net({
+          network: "TikTok",
+          spend: 1500,
+          subStart: 50,
+          subD7: 3, // below COHORT_D7_MATURITY_THRESHOLD (10)
+          cpaD7: 500, // artifact value; must NOT make it to the deck
+        }),
+      },
+    ];
+    const networks: BQNetworkRow[] = [
+      net({ network: "TikTok", spend: 2000, subStart: 70, subD7: 35, cpaD7: 57 }),
+    ];
+
+    const snap = buildHermesSnapshot({
+      intent: intent({ channels: ["tiktok"] }),
+      networks,
+      campaigns: [],
+      history: trailing,
+    });
+
+    const row = snap.channelWeekly?.history?.[0];
+    expect(row?.subD7).toBeNull();
+    expect(row?.cpaD7).toBeNull();
+  });
 });

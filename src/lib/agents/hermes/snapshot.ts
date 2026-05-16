@@ -3,6 +3,7 @@ import "server-only";
 import { findClient } from "@/lib/mock/clients";
 import type {
   CampaignRow as ReportCampaignRow,
+  HistoricalWeekRow,
   WeeklySummaryRow,
 } from "@/lib/reports/types";
 import type {
@@ -12,6 +13,7 @@ import type {
 } from "@/types/dashboard";
 
 import { COHORT_D7_MATURITY_THRESHOLD } from "@/lib/analyst/maturity-gates";
+import type { WeeklyHistoryRow } from "@/lib/analyst/types";
 
 import type { HermesSnapshot, Intent } from "./state";
 
@@ -47,8 +49,15 @@ import type { HermesSnapshot, Intent } from "./state";
 //     table's campaign attribution is unreliable per
 //     queryGlobalComixCampaigns header comment). Per-campaign sub
 //     fields are 0 with a documented caveat (better than fabricating).
-//   * Prior weekly history rows (channelWeekly.history). Left empty;
-//     a future query that scans 4-5 prior weeks fills this in.
+//
+// What changed in Phase 0:
+//   * channelWeekly.history is now populated from ReadyData.history.
+//     The analyst layer fires N parallel network-breakdown queries for
+//     the trailing weeks; this file projects the rows down to the
+//     renderer's HistoricalWeekRow shape and filters to the active
+//     channel. Empty array when the caller doesn't pass history (e.g.
+//     a unit test that builds a snapshot directly), preserving the
+//     prior fallback behavior.
 
 // ── Intent-channel <-> BQ-network mapping ─────────────────────────────
 //
@@ -216,6 +225,70 @@ function totalsFromNetworks(rows: BQNetworkRow[]): WeeklySummaryRow {
   };
 }
 
+// ── WeeklyHistoryRow -> reports::HistoricalWeekRow ────────────────────
+//
+// The analyst layer surfaces per-(network, week) rows in
+// ReadyData.history.networks. The renderer's ChannelWeeklySection wants
+// the channel-scoped trailing rows in the HistoricalWeekRow shape (label
+// + range + flat metric fields), ordered oldest-first. This projection
+// filters by the requested BQ network labels and reshapes.
+//
+// The maturity gate stays consistent with the current-week renderer:
+// when a week's subD7 is below COHORT_D7_MATURITY_THRESHOLD we surface
+// the cohort fields as `null` (subD7 / cpaD7) so a CSM reads "—" rather
+// than an artifact value.
+
+function historyRowToHistorical(row: WeeklyHistoryRow): HistoricalWeekRow {
+  const m = row.metrics;
+  const d7Mature = m.subD7 >= COHORT_D7_MATURITY_THRESHOLD;
+  // `label` and `range` map to the deck's "Week 17" / "20 Apr 2026 to
+  // 26 Apr 2026" labels. We derive both from the row's own dates so the
+  // output stays period-agnostic.
+  const range = formatDateRange(row.weekIsoStart, row.weekIsoEnd);
+  return {
+    label: `Week ${row.weekNumber}`,
+    range,
+    spend: round(m.spend, 0),
+    impressions: round(m.impressions, 0),
+    clicks: round(m.clicks, 0),
+    installs: round(m.installs, 0),
+    cpi: round(m.cpi, 2),
+    substart: round(m.subStart, 0),
+    cpSubstart: round(m.cpSubStart, 2),
+    subD0: round(m.subD0, 0),
+    cpaD0: round(m.cpaD0, 2),
+    subD7: d7Mature ? round(m.subD7, 0) : null,
+    cpaD7: d7Mature ? round(m.cpaD7, 2) : null,
+  };
+}
+
+function formatDateRange(isoStart: string, isoEnd: string): string {
+  const fmt = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00Z`);
+    return d.toLocaleDateString("en-US", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  };
+  return `${fmt(isoStart)} to ${fmt(isoEnd)}`;
+}
+
+function projectChannelHistory(
+  history: WeeklyHistoryRow[],
+  intentChannel: IntentChannel | undefined,
+): HistoricalWeekRow[] {
+  if (intentChannel == null || history.length === 0) return [];
+  const matches = history.filter((r) =>
+    bqNetworkMatchesIntentChannel(r.network, intentChannel),
+  );
+  // Oldest-first so the renderer can stack the trailing rows above the
+  // current week in chronological order.
+  matches.sort((a, b) => a.weekIsoStart.localeCompare(b.weekIsoStart));
+  return matches.map(historyRowToHistorical);
+}
+
 // ── BQ CampaignRow -> reports::CampaignRow ─────────────────────────────
 
 function bqCampaignToReport(c: BQCampaignRow): ReportCampaignRow {
@@ -250,10 +323,16 @@ export type SnapshotInputs = {
   // trend retained in the signature for future per-week aggregation;
   // unused today.
   trend?: BQTrendPointByNetwork[];
+  /** Trailing-week context from ReadyData.history.networks. Empty when
+   *  the caller has no history (e.g. the analyst couldn't anchor the
+   *  walk-back); the channel weekly section then renders with no
+   *  trailing rows, same fallback as before. */
+  history?: WeeklyHistoryRow[];
 };
 
 export function buildHermesSnapshot(args: SnapshotInputs): HermesSnapshot {
   const { intent, networks, campaigns } = args;
+  const history = args.history ?? [];
   const client = findClient(intent.client);
   const intentChannel = intent.channels[0];
 
@@ -303,10 +382,12 @@ export function buildHermesSnapshot(args: SnapshotInputs): HermesSnapshot {
       channelMatch != null
         ? {
             currentWeek: networkRowToSummary(channelMatch),
-            // Weekly history needs a prior-period BQ query; left empty
-            // for now (renderer handles []). Documented in the file
-            // header.
-            history: [],
+            // Trailing weeks for the active channel, projected from
+            // ReadyData.history.networks. Empty array when the caller
+            // didn't pass `history` (back-compat for tests that build
+            // a snapshot without going through getReadyData) or when
+            // the BQ history fetch returned nothing for this channel.
+            history: projectChannelHistory(history, intentChannel),
           }
         : null,
     channelCampaign:

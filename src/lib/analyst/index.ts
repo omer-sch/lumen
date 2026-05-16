@@ -13,7 +13,9 @@ import {
   deriveAnalystCacheKey,
   withAnalystCache,
 } from "./cache";
+import { enrichCampaignRow } from "./campaign-classifier";
 import { cpaD7VsTrailing30d } from "./comparisons";
+import { fetchTrailingWeeks } from "./history";
 import { lookupKnowledge } from "./knowledge";
 import { stampReadyDataProvenance } from "./provenance";
 import { topCampaignsBySpend } from "./rankings";
@@ -78,24 +80,43 @@ export async function getReadyData(intent: Intent): Promise<ReadyData> {
 
   return withAnalystCache(intent, async () => {
     // Per-query BQ cache absorbs the warehouse latency; this layer
-    // pays the analyst-computation cost only on miss. Knowledge is
-    // parallelised so it does not add to the critical path when
-    // USE_ANALYST_KNOWLEDGE flips on.
-    const [networks, campaigns, trend, dataAsOf, knowledgeChunks] =
-      await Promise.all([
-        queryGlobalComixNetworkBreakdown(intent.client, isoStart, isoEnd),
-        queryGlobalComixCampaigns(intent.client, isoStart, isoEnd),
-        queryGlobalComixTrend(intent.client, isoStart, isoEnd),
-        queryGlobalComixDataAsOf(intent.client).catch(() => null),
-        lookupKnowledge({ intent }),
-      ]);
+    // pays the analyst-computation cost only on miss. Knowledge and
+    // trailing history are parallelised so they do not add to the
+    // critical path.
+    const [
+      networks,
+      rawCampaigns,
+      trend,
+      dataAsOf,
+      knowledgeChunks,
+      historyRows,
+    ] = await Promise.all([
+      queryGlobalComixNetworkBreakdown(intent.client, isoStart, isoEnd),
+      queryGlobalComixCampaigns(intent.client, isoStart, isoEnd),
+      queryGlobalComixTrend(intent.client, isoStart, isoEnd),
+      queryGlobalComixDataAsOf(intent.client).catch(() => null),
+      lookupKnowledge({ intent }),
+      fetchTrailingWeeks({
+        client: intent.client,
+        periodIsoStart: isoStart,
+      }).catch(() => []),
+    ]);
+
+    // Enrich campaign rows with family / geo / campaignType derived
+    // from the GlobalComix naming convention. Pure regex; no extra BQ
+    // round-trip. Names that don't match the pattern fall back to
+    // {family: "Other", geo: "Unknown"} so the row still flows through.
+    const campaigns = rawCampaigns.map(enrichCampaignRow);
 
     const anomstack = runAnomstack({
       networks,
-      campaigns,
+      campaigns: rawCampaigns,
       periodIsoStart: isoStart,
       periodIsoEnd: isoEnd,
     });
+    // Rankings consumes the raw shape (it only reads spend); we pass
+    // the enriched array for type-safety. Property-compatible since
+    // EnrichedCampaignRow widens CampaignRow.
     const rankings = { topCampaignsBySpend: topCampaignsBySpend(campaigns) };
     const comparisons = { cpaD7PoP: cpaD7VsTrailing30d(networks) };
 
@@ -123,6 +144,7 @@ export async function getReadyData(intent: Intent): Promise<ReadyData> {
       networks,
       campaigns,
       trend,
+      history: { networks: historyRows },
       anomalies: anomstack.findings,
       rankings,
       comparisons,
@@ -141,6 +163,7 @@ export type {
   AnalystFindingKind,
   AnalystFindingSeverity,
   AnomalyDetails,
+  EnrichedCampaignRow,
   FindingProvenance,
   Intent,
   IntentChannel,
@@ -150,6 +173,7 @@ export type {
   Rankings,
   ReadyData,
   ReadyDataProvenance,
+  WeeklyHistoryRow,
 } from "./types";
 export { IntentSchema, ANALYST_QUERY_IDS } from "./types";
 export {
@@ -158,3 +182,9 @@ export {
   deriveAnalystCacheKey,
   deriveAnalystCacheParams,
 } from "./cache";
+export {
+  classifyCampaignName,
+  enrichCampaignRow,
+  type CampaignClassification,
+} from "./campaign-classifier";
+export { HISTORY_WEEKS, fetchTrailingWeeks } from "./history";

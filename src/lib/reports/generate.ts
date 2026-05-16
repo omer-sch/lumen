@@ -157,13 +157,14 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
   // manual run within the cache TTL is still near-free.
   const intent = defaultIntentFor({ client, period, weekStart, weekEnd });
   const ready = await getReadyData(intent);
-  const { networks, campaigns, trend } = ready;
+  const { networks, campaigns, trend, history } = ready;
 
   const snapshot = buildHermesSnapshot({
     intent,
     networks,
     campaigns,
     trend,
+    history: history.networks,
   });
 
   // Compose sections from the snapshot. Reuses the same Report shape

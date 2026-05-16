@@ -4,6 +4,7 @@ import { traceable } from "langsmith/traceable";
 
 import { getReadyData } from "@/lib/analyst";
 import { runAnomstack, type RawAnomaly } from "@/lib/analyst/anomstack";
+import { enrichCampaignRow } from "@/lib/analyst/campaign-classifier";
 import type { AnalystFinding, ReadyData } from "@/lib/analyst/types";
 import { getAnthropicClient, pickModel } from "@/lib/agents/_scaffold/model";
 import { serverEnv } from "@/lib/env.server";
@@ -277,6 +278,12 @@ export async function analyze(
   let networks: ReadyData["networks"];
   let campaigns: ReadyData["campaigns"];
   let trend: ReadyData["trend"];
+  // History flows through from ReadyData when available so the
+  // snapshot's channelWeekly section can stack trailing rows. In the
+  // legacy "off" / "shadow" path it stays empty (existing behavior);
+  // the shadow run still fetches history under the hood and the diff
+  // log surfaces the difference.
+  let history: ReadyData["history"]["networks"] = [];
   let rawAnomalies: RawAnomaly[];
   let counts: ReturnType<typeof runAnomstack>["counts"];
 
@@ -285,6 +292,7 @@ export async function analyze(
     networks = ready.networks;
     campaigns = ready.campaigns;
     trend = ready.trend;
+    history = ready.history.networks;
     // Sonnet's tool prompt expects the RawAnomaly shape (free-form
     // `rationale` string, the existing JSON shape it has been trained
     // against in fixtures). Re-running anomstack on ReadyData's
@@ -301,15 +309,22 @@ export async function analyze(
   } else {
     // Existing path. Atlas fetch: reuse cached BQ query functions; the
     // traced wrappers are no-ops when LangSmith tracing is off.
-    [networks, campaigns, trend] = await Promise.all([
+    const [rawNetworks, rawCampaigns, rawTrend] = await Promise.all([
       tracedQueryNetworks(intent.client, period.from, period.to),
       tracedQueryCampaigns(intent.client, period.from, period.to),
       tracedQueryTrend(intent.client, period.from, period.to),
     ]);
+    networks = rawNetworks;
+    // EnrichedCampaignRow widens BQ CampaignRow with the classifier
+    // output (family / geo / campaignType / platform). The legacy path
+    // also enriches so the variable type stays consistent across modes
+    // and downstream consumers (snapshot, atelier) read one shape.
+    campaigns = rawCampaigns.map(enrichCampaignRow);
+    trend = rawTrend;
 
     const anomstack = runAnomstack({
       networks,
-      campaigns,
+      campaigns: rawCampaigns,
       periodIsoStart: period.from,
       periodIsoEnd: period.to,
     });
@@ -439,14 +454,16 @@ export async function analyze(
   const findings: Finding[] = parsed.findings;
 
   // Snapshot: the structural data tables Atelier lifts into the Report.
-  // Built from the BQ rows we just fetched (networks / campaigns / trend);
-  // every visible number in the deck traces back to a real query, the
-  // same trust contract the citation validator enforces for the prose.
+  // Built from the BQ rows we just fetched (networks / campaigns / trend
+  // / history); every visible number in the deck traces back to a real
+  // query, the same trust contract the citation validator enforces for
+  // the prose.
   const snapshot = buildHermesSnapshot({
     intent,
     networks,
     campaigns,
     trend,
+    history,
   });
 
   const endedAt = new Date().toISOString();
