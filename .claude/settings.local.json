@@ -285,7 +285,16 @@
       "Bash(sips -Z 256 public/avatars/hermes.png --out public/avatars/hermes.png)",
       "Bash(npx --yes tsx --version)",
       "Bash(npx --yes tsx --env-file=.env.local scripts/verify-hermes-snapshot.mjs)",
-      "Bash(kill 93673)"
+      "Bash(kill 93673)",
+      "Bash(pkill -f \"next-server\")",
+      "Bash(unzip -l '/Users/omer/Downloads/GlobalComix - Week 18 Review.pptx')",
+      "Bash(sort -t/ -k1 -V)",
+      "Bash(cat)",
+      "Bash(python3 /tmp/extract_slides.py)",
+      "Bash(sort -k5 -n)",
+      "Bash(gh pr *)",
+      "Bash(NODE_OPTIONS='--require ./scripts/_unhide-server-only.cjs' npx tsx scripts/shadow-analyst-divergence.ts)",
+      "Bash(lsof -ti:3000 -ti:3001)"
     ]
   },
   "enableAllProjectMcpServers": true,
