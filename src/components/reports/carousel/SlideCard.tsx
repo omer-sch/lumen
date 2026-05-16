@@ -11,6 +11,8 @@ import { REPORT_BRAND } from "@/lib/reports/brand";
 import type {
   ChannelCampaignSlide,
   ChannelWeeklySlide,
+  ChapterDividerSlide,
+  CloserSlide,
   LegacySection,
   LegacySlide,
   PlatformOverallSlide,
@@ -59,6 +61,8 @@ export function SlideCard({ slide, report, readOnly, capture, onChange }: SlideC
   switch (slide.kind) {
     case "cover":
       return <CoverCard report={report} readOnly={ro} onChange={onChange} />;
+    case "chapter_divider":
+      return <ChapterDividerCard slide={slide.slide} />;
     case "platform_overall":
       return <PlatformOverallCard slide={slide.slide} />;
     case "channel_weekly":
@@ -72,6 +76,8 @@ export function SlideCard({ slide, report, readOnly, capture, onChange }: SlideC
           onChange={onChange}
         />
       );
+    case "closer":
+      return <CloserCard slide={slide.slide} />;
     case "legacy":
       return (
         <LegacyCard
@@ -82,6 +88,62 @@ export function SlideCard({ slide, report, readOnly, capture, onChange }: SlideC
         />
       );
   }
+}
+
+function ChapterDividerCard({ slide }: { slide: ChapterDividerSlide }) {
+  return (
+    <div
+      className="flex h-full w-full flex-col items-start justify-center px-12"
+      style={{ background: REPORT_BRAND.navy }}
+    >
+      <div
+        className="font-display font-bold leading-none"
+        style={{ color: REPORT_BRAND.white, fontSize: 88 }}
+      >
+        {slide.title}
+      </div>
+      {slide.subtitle ? (
+        <div
+          className="mt-4 font-body"
+          style={{ color: REPORT_BRAND.yellow, fontSize: 18 }}
+        >
+          {slide.subtitle}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CloserCard({ slide }: { slide: CloserSlide }) {
+  return (
+    <div
+      className="flex h-full w-full flex-col items-center justify-center px-12 text-center"
+      style={{ background: REPORT_BRAND.navy }}
+    >
+      <div
+        className="font-display font-bold leading-none"
+        style={{ color: REPORT_BRAND.white, fontSize: 80 }}
+      >
+        {slide.title}
+      </div>
+      {slide.subtitle ? (
+        <div
+          className="mt-3 font-body"
+          style={{ color: REPORT_BRAND.yellow, fontSize: 16 }}
+        >
+          {slide.subtitle}
+        </div>
+      ) : null}
+      {slide.contactLine ? (
+        <div
+          className="mt-6 whitespace-pre-line font-body"
+          style={{ color: "rgba(255,255,255,0.7)", fontSize: 14 }}
+        >
+          {slide.contactLine}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function CoverCard({

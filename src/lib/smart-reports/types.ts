@@ -28,7 +28,9 @@ import type { Intent, ReadyData } from "@/lib/analyst/types";
  * multi-platform structure). The template drives which sections
  * composeReport asks the prose-writer for and in what order.
  */
-export type ComposeTemplate = "single-channel-weekly";
+export type ComposeTemplate =
+  | "single-channel-weekly"
+  | "weekly-review-globalcomix";
 
 // ── Highlight markup ──────────────────────────────────────────────────
 

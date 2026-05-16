@@ -6,6 +6,8 @@ import {
   layoutSlides,
   type ChannelCampaignSlide,
   type ChannelWeeklySlide,
+  type ChapterDividerSlide,
+  type CloserSlide,
   type ContinuationInfo,
   type LaidOutSlide,
   type LegacySlide,
@@ -114,12 +116,16 @@ function buildSlide(pres: Pptx, s: LaidOutSlide, report: Report) {
   switch (s.kind) {
     case "cover":
       return buildCoverSlide(pres, report);
+    case "chapter_divider":
+      return buildChapterDividerSlide(pres, s.slide);
     case "platform_overall":
       return buildPlatformOverallSlide(pres, s.slide, report);
     case "channel_weekly":
       return buildChannelWeeklySlide(pres, s.slide, report);
     case "channel_campaign":
       return buildChannelCampaignSlide(pres, s.slide, report);
+    case "closer":
+      return buildCloserSlide(pres, s.slide);
     case "legacy":
       return buildLegacySlide(pres, s.slide, report);
   }
@@ -544,6 +550,101 @@ function buildChannelCampaignSlide(
   }
 
   paintFooter(pptSlide, report, slide.continuation);
+}
+
+// ---------------------------------------------------------------------------
+// Chapter divider (Phase 2)
+// ---------------------------------------------------------------------------
+//
+// Full-bleed slide with the platform name as the headline. Matches the
+// Week 18 reference deck's chapter-divider slides (slides 2 / 13 / etc):
+// dark navy background, large white title, optional subtitle. No
+// footer — the divider is structural, not data-bearing.
+
+function buildChapterDividerSlide(pres: Pptx, slide: ChapterDividerSlide) {
+  const pptSlide = pres.addSlide();
+  pptSlide.background = { color: hex(REPORT_BRAND.navy) };
+
+  pptSlide.addText(slide.title, {
+    x: 0.6,
+    y: 2.9,
+    w: 12.1,
+    h: 1.5,
+    fontFace: REPORT_BRAND.fontHeader,
+    fontSize: 96,
+    bold: true,
+    color: hex(REPORT_BRAND.white),
+    align: "left",
+    valign: "middle",
+  });
+
+  if (slide.subtitle) {
+    pptSlide.addText(slide.subtitle, {
+      x: 0.6,
+      y: 4.5,
+      w: 12.1,
+      h: 0.5,
+      fontFace: REPORT_BRAND.fontBody,
+      fontSize: 18,
+      color: hex(REPORT_BRAND.yellow),
+      align: "left",
+      valign: "top",
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Closer (Phase 2)
+// ---------------------------------------------------------------------------
+//
+// Final slide. Branded thank-you with optional subtitle and contact
+// line. Matches the Week 18 closer style: dark navy background, three
+// lines of decreasing weight from title to contact.
+
+function buildCloserSlide(pres: Pptx, slide: CloserSlide) {
+  const pptSlide = pres.addSlide();
+  pptSlide.background = { color: hex(REPORT_BRAND.navy) };
+
+  pptSlide.addText(slide.title, {
+    x: 0.6,
+    y: 2.2,
+    w: 12.1,
+    h: 1.4,
+    fontFace: REPORT_BRAND.fontHeader,
+    fontSize: 88,
+    bold: true,
+    color: hex(REPORT_BRAND.white),
+    align: "center",
+    valign: "middle",
+  });
+
+  if (slide.subtitle) {
+    pptSlide.addText(slide.subtitle, {
+      x: 0.6,
+      y: 3.7,
+      w: 12.1,
+      h: 0.4,
+      fontFace: REPORT_BRAND.fontBody,
+      fontSize: 16,
+      color: hex(REPORT_BRAND.yellow),
+      align: "center",
+      valign: "top",
+    });
+  }
+
+  if (slide.contactLine) {
+    pptSlide.addText(slide.contactLine, {
+      x: 0.6,
+      y: 4.6,
+      w: 12.1,
+      h: 1.4,
+      fontFace: REPORT_BRAND.fontBody,
+      fontSize: 14,
+      color: "BFC8D6",
+      align: "center",
+      valign: "top",
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------

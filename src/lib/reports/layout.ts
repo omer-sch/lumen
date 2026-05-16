@@ -89,11 +89,29 @@ export type LegacySlide = {
   section: LegacySection;
 };
 
+/** Phase 2: full-bleed chapter divider slide (Android / iOS / Web). */
+export type ChapterDividerSlide = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  platform: Platform;
+};
+
+/** Phase 2: closer slide (Thank you / Follow us / contact). */
+export type CloserSlide = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  contactLine?: string;
+};
+
 export type LaidOutSlide =
   | { kind: "cover"; report: Report }
+  | { kind: "chapter_divider"; slide: ChapterDividerSlide }
   | { kind: "platform_overall"; slide: PlatformOverallSlide }
   | { kind: "channel_weekly"; slide: ChannelWeeklySlide }
   | { kind: "channel_campaign"; slide: ChannelCampaignSlide }
+  | { kind: "closer"; slide: CloserSlide }
   | { kind: "legacy"; slide: LegacySlide };
 
 // =============================================================================
@@ -138,29 +156,74 @@ const ORPHAN_SLACK = 1;
 export function layoutSlides(report: Report): LaidOutSlide[] {
   const out: LaidOutSlide[] = [{ kind: "cover", report }];
 
-  for (const section of report.sections) {
-    if (!isRenderable(section)) continue;
-    switch (section.id) {
-      case "platform_overall":
-        out.push(...layoutPlatformOverall(section));
-        break;
-      case "channel_weekly":
-        out.push(...layoutChannelWeekly(section));
-        break;
-      case "channel_campaign":
-        out.push(...layoutChannelCampaign(section));
-        break;
-      case "executive_summary":
-      case "kpis":
-      case "channel_breakdown":
-      case "top_campaigns":
-      case "recommendations":
-        out.push(layoutLegacy(section));
-        break;
+  // Phase 2: when the report carries `chapters`, walk those in order
+  // and emit a divider slide before each chapter's sections. Legacy
+  // reports keep the flat `sections` walk below.
+  if (report.chapters && report.chapters.length > 0) {
+    for (const chapter of report.chapters) {
+      out.push({
+        kind: "chapter_divider",
+        slide: {
+          id: `chapter-${chapter.platform}`,
+          title: chapter.divider.title,
+          subtitle: chapter.divider.subtitle,
+          platform: chapter.platform,
+        },
+      });
+      for (const section of chapter.sections) {
+        out.push(...layoutOneSection(section));
+      }
     }
+    if (report.closer) {
+      out.push({
+        kind: "closer",
+        slide: {
+          id: "closer",
+          title: report.closer.title,
+          subtitle: report.closer.subtitle,
+          contactLine: report.closer.contactLine,
+        },
+      });
+    }
+    return finalizeChapterLayout(out);
+  }
+
+  for (const section of report.sections) {
+    out.push(...layoutOneSection(section));
   }
 
   return out;
+}
+
+function layoutOneSection(section: ReportSection): LaidOutSlide[] {
+  if (!isRenderable(section)) return [];
+  switch (section.id) {
+    case "platform_overall":
+      return layoutPlatformOverall(section);
+    case "channel_weekly":
+      return layoutChannelWeekly(section);
+    case "channel_campaign":
+      return layoutChannelCampaign(section);
+    case "executive_summary":
+    case "kpis":
+    case "channel_breakdown":
+    case "top_campaigns":
+    case "recommendations":
+      return [layoutLegacy(section)];
+  }
+  return [];
+}
+
+// Walk the laid-out list to assign `partTotal` to each chapter's
+// section family (just like finalize does for a single section), so a
+// reader sees "Android | Meta | Weekly Breakdown (2 of 3)" instead of
+// just "(cont.)". Chapter dividers and closers don't have partTotal.
+function finalizeChapterLayout(slides: LaidOutSlide[]): LaidOutSlide[] {
+  // The per-section finalize() already did its work in layoutOneSection.
+  // This helper is a placeholder so a future tweak (e.g. shared part
+  // counters across chapters for cross-chapter pagination) has one
+  // place to live.
+  return slides;
 }
 
 // =============================================================================

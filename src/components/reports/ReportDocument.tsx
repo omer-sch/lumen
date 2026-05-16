@@ -107,16 +107,97 @@ export function ReportDocument({
         />
       </header>
 
-      {report.sections.map((section, idx) => (
-        <SectionRenderer
-          key={`${section.id}-${idx}`}
-          section={section}
-          readOnly={readOnly}
-          updateSection={updateSection}
-          regenerateContext={regenerateContext}
-          suppressPlatformChannelPills={report.suppressPlatformChannelPills}
-        />
-      ))}
+      {/* Phase 2: when the report carries `chapters`, walk those and
+          emit a chapter heading before each chapter's sections.
+          Legacy reports keep the flat `sections` walk below. */}
+      {report.chapters && report.chapters.length > 0 ? (
+        report.chapters.map((chapter, ci) => (
+          <div
+            key={`chapter-${chapter.platform}-${ci}`}
+            className="flex flex-col gap-8"
+          >
+            <div
+              className="-mx-8 sm:-mx-12 rounded-xl px-8 py-10 sm:px-12 sm:py-14"
+              style={{
+                background: "var(--surface-base)",
+                color: "var(--text-on-dark, #ffffff)",
+              }}
+            >
+              <div
+                className="font-display text-5xl font-bold sm:text-7xl"
+                style={{ color: "#ffffff" }}
+              >
+                {chapter.divider.title}
+              </div>
+              {chapter.divider.subtitle ? (
+                <div
+                  className="mt-3 font-body text-sm sm:text-base"
+                  style={{ color: "var(--color-brand)" }}
+                >
+                  {chapter.divider.subtitle}
+                </div>
+              ) : null}
+            </div>
+            {chapter.sections.map((section, idx) => (
+              <SectionRenderer
+                key={`${chapter.platform}-${section.id}-${idx}`}
+                section={section}
+                readOnly={readOnly}
+                updateSection={updateSection}
+                regenerateContext={regenerateContext}
+                suppressPlatformChannelPills={
+                  report.suppressPlatformChannelPills
+                }
+              />
+            ))}
+          </div>
+        ))
+      ) : (
+        report.sections.map((section, idx) => (
+          <SectionRenderer
+            key={`${section.id}-${idx}`}
+            section={section}
+            readOnly={readOnly}
+            updateSection={updateSection}
+            regenerateContext={regenerateContext}
+            suppressPlatformChannelPills={report.suppressPlatformChannelPills}
+          />
+        ))
+      )}
+
+      {/* Phase 2 closer slide content. */}
+      {report.closer ? (
+        <div
+          className="-mx-8 sm:-mx-12 rounded-xl px-8 py-10 sm:px-12 sm:py-14 text-center"
+          style={{
+            background: "var(--surface-base)",
+            color: "var(--text-on-dark, #ffffff)",
+          }}
+        >
+          <div
+            className="font-display text-4xl font-bold sm:text-6xl"
+            style={{ color: "#ffffff" }}
+          >
+            {report.closer.title}
+          </div>
+          {report.closer.subtitle ? (
+            <div
+              className="mt-3 font-body text-sm sm:text-base"
+              style={{ color: "var(--color-brand)" }}
+            >
+              {report.closer.subtitle}
+            </div>
+          ) : null}
+          {report.closer.contactLine ? (
+            <div
+              className="mt-6 font-body whitespace-pre-line text-sm"
+              style={{ color: "rgba(255,255,255,0.7)" }}
+            >
+              {report.closer.contactLine}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <footer className="border-t pt-4 text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-light-muted)]" style={{ borderColor: "var(--surface-light-line)" }}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

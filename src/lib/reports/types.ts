@@ -242,6 +242,39 @@ export type ReportSection =
   | ChannelWeeklySection
   | ChannelCampaignSection;
 
+/**
+ * One platform-scoped chapter within a multi-section weekly review
+ * deck. Phase 2 introduces this on top of the flat `sections` field;
+ * the renderer prefers `chapters` when populated and falls back to
+ * `sections` for legacy / single-channel reports.
+ *
+ * Each chapter is a series of consecutive sections, separated from
+ * neighbours by a full-bleed divider slide. Chapter order is
+ * deterministic: Android, then iOS, then Web (when those platforms
+ * have any spend in the period).
+ */
+export type ReportChapter = {
+  platform: Platform;
+  /** Divider slide content. Phase 2 ships title + optional subtitle;
+   *  the renderer paints the platform name in white on a dark slide
+   *  with the channel logos arranged in the corner. */
+  divider: { title: string; subtitle?: string };
+  /** Sections inside this chapter, in render order. Typically one
+   *  platform_overall + N (channel_weekly + channel_campaign) pairs. */
+  sections: ReportSection[];
+};
+
+/**
+ * Closer slide content (Phase 2). Branded, no data claims. The
+ * renderer paints the title prominently, then the subtitle and
+ * contact line below. Optional; legacy reports omit it.
+ */
+export type ReportCloser = {
+  title: string;
+  subtitle?: string;
+  contactLine?: string;
+};
+
 export type Report = {
   id: string;
   /** Owner. Clerk userId on the server, "preview-user" under LUMEN_PREVIEW,
@@ -293,6 +326,19 @@ export type Report = {
    *  from state.contact (see chunk B4). */
   preparedFor?: string | null;
   sections: ReportSection[];
+  /** Phase 2 (Smart Reports `weekly-review-globalcomix` template).
+   *  When populated, the renderer walks chapters in order, emits a
+   *  divider slide per chapter, then the chapter's sections. Legacy
+   *  reports leave this undefined and the renderer falls back to
+   *  the flat `sections` list. The two coexist intentionally:
+   *  Hermes's single-channel-weekly template ships `sections` only;
+   *  the manual builder's full weekly review ships both
+   *  (the flat list is the union of every chapter's sections, kept
+   *  so backwards-compatible consumers still resolve). */
+  chapters?: ReportChapter[];
+  /** Phase 2 closer slide content. Optional; legacy reports omit it
+   *  and the renderer skips the slide. */
+  closer?: ReportCloser;
   /** Audit trail. Entries are append-only and shaped per kind:
    *  - {kind:"regenerate_section", slide_target, at, by}
    *  - {kind:"edit", section_id, before, after, at, by}
