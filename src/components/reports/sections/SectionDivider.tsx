@@ -77,7 +77,11 @@ export function SectionDivider({
       role="separator"
       aria-label={`${title} — ${renderedSubtitle}`}
       className={cn(
-        "relative flex items-center gap-4 rounded-xl print:break-inside-avoid",
+        // flex-1 + min-w-0 so the divider spans the full width of its
+        // flex parent. Without this, the divider shrinks to its
+        // content width and the absolute-positioned platform/channel
+        // pill on the right ends up sitting over the title text.
+        "relative flex flex-1 min-w-0 items-center gap-4 rounded-xl print:break-inside-avoid",
         compact ? "px-6 py-3 sm:px-6" : "gap-5 px-8 py-10 sm:px-10",
       )}
       style={{

@@ -138,21 +138,19 @@ const CONT_ROWS_CAMPAIGN = 6;
 const FIRST_COMMENTARY_CAMPAIGN = 1;
 const CONT_COMMENTARY_CAMPAIGN = 2;
 
-// Prose pagination (Phase 1 cutover). When Smart Reports populates
-// `prose`, the carousel slide frame's `overflow:hidden` will clip
-// anything past the 16:9 cut. Cap the first slide at a small number
-// of prose blocks and push the rest to continuation slides. The
-// per-slide budgets below assume a single-row campaign table on
-// slide 1 followed by `FIRST_PROSE_CAMPAIGN` prose blocks; ratchet
-// the rows down accordingly when prose is present so the prose has
-// room to breathe.
-const FIRST_PROSE_CAMPAIGN = 2;
-const CONT_PROSE_CAMPAIGN = 3;
-const FIRST_ROWS_CAMPAIGN_WITH_PROSE = 4;
-// Same idea for the channel-weekly slide: when prose is present we
-// shrink the history table on slide 1 so the prose paragraph fits.
+// Prose pagination. A Smart Reports prose block is now:
+//   heading (~0.25") + 2-4 bullets (~1.5") + optional `<> AI:`
+//   callout (~0.5") + bottom-line band (~0.6") = ~2.8-3" tall.
+// That's roughly double the old single-paragraph block, so the
+// per-slide budgets shrink accordingly. Each continuation slide
+// fits about 2 blocks comfortably.
+const FIRST_PROSE_CAMPAIGN = 1;
+const CONT_PROSE_CAMPAIGN = 2;
+const FIRST_ROWS_CAMPAIGN_WITH_PROSE = 3;
+// Channel-weekly slide: history table + one prose block on slide 1,
+// continuations get 2 blocks each.
 const FIRST_PROSE_WEEKLY = 1;
-const CONT_PROSE_WEEKLY = 3;
+const CONT_PROSE_WEEKLY = 2;
 /** When a channel_campaign section has no rows at all, the first slide
  *  hands the entire data area to commentary. We let it absorb more blocks
  *  in that case so a commentary-only section doesn't unnecessarily spill. */

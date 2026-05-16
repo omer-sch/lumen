@@ -112,6 +112,8 @@ describe("generateReport (manual builder, BQ-backed)", () => {
       from: FROM,
       to: TO,
       client: "globalcomix",
+      platforms: ["android"],
+      channels: ["meta"],
     });
     expect(networksMock).toHaveBeenCalledWith(
       "globalcomix",
@@ -142,6 +144,8 @@ describe("generateReport (manual builder, BQ-backed)", () => {
       from: FROM,
       to: TO,
       client: "globalcomix",
+      platforms: ["android"],
+      channels: ["meta"],
     });
     expect(r.sections.map((s) => s.id)).toEqual([
       "platform_overall",
@@ -169,6 +173,8 @@ describe("generateReport (manual builder, BQ-backed)", () => {
       from: FROM,
       to: TO,
       client: "globalcomix",
+      platforms: ["android"],
+      channels: ["meta"],
     });
     expect(r.source).toBe("manual");
     expect(r.authoredBy).toBe("nova");
@@ -184,6 +190,8 @@ describe("generateReport (manual builder, BQ-backed)", () => {
       from: FROM,
       to: TO,
       client: "globalcomix",
+      platforms: ["android"],
+      channels: ["meta"],
     });
     expect(r.title).toBe("Custom title for week 18");
   });
@@ -197,6 +205,8 @@ describe("generateReport (manual builder, BQ-backed)", () => {
       from: FROM,
       to: TO,
       client: "globalcomix",
+      platforms: ["android"],
+      channels: ["meta"],
     });
     expect(r.title).toMatch(/GlobalComix.*Week \d+ Review/);
   });
@@ -209,6 +219,8 @@ describe("generateReport (manual builder, BQ-backed)", () => {
         from: FROM,
         to: TO,
         client: "playw3",
+        platforms: ["android"],
+        channels: ["meta"],
       }),
     ).rejects.toThrow(/real BQ data/);
     expect(networksMock).not.toHaveBeenCalled();
@@ -223,6 +235,8 @@ describe("generateReport (manual builder, BQ-backed)", () => {
       from: FROM,
       to: TO,
       client: "globalcomix",
+      platforms: ["android"],
+      channels: ["meta"],
     });
     expect(r.sections).toEqual([]);
     expect(r.source).toBe("manual");

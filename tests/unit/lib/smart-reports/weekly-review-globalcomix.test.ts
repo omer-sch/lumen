@@ -161,21 +161,40 @@ describe("composeReport (weekly-review-globalcomix template)", () => {
       .mockResolvedValueOnce(toolResp("write_platform_overall", {
         blocks: [
           {
-            heading: "",
-            prose: "Overall decline across platforms except for Google. [cite:network-breakdown]",
+            heading: "Facebook",
+            bullets: [
+              { text: "{{bad}}Decline across the funnel{{/bad}} [cite:network-breakdown]" },
+              { text: "CPA D7 still maturing [cite:network-breakdown]" },
+            ],
+            bottomLine: "Pause pending creative refresh.",
           },
         ],
       }))
       .mockResolvedValueOnce(toolResp("write_weekly_breakdown", {
-        prose: "Meta declined. {{bad}}CPA up 20%{{/bad}}. [cite:network-breakdown]",
+        bullets: [
+          { text: "Meta declined; {{bad}}CPA up 20%{{/bad}} [cite:network-breakdown]" },
+          { text: "Top-Geos drove the increase [cite:network-breakdown]" },
+        ],
+        bottomLine: "Meta is the bottleneck this week.",
       }))
       .mockResolvedValueOnce(toolResp("write_campaign_breakdown", {
         blocks: [
-          { heading: "Sub Evergreen", prose: "WW continues to deliver. [cite:campaigns]" },
+          {
+            heading: "Sub Evergreen",
+            bullets: [
+              { text: "WW continues to deliver [cite:campaigns]" },
+              { text: "Other geos held steady [cite:campaigns]" },
+            ],
+            bottomLine: "Keep WW; revisit India next week.",
+          },
         ],
       }))
       .mockResolvedValueOnce(toolResp("write_weekly_breakdown", {
-        prose: "Google stable. [cite:network-breakdown]",
+        bullets: [
+          { text: "Google stable [cite:network-breakdown]" },
+          { text: "ROAS holding [cite:network-breakdown]" },
+        ],
+        bottomLine: "Maintain Google budgets.",
       }))
       .mockResolvedValueOnce(toolResp("write_campaign_breakdown", {
         blocks: [],
@@ -225,14 +244,22 @@ describe("composeReport (weekly-review-globalcomix template)", () => {
       .mockResolvedValueOnce(toolResp("write_platform_overall", {
         blocks: [
           {
-            heading: "",
-            prose: "Bad citation. [cite:fictional-query]",
+            heading: "Facebook",
+            bullets: [
+              { text: "Bad citation [cite:fictional-query]" },
+              { text: "Second bullet [cite:network-breakdown]" },
+            ],
+            bottomLine: "Investigate.",
           },
         ],
       }))
-      .mockResolvedValueOnce(toolResp("write_weekly_breakdown", { prose: "" }))
+      .mockResolvedValueOnce(
+        toolResp("write_weekly_breakdown", { bullets: [], bottomLine: "" }),
+      )
       .mockResolvedValueOnce(toolResp("write_campaign_breakdown", { blocks: [] }))
-      .mockResolvedValueOnce(toolResp("write_weekly_breakdown", { prose: "" }))
+      .mockResolvedValueOnce(
+        toolResp("write_weekly_breakdown", { bullets: [], bottomLine: "" }),
+      )
       .mockResolvedValueOnce(toolResp("write_campaign_breakdown", { blocks: [] }));
 
     await expect(

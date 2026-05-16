@@ -22,9 +22,11 @@ import type {
   CalloutColor,
   CampaignCommentary,
   CampaignRow,
+  HighlightKind,
   HistoricalWeekRow,
   MetricValue,
   ProseBlock,
+  ProseBullet,
   Report,
   WeeklyBullet,
   WeeklySummaryRow,
@@ -1145,21 +1147,25 @@ function paintFooter(
   });
 }
 
-// Render Smart Reports prose blocks on the pptx slide. Each block's
-// `text` carries `[[highlight:N]]` placeholders that resolve to entries
-// in `highlights` (kind: "good" | "bad", colored fill in the deck).
-// pptxgenjs accepts a text-runs array where each run has its own
-// options, including `highlight` and `bold` — perfect for emitting a
-// styled phrase mid-paragraph without splitting the visual baseline.
+// Render Smart Reports prose blocks on the pptx slide. Each block is
+// a stack of:
+//   - optional family / channel heading
+//   - 2 to 4 bullets, each painted as a native pptx bullet row with
+//     inline highlight runs ({{good}}/{{bad}} + callout-color tokens)
+//   - optional `<> AI:` action-item callout (yellow pill + body text)
+//   - a bold "Bottom line" band (yellow fill, navy text)
 function paintProseBlocks(
   slide: Slide,
   blocks: ProseBlock[],
   cursor: Cursor,
 ) {
-  const PROSE_BLOCK_H = 0.55;
-  const ACTION_BLOCK_H = 0.55;
   const HEADING_H = 0.22;
-  const PROSE_FONT_SIZE = 11;
+  const BULLET_ROW_H = 0.36;
+  const ACTION_ROW_H = 0.45;
+  const BOTTOM_LINE_H = 0.6;
+  const BLOCK_GAP = 0.18;
+  const BULLET_FONT_SIZE = 11;
+
   for (const block of blocks) {
     if (block.heading) {
       slide.addText(block.heading, {
@@ -1176,141 +1182,132 @@ function paintProseBlocks(
       cursor.advance(HEADING_H + 0.04);
     }
 
-    // Phase 3: split the prose on `<> AI:` action-item callouts so
-    // each action becomes its own row with a yellow pill prefix. Plain
-    // prose rows render as before with inline highlight runs.
-    const paragraphs = splitProseOnActionCallouts(block);
-    for (const para of paragraphs) {
-      if (para.kind === "action") {
-        // Yellow pill on the left, action text to the right. Two
-        // addText calls so the pill stays a fixed width regardless of
-        // how long the action sentence is.
-        const PILL_W = 0.7;
-        slide.addShape("roundRect", {
-          x: PAGE_LEFT,
-          y: cursor.y + 0.06,
-          w: PILL_W,
-          h: 0.28,
-          fill: { color: hex(REPORT_BRAND.yellow) },
-          line: { color: hex(REPORT_BRAND.yellow), width: 0 },
-          rectRadius: 0.04,
-        });
-        slide.addText("<> AI", {
-          x: PAGE_LEFT,
-          y: cursor.y + 0.06,
-          w: PILL_W,
-          h: 0.28,
-          fontFace: REPORT_BRAND.fontBody,
-          fontSize: 8,
-          bold: true,
-          color: hex(REPORT_BRAND.textPrimary),
-          align: "center",
-          valign: "middle",
-        });
-        slide.addText(para.text, {
-          x: PAGE_LEFT + PILL_W + 0.1,
-          y: cursor.y,
-          w: PAGE_W - PILL_W - 0.1,
-          h: ACTION_BLOCK_H,
-          fontFace: REPORT_BRAND.fontBody,
-          fontSize: PROSE_FONT_SIZE,
-          color: hex(REPORT_BRAND.textPrimary),
-          valign: "top",
-        });
-        cursor.advance(ACTION_BLOCK_H + 0.08);
-        continue;
-      }
-
-      // Prose paragraph: walk highlight placeholders into pptx text-runs.
-      const runs = splitProseTextIntoRuns(para.text, block.highlights);
+    for (const bullet of block.bullets) {
+      const runs = splitBulletIntoRuns(bullet);
       slide.addText(runs, {
         x: PAGE_LEFT,
         y: cursor.y,
         w: PAGE_W,
-        h: PROSE_BLOCK_H,
+        h: BULLET_ROW_H,
         fontFace: REPORT_BRAND.fontBody,
-        fontSize: PROSE_FONT_SIZE,
+        fontSize: BULLET_FONT_SIZE,
+        color: hex(REPORT_BRAND.textPrimary),
+        bullet: { type: "bullet" },
+        valign: "top",
+      });
+      cursor.advance(BULLET_ROW_H);
+    }
+
+    if (block.actionItem) {
+      const PILL_W = 0.7;
+      slide.addShape("roundRect", {
+        x: PAGE_LEFT,
+        y: cursor.y + 0.06,
+        w: PILL_W,
+        h: 0.28,
+        fill: { color: hex(REPORT_BRAND.yellow) },
+        line: { color: hex(REPORT_BRAND.yellow), width: 0 },
+        rectRadius: 0.04,
+      });
+      slide.addText("<> AI", {
+        x: PAGE_LEFT,
+        y: cursor.y + 0.06,
+        w: PILL_W,
+        h: 0.28,
+        fontFace: REPORT_BRAND.fontBody,
+        fontSize: 8,
+        bold: true,
+        color: hex(REPORT_BRAND.textPrimary),
+        align: "center",
+        valign: "middle",
+      });
+      slide.addText(block.actionItem, {
+        x: PAGE_LEFT + PILL_W + 0.1,
+        y: cursor.y,
+        w: PAGE_W - PILL_W - 0.1,
+        h: ACTION_ROW_H,
+        fontFace: REPORT_BRAND.fontBody,
+        fontSize: BULLET_FONT_SIZE,
         color: hex(REPORT_BRAND.textPrimary),
         valign: "top",
       });
-      cursor.advance(PROSE_BLOCK_H + 0.08);
+      cursor.advance(ACTION_ROW_H + 0.04);
     }
-  }
-}
 
-// Split a prose block into action-callout rows + prose rows, mirroring
-// the DOM renderer in src/components/reports/sections/ProseBlock.tsx.
-type ProsePart = { kind: "prose" | "action"; text: string };
-function splitProseOnActionCallouts(block: ProseBlock): ProsePart[] {
-  const text = block.text;
-  if (!text.includes("<>")) return [{ kind: "prose", text }];
-  const out: ProsePart[] = [];
-  let cursor = 0;
-  const re = /<>\s*AI:\s*/g;
-  let m: RegExpExecArray | null = re.exec(text);
-  while (m != null) {
-    const markerStart = m.index;
-    const contentStart = m.index + m[0].length;
-    const pre = text.slice(cursor, markerStart).trim();
-    if (pre.length > 0) out.push({ kind: "prose", text: pre });
-    const nextMatch = re.exec(text);
-    const contentEnd = nextMatch != null ? nextMatch.index : text.length;
-    const action = text.slice(contentStart, contentEnd).trim();
-    if (action.length > 0) out.push({ kind: "action", text: action });
-    if (nextMatch != null) {
-      cursor = nextMatch.index;
-      m = nextMatch;
-    } else {
-      m = null;
-      cursor = text.length;
+    if (block.bottomLine) {
+      const bandY = cursor.y + 0.04;
+      slide.addShape("rect", {
+        x: PAGE_LEFT,
+        y: bandY,
+        w: PAGE_W,
+        h: BOTTOM_LINE_H - 0.04,
+        fill: { color: hex(REPORT_BRAND.yellow) },
+        line: { color: hex(REPORT_BRAND.yellow), width: 0 },
+      });
+      slide.addText(
+        [
+          {
+            text: "BOTTOM LINE   ",
+            options: {
+              fontFace: REPORT_BRAND.fontHeader,
+              fontSize: 9,
+              bold: true,
+              color: hex(REPORT_BRAND.navy),
+              charSpacing: 2,
+            },
+          },
+          {
+            text: block.bottomLine,
+            options: {
+              fontFace: REPORT_BRAND.fontBody,
+              fontSize: 12,
+              bold: true,
+              color: hex(REPORT_BRAND.navy),
+            },
+          },
+        ],
+        {
+          x: PAGE_LEFT + 0.18,
+          y: bandY,
+          w: PAGE_W - 0.36,
+          h: BOTTOM_LINE_H - 0.04,
+          valign: "middle",
+        },
+      );
+      cursor.advance(BOTTOM_LINE_H);
     }
+
+    cursor.advance(BLOCK_GAP);
   }
-  if (cursor < text.length) {
-    const tail = text.slice(cursor).trim();
-    if (tail.length > 0) out.push({ kind: "prose", text: tail });
-  }
-  return out;
 }
 
 const PROSE_PLACEHOLDER_RE = /\[\[highlight:(\d+)\]\]/g;
 
-// Walk a single prose string (with `[[highlight:N]]` placeholders) into
-// pptxgenjs text-runs. Pulled out so the action-callout renderer can
-// share it with the standard prose renderer.
-function splitProseTextIntoRuns(
-  text: string,
-  highlights: ProseBlock["highlights"],
+// Walk one bullet's text into pptxgenjs text-runs. Each run carries
+// its own options so a highlighted phrase gets the colored fill while
+// the surrounding text stays plain.
+function splitBulletIntoRuns(
+  bullet: ProseBullet,
 ): { text: string; options?: Record<string, unknown> }[] {
-  const out: { text: string; options?: Record<string, unknown> }[] = [];
+  const { text, highlights } = bullet;
   if (highlights.length === 0 || !text.includes("[[highlight:")) {
     return [{ text }];
   }
+  const out: { text: string; options?: Record<string, unknown> }[] = [];
   let cursor = 0;
-  PROSE_PLACEHOLDER_RE.lastIndex = 0;
-  for (
-    let m = PROSE_PLACEHOLDER_RE.exec(text);
-    m != null;
-    m = PROSE_PLACEHOLDER_RE.exec(text)
-  ) {
+  const re = new RegExp(PROSE_PLACEHOLDER_RE.source, "g");
+  for (let m = re.exec(text); m != null; m = re.exec(text)) {
     const idx = Number(m[1]);
     const token = highlights[idx];
     if (m.index > cursor) {
       out.push({ text: text.slice(cursor, m.index) });
     }
     if (token) {
-      // pptxgenjs supports `highlight` (cell background) on text runs;
-      // we approximate the DOM rendering by setting a per-run color +
-      // bold. The deck uses brand yellow for "good" and creative coral
-      // for "bad" to match the on-screen highlight pills.
-      const highlightColor =
-        token.kind === "good"
-          ? hex(REPORT_BRAND.yellow)
-          : hex(REPORT_BRAND.creative);
       out.push({
         text: token.text,
         options: {
           bold: true,
-          highlight: highlightColor,
+          highlight: highlightHexForKind(token.kind),
         },
       });
     }
@@ -1320,6 +1317,25 @@ function splitProseTextIntoRuns(
     out.push({ text: text.slice(cursor) });
   }
   return out;
+}
+
+function highlightHexForKind(kind: HighlightKind): string {
+  switch (kind) {
+    case "good":
+      return hex(REPORT_BRAND.yellow);
+    case "bad":
+      return hex(REPORT_BRAND.creative);
+    case "pink":
+      return hex(CALLOUT_HEX.pink);
+    case "orange":
+      return hex(CALLOUT_HEX.orange);
+    case "blue":
+      return hex(CALLOUT_HEX.blue);
+    case "green":
+      return hex(CALLOUT_HEX.green);
+    case "violet":
+      return hex(CALLOUT_HEX.violet);
+  }
 }
 
 function paintBullets(

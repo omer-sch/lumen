@@ -294,7 +294,20 @@
       "Bash(sort -k5 -n)",
       "Bash(gh pr *)",
       "Bash(NODE_OPTIONS='--require ./scripts/_unhide-server-only.cjs' npx tsx scripts/shadow-analyst-divergence.ts)",
-      "Bash(lsof -ti:3000 -ti:3001)"
+      "Bash(lsof -ti:3000 -ti:3001)",
+      "Bash(kill 13684)",
+      "Bash(kill 19803 19801)",
+      "Bash(kill 11086)",
+      "Bash(pkill -9 -f \"next-server\\\\|next dev\")",
+      "Bash(awk '{print $2, $3, $4}')",
+      "Bash(awk '{print \"PID=\"$2\" CPU=\"$3\"% MEM=\"$4\"%\"}')",
+      "Bash(awk '{print \"PID=\"$2\" uptime=\"$10\" cpu=\"$3\"%\"}')",
+      "Bash(awk '{print \"PID=\"$2\" cpu=\"$3\"% mem=\"$4\"%\"}')",
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\"; grep -n \"email_text:\" {}')",
+      "Bash(xargs -0 perl -i -pe 's/\\(email_text:\\\\s*\\(?:\"[^\"]*\"|CANONICAL_FIXTURE|bodyWithSignature\\),\\)$/$1\\\\n    action_notes: null as string | null,/g')",
+      "Bash(awk NR==270,NR==290 *)",
+      "Bash(awk NR==45,NR==65 *)",
+      "Bash(awk NR==244,NR==270 *)"
     ]
   },
   "enableAllProjectMcpServers": true,

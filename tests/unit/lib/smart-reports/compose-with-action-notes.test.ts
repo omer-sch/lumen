@@ -132,7 +132,11 @@ describe("composeReport with actionNotes", () => {
     messagesCreateMock
       .mockResolvedValueOnce(
         toolResp("write_weekly_breakdown", {
-          prose: "Meta declined. [cite:network-breakdown]",
+          bullets: [
+            { text: "Meta declined [cite:network-breakdown]" },
+            { text: "Top-Geos drove the drop [cite:network-breakdown]" },
+          ],
+          bottomLine: "Pause Top-Geos.",
         }),
       )
       .mockResolvedValueOnce(
@@ -140,8 +144,12 @@ describe("composeReport with actionNotes", () => {
           blocks: [
             {
               heading: "Sub Evergreen",
-              prose:
-                "WW-Top delivered well. [cite:campaigns] <> AI: We added fresh creatives.",
+              bullets: [
+                { text: "WW-Top delivered well [cite:campaigns]" },
+                { text: "India held steady [cite:campaigns]" },
+              ],
+              bottomLine: "Keep WW; watch India.",
+              actionItem: "We added fresh creatives to WW-Top.",
             },
           ],
         }),
@@ -157,8 +165,6 @@ describe("composeReport with actionNotes", () => {
       },
     });
 
-    // Verify the campaign-breakdown call's user message includes the
-    // <actions> context block + the relevant family.
     const campaignCall = messagesCreateMock.mock.calls.find((args) => {
       const tools = (args[0] as { tools?: { name: string }[] }).tools ?? [];
       return tools.some((t) => t.name === "write_campaign_breakdown");
@@ -169,15 +175,19 @@ describe("composeReport with actionNotes", () => {
     }).messages[0].content;
     expect(userMsg).toContain("<actions>");
     expect(userMsg).toContain("Family: Sub Evergreen");
-    expect(userMsg).toContain("- We added fresh creatives to the WW-Top Sub Evergreen.");
+    expect(userMsg).toContain(
+      "- We added fresh creatives to the WW-Top Sub Evergreen.",
+    );
 
-    // The prose-writer's output (the `<> AI:` token) survives into
-    // the block text so the renderer can split it into an action row.
+    // The campaign-breakdown writer surfaces matching actions via the
+    // structured `actionItem` field on the block, not inline.
     const campaign = composed.report.sections.find(
       (s) => s.id === "channel_campaign",
     );
     if (campaign && campaign.id === "channel_campaign") {
-      expect(campaign.prose?.[0].text).toContain("<> AI:");
+      expect(campaign.prose?.[0].actionItem).toBe(
+        "We added fresh creatives to WW-Top.",
+      );
     }
   });
 
@@ -185,12 +195,25 @@ describe("composeReport with actionNotes", () => {
     messagesCreateMock
       .mockResolvedValueOnce(
         toolResp("write_weekly_breakdown", {
-          prose: "Meta stable. [cite:network-breakdown]",
+          bullets: [
+            { text: "Meta stable [cite:network-breakdown]" },
+            { text: "ROAS holding [cite:network-breakdown]" },
+          ],
+          bottomLine: "Hold pacing.",
         }),
       )
       .mockResolvedValueOnce(
         toolResp("write_campaign_breakdown", {
-          blocks: [{ heading: "Sub Evergreen", prose: "Stable. [cite:campaigns]" }],
+          blocks: [
+            {
+              heading: "Sub Evergreen",
+              bullets: [
+                { text: "Stable [cite:campaigns]" },
+                { text: "Steady performance [cite:campaigns]" },
+              ],
+              bottomLine: "No changes needed.",
+            },
+          ],
         }),
       );
 

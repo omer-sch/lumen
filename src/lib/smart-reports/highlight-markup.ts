@@ -28,8 +28,15 @@ import type { HighlightToken, ParsedProse } from "./types";
 //   spans so diagnostics surface them.
 // - Empty tokens (`{{good}}{{/good}}`) are dropped.
 
-const TOKEN_RE =
-  /\{\{(good|bad)\}\}([\s\S]*?)\{\{\/\1\}\}/g;
+// Seven recognized kinds. "good" / "bad" are the semantic callouts
+// (yellow / coral); pink / orange / blue / green / violet are the
+// campaign-breakdown row-arrow color markers that bind a bullet
+// phrase to its matching colored arrow in the table.
+const HIGHLIGHT_KIND_PATTERN = "good|bad|pink|orange|blue|green|violet";
+const TOKEN_RE = new RegExp(
+  `\\{\\{(${HIGHLIGHT_KIND_PATTERN})\\}\\}([\\s\\S]*?)\\{\\{\\/\\1\\}\\}`,
+  "g",
+);
 
 /**
  * Parse highlight markup out of a prose string, returning:
@@ -93,7 +100,9 @@ export function reconstructMarkup(parsed: ParsedProse): string {
  */
 export function countUnclosedTags(input: string): number {
   if (typeof input !== "string") return 0;
-  const opening = (input.match(/\{\{(good|bad)\}\}/g) ?? []).length;
-  const closing = (input.match(/\{\{\/(good|bad)\}\}/g) ?? []).length;
+  const openRe = new RegExp(`\\{\\{(${HIGHLIGHT_KIND_PATTERN})\\}\\}`, "g");
+  const closeRe = new RegExp(`\\{\\{\\/(${HIGHLIGHT_KIND_PATTERN})\\}\\}`, "g");
+  const opening = (input.match(openRe) ?? []).length;
+  const closing = (input.match(closeRe) ?? []).length;
   return Math.max(0, opening - closing);
 }

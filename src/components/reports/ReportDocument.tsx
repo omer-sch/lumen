@@ -1,40 +1,28 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { EditableText } from "./EditableText";
-import { RegenerateSectionButton } from "./RegenerateSectionButton";
 import { ReportCoverHeader } from "./ReportCoverHeader";
+import { SectionActions, sectionKey } from "./SectionActions";
 import { SectionDivider } from "./sections/SectionDivider";
 import { WeeklyBreakdown } from "./sections/WeeklyBreakdown";
 import { CampaignBreakdown } from "./sections/CampaignBreakdown";
-import type { Report, ReportSection } from "@/lib/reports/types";
-
-type RegenerateContext = {
-  reportId: string;
-  originalRunId: string;
-  onRegenerated: () => void;
-};
-
-const SLIDE_TARGET_FOR: Record<
-  "platform_overall" | "channel_weekly" | "channel_campaign",
-  "platform_overall" | "channel_weekly" | "campaign_breakdown"
-> = {
-  platform_overall: "platform_overall",
-  channel_weekly: "channel_weekly",
-  channel_campaign: "campaign_breakdown",
-};
+import type {
+  ChannelCampaignSection,
+  ChannelWeeklySection,
+  PlatformOverallSection,
+  ProseBlock,
+  Report,
+  ReportSection,
+} from "@/lib/reports/types";
 
 type ReportDocumentProps = {
   report: Report;
-  /** Controlled mutation — the parent persists the result. */
+  /** Controlled mutation -- the parent persists the result. */
   onChange: (next: Report) => void;
   /** Read-only mode for the share view + PDF export. */
   readOnly?: boolean;
-  /** When set, each yellowHEAD section renders a "Regenerate" button
-   *  that fires the Hermes regenerate-section sub-graph. Only used on
-   *  Hermes-drafted reports opened with source=hermes. */
-  regenerateContext?: RegenerateContext;
 };
 
 /** Yellowhead deck convention: the first divider for each platform/channel
@@ -68,8 +56,11 @@ export function ReportDocument({
   report,
   onChange,
   readOnly,
-  regenerateContext,
 }: ReportDocumentProps) {
+  // Per-section edit toggle. Keyed by sectionKey so multiple sections
+  // of the same id (one per channel) keep their own state.
+  const [editingMap, setEditingMap] = useState<Record<string, boolean>>({});
+
   const updateSection = useCallback(
     (id: ReportSection["id"], patch: Partial<ReportSection>) => {
       onChange({
@@ -77,6 +68,46 @@ export function ReportDocument({
         sections: report.sections.map((s) =>
           s.id === id ? ({ ...s, ...patch } as ReportSection) : s,
         ),
+      });
+    },
+    [onChange, report],
+  );
+
+  // Patch a single section by stable sectionKey (handles multi-channel
+  // sections where section.id alone is not unique).
+  const patchByKey = useCallback(
+    (key: string, patch: Partial<ReportSection>) => {
+      const patchOne = (s: ReportSection): ReportSection =>
+        sectionKey(s) === key ? ({ ...s, ...patch } as ReportSection) : s;
+      onChange({
+        ...report,
+        sections: report.sections.map(patchOne),
+        chapters: report.chapters?.map((ch) => ({
+          ...ch,
+          sections: ch.sections.map(patchOne),
+        })),
+      });
+    },
+    [onChange, report],
+  );
+
+  const replaceByKey = useCallback(
+    (
+      key: string,
+      next:
+        | PlatformOverallSection
+        | ChannelWeeklySection
+        | ChannelCampaignSection,
+    ) => {
+      const swap = (s: ReportSection): ReportSection =>
+        sectionKey(s) === key ? (next as ReportSection) : s;
+      onChange({
+        ...report,
+        sections: report.sections.map(swap),
+        chapters: report.chapters?.map((ch) => ({
+          ...ch,
+          sections: ch.sections.map(swap),
+        })),
       });
     },
     [onChange, report],
@@ -144,7 +175,17 @@ export function ReportDocument({
                 section={section}
                 readOnly={readOnly}
                 updateSection={updateSection}
-                regenerateContext={regenerateContext}
+                patchByKey={patchByKey}
+                replaceByKey={replaceByKey}
+                reportId={report.id}
+                regenerateDisabled={!report.regenerationContext}
+                editing={Boolean(editingMap[sectionKey(section)])}
+                onEditingChange={(next) =>
+                  setEditingMap((cur) => ({
+                    ...cur,
+                    [sectionKey(section)]: next,
+                  }))
+                }
                 suppressPlatformChannelPills={
                   report.suppressPlatformChannelPills
                 }
@@ -159,7 +200,17 @@ export function ReportDocument({
             section={section}
             readOnly={readOnly}
             updateSection={updateSection}
-            regenerateContext={regenerateContext}
+            patchByKey={patchByKey}
+            replaceByKey={replaceByKey}
+            reportId={report.id}
+            regenerateDisabled={!report.regenerationContext}
+            editing={Boolean(editingMap[sectionKey(section)])}
+            onEditingChange={(next) =>
+              setEditingMap((cur) => ({
+                ...cur,
+                [sectionKey(section)]: next,
+              }))
+            }
             suppressPlatformChannelPills={report.suppressPlatformChannelPills}
           />
         ))
@@ -221,7 +272,12 @@ function SectionRenderer({
   section,
   readOnly,
   updateSection,
-  regenerateContext,
+  patchByKey,
+  replaceByKey,
+  reportId,
+  regenerateDisabled,
+  editing,
+  onEditingChange,
   suppressPlatformChannelPills,
 }: {
   section: ReportSection;
@@ -230,23 +286,43 @@ function SectionRenderer({
     id: ReportSection["id"],
     patch: Partial<ReportSection>,
   ) => void;
-  regenerateContext?: RegenerateContext;
+  patchByKey: (key: string, patch: Partial<ReportSection>) => void;
+  replaceByKey: (
+    key: string,
+    next:
+      | PlatformOverallSection
+      | ChannelWeeklySection
+      | ChannelCampaignSection,
+  ) => void;
+  reportId: string;
+  regenerateDisabled: boolean;
+  editing: boolean;
+  onEditingChange: (next: boolean) => void;
   suppressPlatformChannelPills?: boolean;
 }) {
-  const regenerateButton =
-    regenerateContext &&
-    (section.id === "platform_overall" ||
-      section.id === "channel_weekly" ||
-      section.id === "channel_campaign") ? (
-      <RegenerateSectionButton
-        reportId={regenerateContext.reportId}
-        originalRunId={regenerateContext.originalRunId}
-        slideTarget={SLIDE_TARGET_FOR[section.id]}
-        onRegenerated={regenerateContext.onRegenerated}
+  const isSmart =
+    section.id === "platform_overall" ||
+    section.id === "channel_weekly" ||
+    section.id === "channel_campaign";
+
+  const key = sectionKey(section);
+
+  const actions =
+    isSmart && !readOnly ? (
+      <SectionActions
+        reportId={reportId}
+        section={section}
+        sectionId={key}
+        editing={editing}
+        onEditingChange={onEditingChange}
+        onRegenerated={(next) => replaceByKey(key, next)}
+        regenerateDisabled={regenerateDisabled}
       />
     ) : null;
 
-  // yellowHEAD format
+  const proseChangeHandler = (next: ProseBlock[]) =>
+    patchByKey(key, { prose: next } as Partial<ReportSection>);
+
   if (section.id === "platform_overall") {
     return (
       <div className="flex flex-col gap-5">
@@ -257,12 +333,14 @@ function SectionRenderer({
             subtitle={SUBTITLE_FOR.platform_overall}
             suppressPill={suppressPlatformChannelPills}
           />
-          {regenerateButton}
+          {actions}
         </div>
         <WeeklyBreakdown
           summary={section.summary}
           bullets={section.bullets}
           prose={section.prose}
+          editable={editing}
+          onProseChange={proseChangeHandler}
         />
       </div>
     );
@@ -279,13 +357,15 @@ function SectionRenderer({
             subtitle={SUBTITLE_FOR.channel_weekly}
             suppressPill={suppressPlatformChannelPills}
           />
-          {regenerateButton}
+          {actions}
         </div>
         <WeeklyBreakdown
           currentWeek={section.currentWeek}
           history={section.history}
           bullets={section.bullets}
           prose={section.prose}
+          editable={editing}
+          onProseChange={proseChangeHandler}
         />
       </div>
     );
@@ -302,13 +382,15 @@ function SectionRenderer({
             subtitle={SUBTITLE_FOR.channel_campaign}
             suppressPill={suppressPlatformChannelPills}
           />
-          {regenerateButton}
+          {actions}
         </div>
         <CampaignBreakdown
           rows={section.rows}
           commentary={section.commentary}
           prose={section.prose}
           readOnly={readOnly}
+          editable={editing}
+          onProseChange={proseChangeHandler}
           onCommentaryChange={(next) =>
             updateSection("channel_campaign", { commentary: next })
           }

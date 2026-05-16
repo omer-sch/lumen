@@ -75,17 +75,33 @@ export async function atelier(
       intent: state.intent,
       ownerUserId: state.user_id,
       options: {
-        template: "single-channel-weekly",
+        // weekly-review-globalcomix self-degrades to a single chapter
+        // when the BQ layer is still client-wide and surfaces the
+        // scope caveat on the cover. Multi-chapter rendering activates
+        // automatically once the BQ platform filter ships.
+        template: "weekly-review-globalcomix",
         // Phase 3: forward the action_notes the user pasted into the
         // Hermes modal. Empty / null when omitted; the action-items
-        // parser short-circuits to [] in that case and the prose-writer
-        // emits no `<> AI:` callouts.
+        // parser short-circuits to [] in that case.
         actionNotes: state.action_notes ?? undefined,
       },
       runId: state.run_id,
       contactName: state.contact?.name ?? null,
     });
-    report = composed.report;
+    // Stamp the regeneration context so the per-section regenerate
+    // route can rebuild the same Intent without re-parsing the email.
+    report = {
+      ...composed.report,
+      regenerationContext: state.intent.period.iso_start &&
+        state.intent.period.iso_end
+        ? {
+            platforms: state.intent.platforms,
+            channels: state.intent.channels,
+            periodIsoStart: state.intent.period.iso_start,
+            periodIsoEnd: state.intent.period.iso_end,
+          }
+        : undefined,
+    };
     assembleMode = "smart-reports";
     const proseCounts = report.sections
       .map((s) => {

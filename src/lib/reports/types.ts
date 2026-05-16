@@ -163,27 +163,49 @@ export type CampaignCommentary = {
 };
 
 /**
- * One paragraph of LLM-emitted prose. Phase 1 of the Lumen Reports
- * lifecycle introduces this as an additive field on the section
- * union; sections produced by the legacy bullet pipeline (today's
- * Hermes quill + atelier flow, the bare manual builder) leave it
- * undefined and the renderer falls back to bullet rendering. Sections
- * produced by Smart Reports (src/lib/smart-reports/composeReport)
- * populate it; the renderer prefers prose when present.
- *
- * `highlights` carries the structured highlight markup tokens parsed
- * out of the prose text. Each token resolves a `[[highlight:N]]`
- * placeholder in `text` to a colored span in the deck (yellow for
- * "good", pink for "bad").
+ * Highlight kinds the prose-writer can emit. Two semantic kinds
+ * ("good" / "bad" -> yellow / coral) plus five callout colors that
+ * bind a bullet phrase to a colored row arrow in the table above
+ * (matches CalloutColor on CampaignRow).
+ */
+export type HighlightKind =
+  | "good"
+  | "bad"
+  | "pink"
+  | "orange"
+  | "blue"
+  | "green"
+  | "violet";
+
+export type HighlightToken = { kind: HighlightKind; text: string };
+
+/** One bullet inside a ProseBlock. Highlights are scoped to the bullet
+ *  so placeholder indexes never collide across the block. */
+export type ProseBullet = {
+  /** Bullet text with `[[highlight:N]]` placeholders. */
+  text: string;
+  /** Resolved tokens in placeholder order, scoped to this bullet. */
+  highlights: HighlightToken[];
+};
+
+/**
+ * One unit of prose emitted by Smart Reports. Each block renders as
+ * a stack of 2-4 bullets followed by a bold "Bottom line" band, with
+ * an optional `<> AI:` callout when an action item matches the block.
+ * Sections produced by the legacy bullet pipeline leave `prose`
+ * undefined; sections produced by composeReport populate it and the
+ * renderer prefers it over the legacy `bullets` / `commentary` lists.
  */
 export type ProseBlock = {
   /** Optional sub-heading (used in campaign-breakdown for family
-   *  grouping). Empty / undefined for a single flowing paragraph. */
+   *  grouping). */
   heading?: string;
-  /** Prose with `[[highlight:N]]` placeholders. */
-  text: string;
-  /** Resolved highlight tokens in placeholder order. */
-  highlights: { kind: "good" | "bad"; text: string }[];
+  /** 2 to 4 bullets. */
+  bullets: ProseBullet[];
+  /** Single-sentence closing takeaway. */
+  bottomLine: string;
+  /** Optional action-item callout (Phase 3 plumbing preserved). */
+  actionItem?: string;
 };
 
 export type PlatformOverallSection = {
@@ -339,6 +361,20 @@ export type Report = {
   /** Phase 2 closer slide content. Optional; legacy reports omit it
    *  and the renderer skips the slide. */
   closer?: ReportCloser;
+  /** Snapshot of the picker selections + ISO bounds used to generate
+   *  the report. Stamped on Smart Reports outputs so the per-section
+   *  regenerate route can rebuild the original Intent and re-fetch
+   *  ReadyData without prompting the user again. Older reports leave
+   *  this undefined, in which case the regenerate route refuses with
+   *  a clear error message. */
+  regenerationContext?: {
+    platforms: ("android" | "ios" | "web")[];
+    /** Mirrors Intent.channels (the analyst-layer enum, which includes
+     *  applovin for Hermes-drafted decks). */
+    channels: ("meta" | "google" | "tiktok" | "apple_search_ads" | "applovin")[];
+    periodIsoStart: string;
+    periodIsoEnd: string;
+  };
   /** Audit trail. Entries are append-only and shaped per kind:
    *  - {kind:"regenerate_section", slide_target, at, by}
    *  - {kind:"edit", section_id, before, after, at, by}

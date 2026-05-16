@@ -24,6 +24,10 @@ type CampaignBreakdownProps = {
   /** Slide-fit variant: tighter padding + smaller fonts so a typical
    *  carousel slide (5 rows + 1 commentary block) fits the 16:9 frame. */
   compact?: boolean;
+  /** When true, prose blocks become editable. The parent threads
+   *  changes back through `onProseChange`. */
+  editable?: boolean;
+  onProseChange?: (next: ProseBlock[]) => void;
 };
 
 /**
@@ -41,6 +45,8 @@ export function CampaignBreakdown({
   readOnly,
   onCommentaryChange,
   compact = false,
+  editable = false,
+  onProseChange,
 }: CampaignBreakdownProps) {
   const maxSpend = Math.max(...rows.map((r) => r.spend), 1);
   const maxCost = Math.max(
@@ -164,7 +170,14 @@ export function CampaignBreakdown({
               )}
               style={{ borderColor: "var(--surface-light-line)" }}
             >
-              <ProseBlockView block={block} compact={compact} />
+              <ProseBlockView
+                block={block}
+                compact={compact}
+                editable={editable}
+                onChange={(next) =>
+                  onProseChange?.(prose.map((b, j) => (j === i ? next : b)))
+                }
+              />
             </div>
           ))}
         </div>

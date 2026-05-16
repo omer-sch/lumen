@@ -53,6 +53,13 @@ const fmtIso = (d: Date) =>
 
 const newId = () => `rpt_${crypto.randomUUID()}`;
 
+export type ReportPlatform = "android" | "ios" | "web";
+export type ReportChannel =
+  | "meta"
+  | "google"
+  | "tiktok"
+  | "apple_search_ads";
+
 type GenerateInput = {
   prompt: string;
   from: Date;
@@ -63,6 +70,13 @@ type GenerateInput = {
    *  USE_SMART_REPORTS=live; ignored on the legacy snapshot-only
    *  path. */
   actionNotes?: string;
+  /** Platform multi-select from the manual builder pickers. Defaults
+   *  applied at the action layer; this list is treated as required
+   *  here (at least one). Web is allowed but silently dropped when
+   *  no Web-capable channel is selected. */
+  platforms: ReportPlatform[];
+  /** Channel multi-select from the manual builder pickers. */
+  channels: ReportChannel[];
 };
 
 const TITLE_SOFT_LIMIT = 90;
@@ -111,24 +125,43 @@ function mostRecentCompleteISOSunday(d: Date): Date {
   return date;
 }
 
-// Default intent for the manual flow: Android / Meta to match the
-// prior manual-report scope. The platform stays a TODO until the
-// builder UI exposes pickers.
-function defaultIntentFor({
+// Build the intent for the manual flow from the user's picker
+// selections. We require at least one platform + one channel up
+// front so the writer never receives an empty intent. Web is allowed
+// in the platform list but silently dropped when no Web-capable
+// channel was selected (today only Google runs on Web), so the deck
+// does not render an empty Web chapter.
+function buildIntent({
   client,
   period,
   weekStart,
   weekEnd,
+  platforms,
+  channels,
 }: {
   client: string;
   period: string;
   weekStart: Date;
   weekEnd: Date;
+  platforms: ReportPlatform[];
+  channels: ReportChannel[];
 }): Intent {
+  const WEB_CAPABLE_CHANNELS: ReportChannel[] = ["google"];
+  const hasWebChannel = channels.some((c) => WEB_CAPABLE_CHANNELS.includes(c));
+  const filteredPlatforms = platforms.filter(
+    (p) => p !== "web" || hasWebChannel,
+  );
+  // Fallback: if the filter wiped everything (e.g. user only picked
+  // Web + a non-Web channel), keep the first picked platform as-is
+  // so the run does not throw. The template's data-aware degrade
+  // path handles it.
+  const finalPlatforms =
+    filteredPlatforms.length > 0 ? filteredPlatforms : [platforms[0]];
+
   return {
     client,
-    platforms: ["android"],
-    channels: ["meta"],
+    platforms: finalPlatforms,
+    channels,
     period: {
       label: period,
       iso_start: fmtIso(weekStart),
@@ -141,12 +174,18 @@ function defaultIntentFor({
 }
 
 export async function generateReport(input: GenerateInput): Promise<Report> {
-  const { prompt, from, to, client, actionNotes } = input;
+  const { prompt, from, to, client, actionNotes, platforms, channels } = input;
 
   if (!clientHasReportData(client)) {
     throw new Error(
       `Reports are only available for clients with real BQ data; ${client} is not wired yet.`,
     );
+  }
+  if (platforms.length === 0) {
+    throw new Error("Pick at least one platform.");
+  }
+  if (channels.length === 0) {
+    throw new Error("Pick at least one channel.");
   }
 
   const c = findClient(client);
@@ -155,36 +194,36 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
     to,
   );
 
-  // Single trip through the shared analyst. ISO bounds come off the
-  // resolved period inside the intent (defaultIntentFor calls fmtIso
-  // on weekStart/weekEnd); getReadyData reads them from intent.period. ReadyData has the same
-  // BQ rows the prior direct queries returned plus the analyst's
-  // findings + provenance; the manual flow only reads the rows for
-  // now. The per-query BQ cache layer underneath means a repeat
-  // manual run within the cache TTL is still near-free.
-  const intent = defaultIntentFor({ client, period, weekStart, weekEnd });
+  const intent = buildIntent({
+    client,
+    period,
+    weekStart,
+    weekEnd,
+    platforms,
+    channels,
+  });
   const ready = await getReadyData(intent);
   const { networks, campaigns, trend, history } = ready;
 
-  // Smart Reports cutover (Phase 1, gated). When USE_SMART_REPORTS=live,
-  // delegate the entire prose + assembly path to composeReport. The
-  // result is byte-identical to the snapshot-based assembly below for
-  // sections that don't have prose, plus a `prose` field on the channel
-  // sections. Off / shadow keep the legacy snapshot-only assembly.
+  // Smart Reports cutover. When USE_SMART_REPORTS=live, delegate the
+  // entire prose + assembly path to composeReport with the multi-
+  // section template; it self-degrades to a single chapter when the
+  // BQ layer is still client-wide and surfaces the scope caveat.
   console.info({
     event: "reports.generate.path",
     use_smart_reports: serverEnv.USE_SMART_REPORTS,
     has_anthropic_key: Boolean(process.env.ANTHROPIC_API_KEY),
     has_action_notes: Boolean(actionNotes && actionNotes.length > 0),
+    platforms,
+    channels,
   });
   if (serverEnv.USE_SMART_REPORTS === "live") {
-    const c = findClient(client);
     const composed = await composeReport({
       readyData: ready,
       intent,
       ownerUserId: "mock-user-1",
       options: {
-        template: "single-channel-weekly",
+        template: "weekly-review-globalcomix",
         actionNotes: actionNotes,
       },
     });
@@ -194,9 +233,6 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
       titleSeed.length > 6
         ? titleSeed
         : `${c.name} · Week ${week} Review`;
-    // Surface the prose-block counts so we can confirm Smart Reports
-    // actually emitted prose for the sections (and didn't silently
-    // fall back to empty arrays after an LLM error).
     const proseCounts = composed.report.sections
       .map((s) => {
         const pose = (s as { prose?: unknown[] }).prose;
@@ -214,8 +250,22 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
       prompt,
       title,
       period,
-      filterRange,
-      suppressPlatformChannelPills: true,
+      // Preserve the scope caveat (if the template stamped one) but
+      // fall back to the date-narrowing filterRange when scope is
+      // platform-filtered already.
+      filterRange: composed.report.filterRange ?? filterRange,
+      // The user explicitly picked platforms + channels; the pills
+      // are now real signal, not a hardcoded default.
+      suppressPlatformChannelPills: false,
+      // Stamp the regeneration context so the per-section regenerate
+      // route can rebuild the original Intent without round-tripping
+      // through the UI.
+      regenerationContext: {
+        platforms,
+        channels,
+        periodIsoStart: fmtIso(weekStart),
+        periodIsoEnd: fmtIso(weekEnd),
+      },
     };
   }
   console.info({ event: "reports.generate.legacy_path" });
@@ -228,16 +278,26 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
     history: history.networks,
   });
 
-  // Compose sections from the snapshot. Reuses the same Report shape
-  // assembleHermesReport produces so the renderer handles both paths
-  // identically. Manual reports keep authoredBy: "nova" and
-  // source: "manual" so the cover byline + provenance read correctly.
+  // Legacy snapshot-only assembly. Used when USE_SMART_REPORTS!=live.
+  // The picker's first platform / channel anchor the section labels;
+  // multi-channel support requires Smart Reports.
+  const legacyPlatform = intent.platforms[0];
+  const legacyChannel = intent.channels[0];
+  const legacyChannelLabel = legacyChannel === "apple_search_ads"
+    ? "ASA"
+    : legacyChannel.charAt(0).toUpperCase() + legacyChannel.slice(1);
+  const legacyChannelEnum: "meta" | "google" | "tiktok" | "asa" | "search" =
+    legacyChannel === "apple_search_ads"
+      ? "asa"
+      : legacyChannel === "applovin"
+        ? "search"
+        : legacyChannel;
   const sections: ReportSection[] = [];
 
   if (snapshot.platformOverall) {
     const section: PlatformOverallSection = {
       id: "platform_overall",
-      platform: "android",
+      platform: legacyPlatform,
       title: "Overall | Weekly Breakdown",
       summary: snapshot.platformOverall,
       bullets: [],
@@ -248,9 +308,9 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
   if (snapshot.channelWeekly) {
     const section: ChannelWeeklySection = {
       id: "channel_weekly",
-      platform: "android",
-      channel: "meta",
-      title: "Meta | Weekly Breakdown",
+      platform: legacyPlatform,
+      channel: legacyChannelEnum,
+      title: `${legacyChannelLabel} | Weekly Breakdown`,
       currentWeek: snapshot.channelWeekly.currentWeek,
       history: snapshot.channelWeekly.history,
       bullets: [],
@@ -261,9 +321,9 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
   if (snapshot.channelCampaign) {
     const section: ChannelCampaignSection = {
       id: "channel_campaign",
-      platform: "android",
-      channel: "meta",
-      title: "Meta | Campaign Breakdown",
+      platform: legacyPlatform,
+      channel: legacyChannelEnum,
+      title: `${legacyChannelLabel} | Campaign Breakdown`,
       rows: snapshot.channelCampaign.rows,
       commentary: [],
     };
@@ -291,11 +351,9 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
     clientLabel: c.name,
     authoredBy: "nova",
     source: "manual",
-    // platforms + channels in the default intent are hardcoded
-    // Android / Meta until the manual builder UI exposes pickers
-    // (TODO at top of file); suppress the platform / channel pills
-    // so the deck does not claim a scope the user did not pick.
-    suppressPlatformChannelPills: true,
+    // The user explicitly picked platforms + channels in the manual
+    // builder; show the pills so the deck reads the user's scope.
+    suppressPlatformChannelPills: false,
     sections,
   };
 }

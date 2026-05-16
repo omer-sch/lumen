@@ -35,19 +35,28 @@ export type ComposeTemplate =
 // ── Highlight markup ──────────────────────────────────────────────────
 
 /**
- * Structured form of the inline highlight tokens the prose-writer
- * emits. Two render styles today:
+ * Inline highlight kinds the prose-writer can emit. Two semantic kinds:
  *   - "good"  yellow background, bold text (positive callout)
- *   - "bad"   pink  background, bold text (negative callout)
+ *   - "bad"   coral background, bold text (negative callout)
  *
- * Phase 3 will add `arrow` tokens that link a phrase to a specific
- * row in the campaign table. The shape stays additive — a future
- * `{kind: "arrow", rowId: string, text: string}` slots in without
- * a breaking change.
+ * Five colored kinds (used by the campaign-breakdown writer to bind a
+ * bullet phrase to a colored row arrow in the table above):
+ *   - "pink" | "orange" | "blue" | "green" | "violet"
+ *
+ * These match the CalloutColor enum on the campaign row so a
+ * {{pink}}...{{/pink}} phrase in a bullet visually pairs with the pink
+ * arrow on the corresponding row.
  */
-export type HighlightToken =
-  | { kind: "good"; text: string }
-  | { kind: "bad"; text: string };
+export type HighlightKind =
+  | "good"
+  | "bad"
+  | "pink"
+  | "orange"
+  | "blue"
+  | "green"
+  | "violet";
+
+export type HighlightToken = { kind: HighlightKind; text: string };
 
 /**
  * The output of the markup parser: the prose with the markup tokens
@@ -56,31 +65,50 @@ export type HighlightToken =
  * (DOM + pptx) walk the placeholders and substitute the styled span.
  */
 export type ParsedProse = {
-  /** Prose with `{{good}}...{{/good}}` / `{{bad}}...{{/bad}}` blocks
-   *  replaced by `[[highlight:N]]` placeholders. */
+  /** Prose with `{{kind}}...{{/kind}}` blocks replaced by
+   *  `[[highlight:N]]` placeholders. */
   text: string;
   /** Resolved tokens, indexed by N. Matches the placeholder order. */
   tokens: HighlightToken[];
 };
 
-// ── Prose blocks ──────────────────────────────────────────────────────
+// ── Prose bullets + blocks ────────────────────────────────────────────
 
 /**
- * One unit of prose emitted by the prose-writer. Sections may carry
- * multiple blocks (e.g. one paragraph per campaign family in the
- * campaign-breakdown section). Each block keeps the highlight tokens
- * with it so the renderer can resolve them locally without scanning
- * the full report.
+ * One bullet inside a ProseBlock. The text carries `[[highlight:N]]`
+ * placeholders that resolve against this bullet's own `highlights`
+ * array, so each bullet is independently renderable.
+ */
+export type ProseBullet = {
+  /** Bullet text with `[[highlight:N]]` placeholders. */
+  text: string;
+  /** Resolved highlight tokens in placeholder order, scoped to this
+   *  bullet only. */
+  highlights: HighlightToken[];
+};
+
+/**
+ * One unit of prose emitted by the prose-writer. Each block renders as
+ * a stack of 2-4 bullets followed by a single bold "Bottom line" band.
+ * Sections may carry multiple blocks (one per channel on the
+ * platform-overall slide, one per campaign family on the
+ * campaign-breakdown slide).
  */
 export type ProseBlock = {
-  /** Optional sub-heading shown above the prose ("Sub (Evergreen)").
-   *  Used by the campaign-breakdown section to group rows by family.
-   *  Empty / undefined when the prose is a single flowing paragraph. */
+  /** Optional sub-heading shown above the bullets ("Sub Evergreen",
+   *  "Meta"). Empty / undefined for single-channel sections where the
+   *  slide title already carries the heading. */
   heading?: string;
-  /** Prose with `[[highlight:N]]` placeholders. */
-  text: string;
-  /** Resolved highlight tokens in placeholder order. */
-  highlights: HighlightToken[];
+  /** 2 to 4 bullets. Each bullet is one short observation; renderers
+   *  paint a small accent square + the bullet text. */
+  bullets: ProseBullet[];
+  /** Single-sentence closing takeaway. Rendered as a bold yellow band
+   *  beneath the bullets. No highlight markup, no citations. */
+  bottomLine: string;
+  /** Optional `<> AI:` callout. Set by the campaign-breakdown writer
+   *  when an action item matches the block's family. Preserves the
+   *  existing Phase 3 action-item plumbing. */
+  actionItem?: string;
 };
 
 // ── Citation contract ─────────────────────────────────────────────────

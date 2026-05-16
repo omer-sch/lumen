@@ -3,7 +3,13 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/db/client";
 import type { Database, Json } from "@/lib/db/types";
 
-import type { Report, ReportAuditEntry, ReportSection } from "./types";
+import type {
+  Report,
+  ReportAuditEntry,
+  ReportChapter,
+  ReportCloser,
+  ReportSection,
+} from "./types";
 import type { AgentId } from "@/lib/agents/identity";
 
 type ReportInsert = Database["public"]["Tables"]["reports"]["Insert"];
@@ -39,6 +45,19 @@ type ReportRow = {
 };
 
 function rowToReport(row: ReportRow): Report {
+  const cover = (row.cover as Record<string, unknown> | null) ?? {};
+  const chapters = Array.isArray(cover["chapters"])
+    ? (cover["chapters"] as unknown as ReportChapter[])
+    : undefined;
+  const closer =
+    cover["closer"] && typeof cover["closer"] === "object"
+      ? (cover["closer"] as unknown as ReportCloser)
+      : undefined;
+  const regenerationContext =
+    cover["regeneration_context"] && typeof cover["regeneration_context"] === "object"
+      ? (cover["regeneration_context"] as unknown as Report["regenerationContext"])
+      : undefined;
+  const suppressPills = cover["suppress_platform_channel_pills"] === true;
   return {
     id: row.id,
     userId: row.owner_user_id,
@@ -54,14 +73,15 @@ function rowToReport(row: ReportRow): Report {
     source: row.source === "hermes" ? "hermes" : "manual",
     agentRunId: row.agent_run_id ?? null,
     preparedFor:
-      ((row.cover as Record<string, unknown> | null) ?? {})["prepared_for"] as
-        | string
-        | null
-        | undefined ?? null,
+      (cover["prepared_for"] as string | null | undefined) ?? null,
+    suppressPlatformChannelPills: suppressPills,
     // sections is jsonb. The renderer guards on section.id, so a row
     // with a bad shape falls into ReportDocument's legacy fallback
     // rather than throwing here.
     sections: (row.sections as unknown as ReportSection[]) ?? [],
+    chapters,
+    closer,
+    regenerationContext,
     audit: Array.isArray(row.audit)
       ? (row.audit as unknown as ReportAuditEntry[])
       : [],
@@ -72,6 +92,21 @@ function reportToInsert(
   report: Report,
   ownerUserId: string,
 ): ReportInsert {
+  // The `cover` jsonb column is the persistence bag for fields the
+  // table doesn't have dedicated columns for: chapter tree, closer,
+  // regeneration context, and the suppress-pills flag. The renderer
+  // tolerates any of these being undefined on read.
+  const cover: Record<string, unknown> = {
+    prepared_for: report.preparedFor ?? null,
+    suppress_platform_channel_pills: Boolean(
+      report.suppressPlatformChannelPills,
+    ),
+  };
+  if (report.chapters) cover.chapters = report.chapters;
+  if (report.closer) cover.closer = report.closer;
+  if (report.regenerationContext) {
+    cover.regeneration_context = report.regenerationContext;
+  }
   return {
     id: report.id,
     owner_user_id: ownerUserId,
@@ -83,7 +118,7 @@ function reportToInsert(
     filter_range: report.filterRange ?? null,
     sections: report.sections as unknown as Json,
     audit: (report.audit ?? []) as unknown as Json,
-    cover: { prepared_for: report.preparedFor ?? null } as unknown as Json,
+    cover: cover as unknown as Json,
     authored_by: report.authoredBy ?? "nova",
     source: report.source ?? "manual",
     agent_run_id: report.agentRunId ?? null,

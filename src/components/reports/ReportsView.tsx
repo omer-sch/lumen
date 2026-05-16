@@ -114,10 +114,18 @@ function ReportsInner({ preloadedReport }: ReportsViewProps) {
   const [generateError, setGenerateError] = useState<string | null>(null);
   // Phase 3: free-form analyst notes ("what did you do this week?").
   // Forwarded to composeReport.options.actionNotes when
-  // USE_SMART_REPORTS=live; ignored on the legacy snapshot-only path,
-  // so this still works under the default off mode (it just doesn't
-  // surface anything in the deck).
+  // USE_SMART_REPORTS=live; ignored on the legacy snapshot-only path.
   const [actionNotes, setActionNotes] = useState("");
+  // Picker selections. Defaults match the most common UA scope: both
+  // mobile platforms and the three big paid channels. ASA + Web are
+  // off by default; the user opts in when relevant.
+  const [platforms, setPlatforms] = useState<("android" | "ios" | "web")[]>([
+    "android",
+    "ios",
+  ]);
+  const [channels, setChannels] = useState<
+    ("meta" | "google" | "tiktok" | "apple_search_ads")[]
+  >(["meta", "google", "tiktok"]);
   const handleGenerate = async (input: string) => {
     const q = (input ?? prompt).trim();
     if (!q || generating) return;
@@ -125,6 +133,14 @@ function ReportsInner({ preloadedReport }: ReportsViewProps) {
       setGenerateError(
         `Reports are not available for ${findClient(client).name} yet. Switch the global filter to GlobalComix to draft a report.`,
       );
+      return;
+    }
+    if (platforms.length === 0) {
+      setGenerateError("Pick at least one platform.");
+      return;
+    }
+    if (channels.length === 0) {
+      setGenerateError("Pick at least one channel.");
       return;
     }
     setGenerating(true);
@@ -136,6 +152,8 @@ function ReportsInner({ preloadedReport }: ReportsViewProps) {
       toIso: to.toISOString(),
       client,
       actionNotes: actionNotes.trim() || undefined,
+      platforms,
+      channels,
     });
     if (result.ok) {
       setDraft(result.report);
@@ -339,6 +357,10 @@ function ReportsInner({ preloadedReport }: ReportsViewProps) {
               generating={generating}
               onGenerate={handleGenerate}
               disabled={!clientHasReportData(client)}
+              platforms={platforms}
+              setPlatforms={setPlatforms}
+              channels={channels}
+              setChannels={setChannels}
             />
             <ActionItemsInput
               value={actionNotes}
@@ -420,48 +442,19 @@ function ReportsInner({ preloadedReport }: ReportsViewProps) {
               </p>
             )}
 
-            {(() => {
-              // Same regenerateContext for both views. Hermes-drafted
-              // reports get a Regenerate button per content section in
-              // the document view AND per content slide in the carousel;
-              // legacy / manual reports leave it undefined so the
-              // button doesn't render.
-              const regenerateContext =
-                sourceParam === "hermes" &&
-                activeReport.source === "hermes" &&
-                activeReport.agentRunId
-                  ? {
-                      reportId: activeReport.id,
-                      originalRunId: activeReport.agentRunId,
-                      onRegenerated: async () => {
-                        const res = await fetch(
-                          `/api/reports/${encodeURIComponent(activeReport.id)}`,
-                        );
-                        if (!res.ok) return;
-                        const body = (await res.json()) as {
-                          report: Report;
-                        };
-                        setDraft(body.report);
-                        save(body.report);
-                      },
-                    }
-                  : undefined;
-              return viewMode === "carousel" ? (
-                <ReportCarousel
-                  report={activeReport}
-                  onChange={handleDocChange}
-                  activeIndex={activeSlide}
-                  onActiveIndexChange={setActiveSlide}
-                  regenerateContext={regenerateContext}
-                />
-              ) : (
-                <ReportDocument
-                  report={activeReport}
-                  onChange={handleDocChange}
-                  regenerateContext={regenerateContext}
-                />
-              );
-            })()}
+            {viewMode === "carousel" ? (
+              <ReportCarousel
+                report={activeReport}
+                onChange={handleDocChange}
+                activeIndex={activeSlide}
+                onActiveIndexChange={setActiveSlide}
+              />
+            ) : (
+              <ReportDocument
+                report={activeReport}
+                onChange={handleDocChange}
+              />
+            )}
 
             {/* Off-screen deck used by the PDF exporter. Mounted only
                 while a PDF export is in progress so we don't pay the
@@ -530,19 +523,57 @@ function ViewToggle({
   );
 }
 
+type Platform = "android" | "ios" | "web";
+type Channel = "meta" | "google" | "tiktok" | "apple_search_ads";
+
+const PLATFORM_OPTIONS: { value: Platform; label: string }[] = [
+  { value: "android", label: "Android" },
+  { value: "ios", label: "iOS" },
+  { value: "web", label: "Web" },
+];
+
+const CHANNEL_OPTIONS: { value: Channel; label: string }[] = [
+  { value: "meta", label: "Meta" },
+  { value: "google", label: "Google" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "apple_search_ads", label: "ASA" },
+];
+
 function BuilderInput({
   prompt,
   setPrompt,
   generating,
   onGenerate,
   disabled = false,
+  platforms,
+  setPlatforms,
+  channels,
+  setChannels,
 }: {
   prompt: string;
   setPrompt: (s: string) => void;
   generating: boolean;
   onGenerate: (s: string) => void;
   disabled?: boolean;
+  platforms: Platform[];
+  setPlatforms: (next: Platform[]) => void;
+  channels: Channel[];
+  setChannels: (next: Channel[]) => void;
 }) {
+  const togglePlatform = (p: Platform) => {
+    setPlatforms(
+      platforms.includes(p)
+        ? platforms.filter((x) => x !== p)
+        : [...platforms, p],
+    );
+  };
+  const toggleChannel = (c: Channel) => {
+    setChannels(
+      channels.includes(c)
+        ? channels.filter((x) => x !== c)
+        : [...channels, c],
+    );
+  };
   const sections: { Icon: typeof BarChart3; label: string; body: string }[] = [
     {
       Icon: BarChart3,
@@ -603,6 +634,22 @@ function BuilderInput({
           }}
           className="flex flex-col gap-3"
         >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-6">
+            <ChipMultiSelect
+              label="Platforms"
+              options={PLATFORM_OPTIONS}
+              selected={platforms}
+              toggle={togglePlatform}
+              disabled={generating || disabled}
+            />
+            <ChipMultiSelect
+              label="Channels"
+              options={CHANNEL_OPTIONS}
+              selected={channels}
+              toggle={toggleChannel}
+              disabled={generating || disabled}
+            />
+          </div>
           <label htmlFor="report-prompt" className="sr-only">
             What should this report cover?
           </label>
@@ -696,6 +743,62 @@ function BuilderInput({
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ChipMultiSelect<T extends string>({
+  label,
+  options,
+  selected,
+  toggle,
+  disabled,
+}: {
+  label: string;
+  options: { value: T; label: string }[];
+  selected: T[];
+  toggle: (v: T) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+        {label}
+      </span>
+      <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
+        {options.map((opt) => {
+          const active = selected.includes(opt.value);
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => toggle(opt.value)}
+              disabled={disabled}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-3 py-1 font-body text-xs font-semibold transition-[background-color,color,border-color,transform] duration-200 ease-out-quart",
+                "disabled:cursor-not-allowed disabled:opacity-60",
+                "hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
+              )}
+              style={
+                active
+                  ? {
+                      background: "var(--color-ua)",
+                      color: "var(--color-navy)",
+                      border: "1px solid var(--color-ua)",
+                    }
+                  : {
+                      background: "var(--surface-input)",
+                      color: "var(--text-secondary)",
+                      border: "1px solid var(--border-default)",
+                    }
+              }
+            >
+              {opt.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

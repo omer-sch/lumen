@@ -18,12 +18,16 @@ type WeeklyBreakdownProps = {
   /** Optional last 3-4 weeks of context, only on channel-weekly. */
   history?: HistoricalWeekRow[];
   bullets: WeeklyBullet[];
-  /** Smart Reports prose (Phase 1). When populated, the renderer
-   *  shows prose blocks; bullets fall back to a secondary list below. */
+  /** Smart Reports prose. When populated, the renderer shows prose
+   *  blocks; bullets fall back to a secondary list below. */
   prose?: ProseBlock[];
   /** Slide-fit variant: tighter padding + smaller fonts so the table +
    *  bullets pack into a 16:9 frame. */
   compact?: boolean;
+  /** When true, prose blocks become editable. The parent owns the
+   *  prose state and patches the report via `onProseChange`. */
+  editable?: boolean;
+  onProseChange?: (next: ProseBlock[]) => void;
 };
 
 /** Volume metrics: an increase reads as good, a decrease as bad. */
@@ -55,6 +59,8 @@ export function WeeklyBreakdown({
   bullets,
   prose,
   compact = false,
+  editable = false,
+  onProseChange,
 }: WeeklyBreakdownProps) {
   // The platform-overall variant: one row per channel + totals.
   // The channel-weekly variant: a single "this week" row.
@@ -209,7 +215,15 @@ export function WeeklyBreakdown({
       {prose && prose.length > 0 && (
         <div className={cn("flex flex-col", compact ? "gap-2" : "gap-3", "pt-1")}>
           {prose.map((block, i) => (
-            <ProseBlockView key={i} block={block} compact={compact} />
+            <ProseBlockView
+              key={i}
+              block={block}
+              compact={compact}
+              editable={editable}
+              onChange={(next) =>
+                onProseChange?.(prose.map((b, j) => (j === i ? next : b)))
+              }
+            />
           ))}
         </div>
       )}

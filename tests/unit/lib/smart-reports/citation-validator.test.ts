@@ -102,7 +102,10 @@ describe("extractCitations", () => {
 
 describe("validateCitations", () => {
   function block(text: string): ProseBlock {
-    return { text, highlights: [] };
+    return {
+      bullets: [{ text, highlights: [] }],
+      bottomLine: "",
+    };
   }
   const ready = readyData();
 

@@ -1,35 +1,62 @@
-import type { ProseBlock as ProseBlockData } from "@/lib/reports/types";
+import type {
+  HighlightKind,
+  ProseBlock as ProseBlockData,
+  ProseBullet,
+} from "@/lib/reports/types";
 import { cn } from "@/lib/utils";
+import { CALLOUT_HIGHLIGHT_RGBA } from "./callout";
+import { EditableText } from "../EditableText";
 
-// Renders one prose block emitted by Smart Reports's composeReport.
-// The text carries `[[highlight:N]]` placeholders; each N resolves to
-// a ProseBlock.highlights[N] entry that the renderer paints as a
-// colored span. Two flavors today:
-//   - "good"  yellow background, bold text (positive callout)
-//   - "bad"   pink   background, bold text (negative callout)
+// Renders one Smart Reports prose block as:
+//   - optional family / channel heading
+//   - 2 to 4 bullets, each with a small accent square + inline
+//     highlight runs ({{good}}/{{bad}} + the pink/orange/blue/green/
+//     violet callout-color tokens)
+//   - optional `<> AI:` action-item pill
+//   - bold "Bottom line" band (yellow background, navy text)
 //
-// Phase 3 adds inline `<> AI:` action-item callouts that the
-// prose-writer emits when the user pasted action notes that match
-// the relevant family. We split those out of the prose into a
-// rendered "action" chunk styled as a yellow pill prefix; the
-// trailing text reads as plain copy.
+// In editable mode the bullet text, action item, and bottom line each
+// become inline editors. The parent owns the prose data: every edit
+// fires `onChange` with the patched ProseBlock so the caller can
+// thread it through the section -> report -> save chain.
 
 type Props = {
   block: ProseBlockData;
-  /** Slide-fit variant: tighter padding + smaller fonts so the
-   *  paragraph packs into a 16:9 frame. */
+  /** Slide-fit variant: tighter padding + smaller fonts so the block
+   *  packs into the carousel's 16:9 frame. */
   compact?: boolean;
+  /** When true, bullets / actionItem / bottomLine become inline
+   *  EditableText fields. Highlights are not editable -- a user who
+   *  wants different highlights regenerates the block. */
+  editable?: boolean;
+  /** Fires with the patched block whenever the user edits a bullet,
+   *  the action item, or the bottom line. */
+  onChange?: (next: ProseBlockData) => void;
 };
 
 const PLACEHOLDER_RE = /\[\[highlight:(\d+)\]\]/g;
 
-export function ProseBlockView({ block, compact }: Props) {
-  // Phase 3: split the prose text on `<> AI:` action callouts FIRST.
-  // Each callout becomes a separate paragraph rendered with a yellow
-  // pill prefix; the surrounding prose flows around them.
-  const paragraphs = splitOnActionCallouts(block.text);
+export function ProseBlockView({ block, compact, editable, onChange }: Props) {
+  const setBulletText = (idx: number, nextText: string) => {
+    if (!onChange) return;
+    onChange({
+      ...block,
+      bullets: block.bullets.map((b, i) =>
+        i === idx ? { ...b, text: nextText } : b,
+      ),
+    });
+  };
+  const setActionItem = (next: string) => {
+    if (!onChange) return;
+    onChange({ ...block, actionItem: next });
+  };
+  const setBottomLine = (next: string) => {
+    if (!onChange) return;
+    onChange({ ...block, bottomLine: next });
+  };
+
   return (
-    <div className={cn("flex flex-col", compact ? "gap-1" : "gap-2")}>
+    <div className={cn("flex flex-col", compact ? "gap-2" : "gap-3")}>
       {block.heading ? (
         <div
           className={cn(
@@ -41,139 +68,225 @@ export function ProseBlockView({ block, compact }: Props) {
           {block.heading}
         </div>
       ) : null}
-      {paragraphs.map((para, pIdx) => {
-        const segments = splitOnPlaceholders(para.text, block.highlights);
-        return (
-          <p
-            key={pIdx}
+
+      <ul className={cn("flex flex-col", compact ? "gap-1.5" : "gap-2")}>
+        {block.bullets.map((bullet, i) => (
+          <BulletRow
+            key={i}
+            bullet={bullet}
+            compact={compact}
+            editable={editable}
+            onChange={(nextText) => setBulletText(i, nextText)}
+          />
+        ))}
+      </ul>
+
+      {(block.actionItem || editable) && (
+        <div
+          className={cn(
+            "flex flex-wrap items-start",
+            compact ? "gap-1.5" : "gap-2",
+          )}
+        >
+          <span
             className={cn(
-              "font-body leading-relaxed",
-              compact ? "text-[12px]" : "text-sm",
-              para.kind === "action" && "pl-0",
+              "inline-flex shrink-0 items-center rounded-md font-mono font-bold uppercase tracking-[0.06em]",
+              compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-1 text-[10px]",
             )}
-            style={{ color: "var(--text-light-secondary)" }}
+            style={{
+              background: "var(--color-yellow)",
+              color: "var(--color-navy)",
+            }}
           >
-            {para.kind === "action" ? (
-              <span
-                className="mr-2 inline-flex items-center rounded-sm px-1.5 py-0.5 align-middle font-bold"
-                style={{
-                  background: "var(--color-yellow)",
-                  color: "var(--text-light-primary)",
-                  fontSize: compact ? "10px" : "11px",
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {"<> AI"}
-              </span>
-            ) : null}
-            {segments.map((seg, i) =>
-              seg.kind === "text" ? (
-                <span key={i}>{seg.text}</span>
-              ) : (
-                <mark
-                  key={i}
-                  className="px-1 py-0.5 rounded-sm font-semibold"
-                  style={{
-                    background:
-                      seg.token.kind === "good"
-                        ? "rgba(255, 221, 12, 0.35)"
-                        : "rgba(248, 134, 115, 0.32)",
-                    color: "var(--text-light-primary)",
-                  }}
-                >
-                  {seg.token.text}
-                </mark>
-              ),
+            {"<>"} AI
+          </span>
+          {editable ? (
+            <EditableText
+              value={block.actionItem ?? ""}
+              onChange={setActionItem}
+              multiline
+              ariaLabel="Action item"
+              className={cn(
+                "flex-1 font-body leading-relaxed text-[color:var(--text-light-primary)] min-h-[1.5rem]",
+                compact ? "text-[11.5px]" : "text-[13px]",
+              )}
+            />
+          ) : block.actionItem ? (
+            <p
+              className={cn(
+                "flex-1 font-body leading-relaxed text-[color:var(--text-light-primary)]",
+                compact ? "text-[11.5px]" : "text-[13px]",
+              )}
+            >
+              {block.actionItem}
+            </p>
+          ) : null}
+        </div>
+      )}
+
+      {(block.bottomLine || editable) && (
+        <div
+          className={cn(
+            "rounded-md font-body font-bold leading-snug",
+            compact ? "px-3 py-2 text-[12px]" : "px-4 py-2.5 text-[13.5px]",
+          )}
+          style={{
+            background: "var(--color-yellow)",
+            color: "var(--color-navy)",
+          }}
+        >
+          <span
+            className={cn(
+              "mr-2 font-display uppercase tracking-[0.1em]",
+              compact ? "text-[9px]" : "text-[10px]",
             )}
-          </p>
-        );
-      })}
+            style={{ opacity: 0.7 }}
+          >
+            Bottom line
+          </span>
+          {editable ? (
+            <EditableText
+              value={block.bottomLine}
+              onChange={setBottomLine}
+              ariaLabel="Bottom line"
+              className="font-body font-bold text-[color:var(--color-navy)]"
+            />
+          ) : (
+            <span>{block.bottomLine}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-// Split prose on `<> AI:` callout markers. Each callout becomes a
-// separate paragraph entry tagged kind="action"; surrounding text
-// becomes kind="prose". Matches the renderer style in the Week 18
-// reference deck where action callouts are visually distinct rows
-// rather than inline tokens.
-type Paragraph = { kind: "prose" | "action"; text: string };
-const ACTION_CALLOUT_RE = /<>\s*AI:\s*/g;
+function BulletRow({
+  bullet,
+  compact,
+  editable,
+  onChange,
+}: {
+  bullet: ProseBullet;
+  compact?: boolean;
+  editable?: boolean;
+  onChange?: (nextText: string) => void;
+}) {
+  return (
+    <li className="flex gap-2.5">
+      <span
+        aria-hidden
+        className={cn(
+          "mt-[0.45rem] shrink-0 rounded-sm",
+          compact ? "h-1.5 w-1.5" : "h-2 w-2",
+        )}
+        style={{ background: "var(--color-ua)" }}
+      />
+      {editable ? (
+        <EditableText
+          value={reconstructBulletPlainText(bullet)}
+          onChange={(next) => onChange?.(next)}
+          multiline
+          ariaLabel="Bullet"
+          className={cn(
+            "flex-1 font-body leading-relaxed text-[color:var(--text-light-primary)] min-h-[1.25rem]",
+            compact ? "text-[12px]" : "text-[13.5px]",
+          )}
+        />
+      ) : (
+        <BulletText bullet={bullet} compact={compact} />
+      )}
+    </li>
+  );
+}
 
-function splitOnActionCallouts(input: string): Paragraph[] {
-  if (typeof input !== "string" || input.length === 0) {
-    return [{ kind: "prose", text: input ?? "" }];
-  }
-  // The regex eats the literal `<> AI:` token; what remains on each
-  // side of a match is the surrounding prose. Anything that comes
-  // AFTER a match (up to the next match or end of string) is the
-  // action sentence.
-  const matches: number[] = [];
-  ACTION_CALLOUT_RE.lastIndex = 0;
-  for (
-    let m = ACTION_CALLOUT_RE.exec(input);
-    m != null;
-    m = ACTION_CALLOUT_RE.exec(input)
-  ) {
-    matches.push(m.index + m[0].length);
-  }
-  if (matches.length === 0) {
-    return [{ kind: "prose", text: input }];
-  }
+function BulletText({
+  bullet,
+  compact,
+}: {
+  bullet: ProseBullet;
+  compact?: boolean;
+}) {
+  const segments = splitOnPlaceholders(bullet.text, bullet.highlights);
+  return (
+    <p
+      className={cn(
+        "font-body leading-relaxed",
+        compact ? "text-[12px]" : "text-[13.5px]",
+      )}
+      style={{ color: "var(--text-light-primary)" }}
+    >
+      {segments.map((seg, i) =>
+        seg.kind === "text" ? (
+          <span key={i}>{seg.text}</span>
+        ) : (
+          <mark
+            key={i}
+            className="rounded-sm px-1 py-0.5 font-semibold"
+            style={{
+              background: highlightBackground(seg.kind),
+              color: "var(--text-light-primary)",
+            }}
+          >
+            {seg.text}
+          </mark>
+        ),
+      )}
+    </p>
+  );
+}
 
-  const out: Paragraph[] = [];
-  const firstMatchStart = matches[0];
-  // The prose chunk that comes BEFORE the first <> AI: marker.
-  // Trimmed so a leading newline doesn't produce an empty paragraph.
-  // Find the actual `<>` index (the match index minus token length)
-  // by scanning back.
-  const firstMarkerIdx = input.slice(0, firstMatchStart).lastIndexOf("<>");
-  const preProse = input
-    .slice(0, firstMarkerIdx >= 0 ? firstMarkerIdx : firstMatchStart)
-    .trim();
-  if (preProse.length > 0) out.push({ kind: "prose", text: preProse });
+/** Flatten a bullet (text + tokens) back into plain text for editing.
+ *  We lose the highlight metadata when the user edits; that is the
+ *  expected trade-off, the user can regenerate to get fresh
+ *  highlights. */
+function reconstructBulletPlainText(bullet: ProseBullet): string {
+  if (bullet.highlights.length === 0) return bullet.text;
+  return bullet.text.replace(PLACEHOLDER_RE, (_full, idxStr) => {
+    const idx = Number(idxStr);
+    const token = bullet.highlights[idx];
+    return token ? token.text : "";
+  });
+}
 
-  for (let i = 0; i < matches.length; i++) {
-    const start = matches[i];
-    const nextMarkerIdx =
-      i + 1 < matches.length
-        ? input.slice(0, matches[i + 1]).lastIndexOf("<>")
-        : input.length;
-    const action = input.slice(start, nextMarkerIdx).trim();
-    if (action.length > 0) out.push({ kind: "action", text: action });
+function highlightBackground(kind: HighlightKind): string {
+  switch (kind) {
+    case "good":
+      return "rgba(255, 221, 12, 0.35)";
+    case "bad":
+      return "rgba(248, 134, 115, 0.32)";
+    case "pink":
+      return CALLOUT_HIGHLIGHT_RGBA.pink;
+    case "orange":
+      return CALLOUT_HIGHLIGHT_RGBA.orange;
+    case "blue":
+      return CALLOUT_HIGHLIGHT_RGBA.blue;
+    case "green":
+      return CALLOUT_HIGHLIGHT_RGBA.green;
+    case "violet":
+      return CALLOUT_HIGHLIGHT_RGBA.violet;
   }
-
-  return out;
 }
 
 type Segment =
   | { kind: "text"; text: string }
-  | { kind: "highlight"; token: ProseBlockData["highlights"][number] };
+  | { kind: HighlightKind; text: string };
 
-/** Walk the text, slicing on `[[highlight:N]]` placeholders into a
- *  flat list of text / highlight segments. Unknown indices are dropped
- *  so a malformed token doesn't crash the render. */
 function splitOnPlaceholders(
   text: string,
-  highlights: ProseBlockData["highlights"],
+  highlights: ProseBullet["highlights"],
 ): Segment[] {
   if (highlights.length === 0) return [{ kind: "text", text }];
   const out: Segment[] = [];
   let cursor = 0;
-  PLACEHOLDER_RE.lastIndex = 0;
-  for (
-    let m = PLACEHOLDER_RE.exec(text);
-    m != null;
-    m = PLACEHOLDER_RE.exec(text)
-  ) {
+  const re = new RegExp(PLACEHOLDER_RE.source, "g");
+  for (let m = re.exec(text); m != null; m = re.exec(text)) {
     const idx = Number(m[1]);
     const token = highlights[idx];
     if (m.index > cursor) {
       out.push({ kind: "text", text: text.slice(cursor, m.index) });
     }
     if (token) {
-      out.push({ kind: "highlight", token });
+      out.push({ kind: token.kind, text: token.text });
     }
     cursor = m.index + m[0].length;
   }
@@ -181,4 +294,17 @@ function splitOnPlaceholders(
     out.push({ kind: "text", text: text.slice(cursor) });
   }
   return out;
+}
+
+/** Public helper for callers (Copy button) that want the plain-text
+ *  rendering of a block. */
+export function proseBlockToPlainText(block: ProseBlockData): string {
+  const lines: string[] = [];
+  if (block.heading) lines.push(block.heading);
+  for (const b of block.bullets) {
+    lines.push(`- ${reconstructBulletPlainText(b)}`);
+  }
+  if (block.actionItem) lines.push(`<> AI: ${block.actionItem}`);
+  if (block.bottomLine) lines.push(`Bottom line: ${block.bottomLine}`);
+  return lines.join("\n");
 }

@@ -12,12 +12,14 @@ import {
   writeCampaignBreakdown,
   writePlatformOverall,
   writeWeeklyBreakdown,
+  type CampaignCallout,
 } from "../prose-writer";
 import type {
   ComposeOptions,
   ProseBlock,
   ProseCitation,
 } from "../types";
+import type { CalloutColor } from "@/lib/reports/types";
 
 // Master template for GlobalComix's weekly review deck. Hardcodes the
 // chapter order (Android, iOS, Web) and the channels each platform
@@ -191,6 +193,15 @@ export async function buildChapter(args: {
     const channelLabel = REPORT_CHANNEL_LABEL[channel];
     const renderChannel = REPORT_CHANNEL_RENDER_ENUM[channel];
 
+    // Pre-pick top 3 callout rows per family by |spendDelta|. The
+    // renderer uses this to paint a colored arrow on the row; the
+    // prose-writer wraps any bullet referencing the row in matching
+    // color markup so the highlight phrase pairs with the arrow.
+    const channelCampaigns = args.ready.campaigns.filter((c) =>
+      bqNames.includes(c.network),
+    );
+    const callouts = pickCalloutsForChannel(channelCampaigns);
+
     const [weekly, campaign] = await Promise.all([
       writeWeeklyBreakdown({
         ready: args.ready,
@@ -202,6 +213,7 @@ export async function buildChapter(args: {
         bqNetworkNames: bqNames,
         options: args.options,
         actionItems: args.actionItems,
+        callouts,
       }),
     ]);
 
@@ -266,8 +278,8 @@ export async function buildChapter(args: {
 
     if (campaign.blocks.length > 0) {
       citations.push(...campaign.blockCitations);
-      const channelCampaigns = args.ready.campaigns.filter((c) =>
-        bqNames.includes(c.network),
+      const calloutByCampaignId = new Map<string, CalloutColor>(
+        callouts.map((c) => [c.campaignId, c.color]),
       );
       sections.push({
         id: "channel_campaign",
@@ -288,6 +300,7 @@ export async function buildChapter(args: {
           subD7: null,
           cpaD7: null,
           cpaD7Delta: null,
+          highlight: calloutByCampaignId.get(c.campaign_id),
         })),
         commentary: [],
         prose: campaign.blocks,
@@ -404,6 +417,35 @@ export async function buildWeeklyReviewGlobalcomix(args: {
 }
 
 // ── helpers ────────────────────────────────────────────────────────────
+
+// Top 3 callout colors in render order. Capped at 3 so a busy family
+// doesn't paint the whole table; the writer also gets these three so
+// its bullet highlights match the table arrows.
+const CALLOUT_COLORS: readonly Extract<
+  CalloutColor,
+  "pink" | "orange" | "blue"
+>[] = ["pink", "orange", "blue"] as const;
+
+/** Score rows by |spendDelta| and assign callout colors in order. */
+function pickCalloutsForChannel(
+  rows: ReadyData["campaigns"],
+): CampaignCallout[] {
+  return rows
+    .slice()
+    .sort(
+      (a, b) =>
+        Math.abs(b.spendDelta ?? 0) - Math.abs(a.spendDelta ?? 0),
+    )
+    .slice(0, CALLOUT_COLORS.length)
+    .filter((r) => Number.isFinite(r.spendDelta) && (r.spendDelta ?? 0) !== 0)
+    .map((r, i) => ({
+      campaignId: r.campaign_id,
+      campaignName: r.campaign_name,
+      family: r.family,
+      spendDelta: r.spendDelta ?? 0,
+      color: CALLOUT_COLORS[i],
+    }));
+}
 
 function pickSinglePlatform(intent: Intent): Platform {
   const first = intent.platforms[0];

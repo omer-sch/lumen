@@ -246,7 +246,11 @@ async function composeSingleChannelWeekly(args: {
     diagnostics: {
       sectionsEmitted,
       proseBlocks: allBlocks.length,
-      highlights: allBlocks.reduce((a, b) => a + b.highlights.length, 0),
+      highlights: allBlocks.reduce(
+        (a, b) =>
+          a + b.bullets.reduce((c, bl) => c + bl.highlights.length, 0),
+        0,
+      ),
       citationsValidated: verdict.ok ? verdict.citationCount : 0,
       prompTokensIn:
         weeklyResult.diagnostics.promptTokensIn +
@@ -380,7 +384,11 @@ async function composeWeeklyReviewGlobalcomix(args: {
     diagnostics: {
       sectionsEmitted: flatSections.map((s) => s.id),
       proseBlocks: built.diagnostics.proseBlocks,
-      highlights: allBlocks.reduce((a, b) => a + b.highlights.length, 0),
+      highlights: allBlocks.reduce(
+        (a, b) =>
+          a + b.bullets.reduce((c, bl) => c + bl.highlights.length, 0),
+        0,
+      ),
       citationsValidated: verdict.ok ? verdict.citationCount : 0,
       prompTokensIn: built.diagnostics.promptTokensIn,
       promptTokensOut: built.diagnostics.promptTokensOut,
