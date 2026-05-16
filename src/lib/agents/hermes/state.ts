@@ -70,17 +70,35 @@ export const FindingsResponseSchema = z.object({
   findings: z.array(FindingSchema).max(20),
 });
 
-// ---------- Bullets (Quill output, stubbed in chunk 1) ----------
+// ---------- Bullets (Quill output) ----------
 
-export type Bullet = {
-  claim: string;
-  columns_used: string[];
-  source_query_id: string;
-  delta_value: number | null;
-  action_item: string | null;
-  citations: Array<{ source_path: string; chunk_id: string }>;
-  slide_target: string;
-};
+export const SLIDE_TARGETS = [
+  "platform_overall",
+  "channel_weekly",
+  "campaign_breakdown",
+  "closing",
+] as const;
+export type SlideTarget = (typeof SLIDE_TARGETS)[number];
+
+export const BulletSchema = z.object({
+  claim: z.string().min(1),
+  columns_used: z.array(z.string()).default([]),
+  source_query_id: z.string().min(1),
+  delta_value: z.number().nullable().default(null),
+  action_item: z.string().nullable().default(null),
+  citations: z.array(
+    z.object({
+      source_path: z.string(),
+      chunk_id: z.string(),
+    }),
+  ),
+  slide_target: z.enum(SLIDE_TARGETS),
+});
+export type Bullet = z.infer<typeof BulletSchema>;
+
+export const BulletsResponseSchema = z.object({
+  bullets: z.array(BulletSchema).max(20),
+});
 
 // ---------- Deck (Atelier output, stubbed in chunk 1) ----------
 

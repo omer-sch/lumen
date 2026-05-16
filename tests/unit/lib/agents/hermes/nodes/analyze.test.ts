@@ -87,19 +87,19 @@ function baseState() {
     run_id: "run-analyze-1",
     intent: {
       client: "globalcomix",
-      platforms: ["android"],
-      channels: ["meta"],
+      platforms: ["android"] as ("android" | "ios" | "web")[],
+      channels: ["meta"] as ("meta" | "google" | "tiktok" | "apple_search_ads" | "applovin")[],
       period: { label: "last week", iso_start: null, iso_end: null },
       focus: null,
       confidence: 0.9,
-      doubts: [],
+      doubts: [] as string[],
     },
     context: { knowledge: [], history: [], comms: [] },
-    findings: [],
-    bullets: [],
-    deck: { pptx_path: null, slides: [] },
-    approval: { approved: false, approved_by: null, approved_at: null, edits: [] },
-    history: [],
+    findings: [] as never[],
+    bullets: [] as never[],
+    deck: { pptx_path: null as string | null, slides: [] as Array<{ index: number; layout: string; title: string }> },
+    approval: { approved: false, approved_by: null, approved_at: null, edits: [] as Array<{ bullet_index: number; original: string; revised: string }> },
+    history: [] as Array<{ node: string; started_at: string; ended_at: string; notes?: string }>,
   };
 }
 

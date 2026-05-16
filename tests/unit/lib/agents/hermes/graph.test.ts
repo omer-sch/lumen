@@ -100,6 +100,19 @@ function mockAnalyzeResponse(findings: unknown[] = []) {
   };
 }
 
+function mockQuillResponse(bullets: unknown[] = []) {
+  return {
+    content: [
+      {
+        type: "tool_use",
+        name: "draft_bullets",
+        id: "toolu_quill",
+        input: { bullets },
+      },
+    ],
+  };
+}
+
 describe("buildHermesGraph", () => {
   it("HERMES_NODE_ORDER pins the five-node linear order", async () => {
     const { HERMES_NODE_ORDER } = await import(
@@ -114,7 +127,7 @@ describe("buildHermesGraph", () => {
     ]);
   });
 
-  it("runs end to end with parse_intent + real analyze (both mocked Anthropic)", async () => {
+  it("runs end to end with parse_intent + analyze + quill (all mocked Anthropic) + atelier/review_gate stubs", async () => {
     fake.messages.create
       .mockResolvedValueOnce(mockHaikuResponse(TOOL_USE_INTENT))
       .mockResolvedValueOnce(
@@ -125,6 +138,19 @@ describe("buildHermesGraph", () => {
             source_query_id: "network_breakdown",
             citations: [],
             severity: "low",
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        mockQuillResponse([
+          {
+            claim: "Quiet week — nothing material.",
+            columns_used: [],
+            source_query_id: "network_breakdown",
+            delta_value: null,
+            action_item: null,
+            citations: [],
+            slide_target: "platform_overall",
           },
         ]),
       );
@@ -139,11 +165,10 @@ describe("buildHermesGraph", () => {
 
     expect(final.intent?.client).toBe("globalcomix");
     expect(final.intent?.confidence).toBeCloseTo(0.91, 2);
-    // Phase 4 analyze returns findings shape from the model; Quill /
-    // Atelier / review_gate are still stubs and produce one bullet,
-    // four slide placeholders, and an unapproved gate respectively.
     expect(final.findings).toHaveLength(1);
     expect(final.bullets).toHaveLength(1);
+    // Atelier and review_gate are still stubs through phases 5; they
+    // produce four slide placeholders and an unapproved gate.
     expect(final.deck.slides).toHaveLength(4);
     expect(final.approval.approved).toBe(false);
     // History trace has one event per node, in order.
