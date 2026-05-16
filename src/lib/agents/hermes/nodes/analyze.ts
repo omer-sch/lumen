@@ -251,10 +251,15 @@ export async function analyze(
   const findings: Finding[] = parsed.findings;
 
   // Snapshot: the structural data tables Atelier lifts into the Report.
-  // Mock-anchored today (see snapshot.ts header); the BQ-overlay seam is
-  // here so a future iteration can swap real values in without changing
-  // Atelier or the Report shape.
-  const snapshot = buildHermesSnapshot(intent);
+  // Built from the BQ rows we just fetched (networks / campaigns / trend);
+  // every visible number in the deck traces back to a real query, the
+  // same trust contract the citation validator enforces for the prose.
+  const snapshot = buildHermesSnapshot({
+    intent,
+    networks,
+    campaigns,
+    trend,
+  });
 
   const endedAt = new Date().toISOString();
   return {

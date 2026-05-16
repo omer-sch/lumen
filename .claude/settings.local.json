@@ -282,7 +282,9 @@
       "Bash(set -o pipefail)",
       "Bash(sips -Z 512 public/avatars/hermes.png --out public/avatars/hermes.png)",
       "Bash(sips -g pixelWidth -g pixelHeight public/avatars/aria.png public/avatars/hermes.png)",
-      "Bash(sips -Z 256 public/avatars/hermes.png --out public/avatars/hermes.png)"
+      "Bash(sips -Z 256 public/avatars/hermes.png --out public/avatars/hermes.png)",
+      "Bash(npx --yes tsx --version)",
+      "Bash(npx --yes tsx --env-file=.env.local scripts/verify-hermes-snapshot.mjs)"
     ]
   },
   "enableAllProjectMcpServers": true,

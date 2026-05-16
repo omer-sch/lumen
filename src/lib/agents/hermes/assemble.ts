@@ -11,7 +11,29 @@ import type {
   WeeklyBullet,
 } from "@/lib/reports/types";
 
+import { reportChannelFromIntent } from "./snapshot";
 import type { Bullet, HermesSnapshot, Intent, SlideTarget } from "./state";
+
+// Intent.platforms uses "android" | "ios" | "web"; the report's
+// Platform type is the same shape, so the mapping is the identity.
+// The channel mapping (intent enum -> renderer enum) lives in
+// snapshot.ts because both files need it.
+const REPORT_PLATFORM_LABEL: Record<"android" | "ios" | "web", string> = {
+  android: "Android",
+  ios: "iOS",
+  web: "Web",
+};
+
+const REPORT_CHANNEL_LABEL: Record<
+  ReturnType<typeof reportChannelFromIntent>,
+  string
+> = {
+  meta: "Meta",
+  google: "Google",
+  tiktok: "TikTok",
+  asa: "ASA",
+  search: "Search",
+};
 
 // Assembler. Takes the structural data (snapshot) plus the Quill
 // bullets, returns a Report ready to insert into the reports table.
@@ -78,14 +100,30 @@ export function assembleHermesReport(args: AssembleArgs): Report {
   const grouped = groupBulletsBySlide(bullets);
   const client = findClient(intent.client);
 
+  // Platform + channel come from intent (IntentSchema enforces >= 1 of
+  // each). The previous hardcoding of "android"/"meta" meant a TikTok
+  // on iOS request still emitted an "Android | Meta" deck, a real
+  // trust-contract break.
+  const platform = intent.platforms[0];
+  const intentChannel = intent.channels[0];
+  if (!platform) {
+    throw new Error("assembleHermesReport: intent.platforms is empty");
+  }
+  if (!intentChannel) {
+    throw new Error("assembleHermesReport: intent.channels is empty");
+  }
+  const channel = reportChannelFromIntent(intentChannel);
+  const platformLabel = REPORT_PLATFORM_LABEL[platform];
+  const channelLabel = REPORT_CHANNEL_LABEL[channel];
+
   const sections: ReportSection[] = [];
 
   if (snapshot.platformOverall) {
     const platformBullets = grouped.platform_overall;
     const section: PlatformOverallSection = {
       id: "platform_overall",
-      platform: "android",
-      title: "Android | Overall | Weekly Breakdown",
+      platform,
+      title: `${platformLabel} | Overall | Weekly Breakdown`,
       summary: snapshot.platformOverall,
       bullets: platformBullets.map((b, i) => bulletToWeekly(b, i === 0)),
     };
@@ -96,9 +134,9 @@ export function assembleHermesReport(args: AssembleArgs): Report {
     const weeklyBullets = grouped.channel_weekly;
     const section: ChannelWeeklySection = {
       id: "channel_weekly",
-      platform: "android",
-      channel: "meta",
-      title: "Android | Meta | Weekly Breakdown",
+      platform,
+      channel,
+      title: `${platformLabel} | ${channelLabel} | Weekly Breakdown`,
       currentWeek: snapshot.channelWeekly.currentWeek,
       history: snapshot.channelWeekly.history,
       bullets: weeklyBullets.map((b, i) => bulletToWeekly(b, i === 0)),
@@ -110,9 +148,9 @@ export function assembleHermesReport(args: AssembleArgs): Report {
     const campaignBullets = grouped.campaign_breakdown;
     const section: ChannelCampaignSection = {
       id: "channel_campaign",
-      platform: "android",
-      channel: "meta",
-      title: "Android | Meta | Campaign Breakdown",
+      platform,
+      channel,
+      title: `${platformLabel} | ${channelLabel} | Campaign Breakdown`,
       rows: snapshot.channelCampaign.rows,
       commentary: campaignBullets.length
         ? campaignBullets.map((b, i) => bulletToCommentary(b, i))

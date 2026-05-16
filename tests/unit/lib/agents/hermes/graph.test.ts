@@ -51,8 +51,49 @@ beforeEach(async () => {
   // Analyze pulls these three; empty arrays produce 0 anomalies, the
   // Sonnet rank-and-frame call (second messages.create) returns no
   // findings; the graph still completes.
-  networkBreakdownMock.mockResolvedValue([]);
-  campaignsMock.mockResolvedValue([]);
+  // Post-snapshot-rewrite: networks/campaigns are no longer
+  // mock-anchored, so empty BQ -> empty deck. Provide one network +
+  // one campaign so the end-to-end test exercises the full assembly.
+  networkBreakdownMock.mockResolvedValue([
+    {
+      network: "Meta",
+      spend: 5000,
+      share: 1,
+      installs: 1000,
+      clicks: 20000,
+      impressions: 1_000_000,
+      cpi: 5,
+      ctr: 0.02,
+      cpm: 5,
+      cpc: 0.25,
+      roasD7: 0.2,
+      roasD14: 0.3,
+      roasD30: 0.4,
+      roasD90: 0.5,
+      ftdD7: 100,
+      payersD7: 80,
+      retD7: 0.6,
+      subStart: 200,
+      subD0: 50,
+      subD7: 80,
+      cpSubStart: 25,
+      cpaD0: 100,
+      cpaD7: 62.5,
+      trailingCpaD7Avg: 60,
+    },
+  ]);
+  campaignsMock.mockResolvedValue([
+    {
+      campaign_id: "c1",
+      campaign_name: "YH_FB_test",
+      network: "Meta",
+      spend: 1000,
+      installs: 200,
+      cpi: 5,
+      roas: 0,
+      spendDelta: 0.1,
+    },
+  ]);
   trendMock.mockResolvedValue([]);
   upsertReportMock.mockReset();
   upsertReportMock.mockImplementation((report) => Promise.resolve(report));
@@ -195,6 +236,134 @@ describe("buildHermesGraph", () => {
       "atelier",
       "review_gate",
     ]);
+  });
+
+  it("end-to-end iOS/TikTok intent assembles an iOS/TikTok deck (no Android/Meta fallback, no mock-fixture leaks)", async () => {
+    // Override default Meta mocks for this test: BQ returns a TikTok row.
+    networkBreakdownMock.mockReset();
+    networkBreakdownMock.mockResolvedValue([
+      {
+        network: "TikTok",
+        spend: 4321,
+        share: 1,
+        installs: 500,
+        clicks: 10000,
+        impressions: 500_000,
+        cpi: 8.64,
+        ctr: 0.02,
+        cpm: 8.64,
+        cpc: 0.43,
+        roasD7: 0.15,
+        roasD14: 0.2,
+        roasD30: 0.25,
+        roasD90: 0.3,
+        ftdD7: 50,
+        payersD7: 40,
+        retD7: 0.5,
+        subStart: 75,
+        subD0: 20,
+        subD7: 35,
+        cpSubStart: 57.6,
+        cpaD0: 216.05,
+        cpaD7: 123.45,
+        trailingCpaD7Avg: 100,
+      },
+    ]);
+    campaignsMock.mockReset();
+    campaignsMock.mockResolvedValue([
+      {
+        campaign_id: "tt-1",
+        campaign_name: "YH_TT_APP_iOS_T1",
+        network: "TikTok",
+        spend: 2000,
+        installs: 250,
+        cpi: 8,
+        roas: 0,
+        spendDelta: -0.12,
+      },
+    ]);
+    fake.messages.create
+      .mockResolvedValueOnce(
+        mockHaikuResponse({
+          client: "globalcomix",
+          platforms: ["ios"],
+          channels: ["tiktok"],
+          period: {
+            label: "last 7 days",
+            iso_start: "2026-05-09",
+            iso_end: "2026-05-15",
+          },
+          focus: null,
+          confidence: 0.93,
+          doubts: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        mockAnalyzeResponse([
+          {
+            kind: "anomaly",
+            claim_template: "TikTok CPA D7 up 23%.",
+            source_query_id: "network_breakdown",
+            citations: [],
+            severity: "high",
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        mockQuillResponse([
+          {
+            claim: "TikTok CPA D7 climbed to $123.45.",
+            columns_used: ["cpa_d7"],
+            source_query_id: "network_breakdown",
+            delta_value: 23,
+            action_item: null,
+            citations: [],
+            slide_target: "channel_weekly",
+          },
+        ]),
+      );
+
+    const { buildHermesGraph } = await import("@/lib/agents/hermes/graph");
+    const final = await buildHermesGraph().invoke({
+      email_text:
+        "Hi team, please send the TikTok weekly review for GlobalComix on iOS, last 7 days. Thanks, Emily",
+      run_id: "test-tiktok",
+      user_id: "user-test",
+    });
+
+    // Snapshot pulls from the BQ mock above, not the deleted fixtures.
+    expect(final.snapshot?.platformOverall?.rows[0].label).toBe("TikTok");
+    expect(final.snapshot?.platformOverall?.rows[0].spend.value).toBe(4321);
+    // cpaD7 delta is derived from trailingCpaD7Avg (123.45 vs 100 = +23.5%).
+    expect(final.snapshot?.platformOverall?.rows[0].cpaD7.delta).toBeCloseTo(
+      23.5,
+      1,
+    );
+
+    // Assembled report headers reflect the intent, not the old defaults.
+    const [reportArg] = upsertReportMock.mock.calls[0];
+    const platformSection = reportArg.sections.find(
+      (s: { id: string }) => s.id === "platform_overall",
+    );
+    const weeklySection = reportArg.sections.find(
+      (s: { id: string }) => s.id === "channel_weekly",
+    );
+    expect(platformSection.platform).toBe("ios");
+    expect(platformSection.title).toMatch(/iOS \| Overall/);
+    expect(weeklySection.platform).toBe("ios");
+    expect(weeklySection.channel).toBe("tiktok");
+    expect(weeklySection.title).toMatch(/iOS \| TikTok/);
+
+    // Trust-contract guard: none of the deleted mock-fixture values
+    // (Facebook $6,230, -28.7% substart, $22.41 cpSubstart) appear in
+    // the snapshot or the assembled deck.
+    const json = JSON.stringify({
+      snapshot: final.snapshot,
+      sections: reportArg.sections,
+    });
+    expect(json).not.toContain("6230");
+    expect(json).not.toContain("-28.7");
+    expect(json).not.toContain("22.41");
   });
 
   it("calls Comms retrieve before invoking Haiku", async () => {

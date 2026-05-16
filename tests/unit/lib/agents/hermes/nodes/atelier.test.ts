@@ -25,6 +25,56 @@ import type {
   ChannelWeeklySection,
   PlatformOverallSection,
 } from "@/lib/reports/types";
+import type {
+  CampaignRow as BQCampaignRow,
+  NetworkRow as BQNetworkRow,
+} from "@/types/dashboard";
+
+// Synthetic BQ rows for the new buildHermesSnapshot signature.
+// Real-data shape; exact numbers chosen so assertions can pin them.
+function netRow(over: Partial<BQNetworkRow> = {}): BQNetworkRow {
+  return {
+    network: "Meta",
+    spend: 5000,
+    share: 0.5,
+    installs: 1000,
+    clicks: 20000,
+    impressions: 1_000_000,
+    cpi: 5,
+    ctr: 0.02,
+    cpm: 5,
+    cpc: 0.25,
+    roasD7: 0.2,
+    roasD14: 0.3,
+    roasD30: 0.4,
+    roasD90: 0.5,
+    ftdD7: 100,
+    payersD7: 80,
+    retD7: 0.6,
+    subStart: 200,
+    subD0: 50,
+    subD7: 80,
+    cpSubStart: 25,
+    cpaD0: 100,
+    cpaD7: 62.5,
+    trailingCpaD7Avg: 60,
+    ...over,
+  };
+}
+
+function campRow(over: Partial<BQCampaignRow> = {}): BQCampaignRow {
+  return {
+    campaign_id: "c1",
+    campaign_name: "YH_FB_APP_test",
+    network: "Meta",
+    spend: 1000,
+    installs: 200,
+    cpi: 5,
+    roas: 0,
+    spendDelta: 0.1,
+    ...over,
+  };
+}
 
 function bullet(over: Partial<Bullet> = {}): Bullet {
   return {
@@ -55,7 +105,7 @@ function intent(over: Partial<Intent> = {}): Intent {
 describe("assembleHermesReport", () => {
   it("produces a Report whose sections match the manual yellowHEAD format", () => {
     const i = intent();
-    const snapshot = buildHermesSnapshot(i);
+    const snapshot = buildHermesSnapshot({ intent: i, networks: [netRow()], campaigns: [campRow()] });
     const report = assembleHermesReport({
       intent: i,
       snapshot,
@@ -81,7 +131,7 @@ describe("assembleHermesReport", () => {
 
   it("overlays Quill bullets onto each section keyed by slide_target", () => {
     const i = intent();
-    const snapshot = buildHermesSnapshot(i);
+    const snapshot = buildHermesSnapshot({ intent: i, networks: [netRow()], campaigns: [campRow()] });
     const report = assembleHermesReport({
       intent: i,
       snapshot,
@@ -114,7 +164,7 @@ describe("assembleHermesReport", () => {
 
   it("falls back to neutral tone when bullets carry no directional signal", () => {
     const i = intent();
-    const snapshot = buildHermesSnapshot(i);
+    const snapshot = buildHermesSnapshot({ intent: i, networks: [netRow()], campaigns: [campRow()] });
     const report = assembleHermesReport({
       intent: i,
       snapshot,
@@ -138,7 +188,7 @@ describe("assembleHermesReport", () => {
 
   it("flags first bullet as headline when the signal is large or directional", () => {
     const i = intent();
-    const snapshot = buildHermesSnapshot(i);
+    const snapshot = buildHermesSnapshot({ intent: i, networks: [netRow()], campaigns: [campRow()] });
     const report = assembleHermesReport({
       intent: i,
       snapshot,
@@ -169,7 +219,7 @@ describe("atelier node skip paths", () => {
       user_id: "user-1",
       intent: intent(),
       context: { knowledge: [], history: [], comms: [] },
-      snapshot: buildHermesSnapshot(intent()),
+      snapshot: buildHermesSnapshot({ intent: intent(), networks: [netRow()], campaigns: [campRow()] }),
       contact: null,
       findings: [],
       bullets: [],
