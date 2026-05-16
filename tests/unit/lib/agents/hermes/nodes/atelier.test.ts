@@ -170,6 +170,7 @@ describe("atelier node skip paths", () => {
       intent: intent(),
       context: { knowledge: [], history: [], comms: [] },
       snapshot: buildHermesSnapshot(intent()),
+      contact: null,
       findings: [],
       bullets: [],
       deck: { pptx_path: null, slides: [], report_id: null },

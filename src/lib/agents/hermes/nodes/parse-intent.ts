@@ -2,16 +2,32 @@ import "server-only";
 
 import { rememberSlice } from "@/lib/agents/_scaffold/memory";
 import { getAnthropicClient, pickModel } from "@/lib/agents/_scaffold/model";
+import { getContactByEmail } from "@/lib/contacts";
 import { retrieve } from "@/lib/rag/retrieve";
 
 import { PARSE_INTENT_SYSTEM_PROMPT } from "../prompts/parse-intent.prompt";
 import {
   type ContextChunk,
+  type HermesContact,
   type HermesState,
   type HermesStateUpdate,
   type Intent,
   IntentSchema,
 } from "../state";
+
+// Pulls the first plausible email address out of a free-form body.
+// Used to map a pasted client email back to a client_contacts row.
+// Picks the longest match (the body often contains an unsubscribe
+// link or a footer with a generic address; the sender's "Thanks,
+// Emily emily@..." signature tends to be the longer one). Returns
+// null when no address is present.
+const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+export function extractSenderEmail(body: string): string | null {
+  const matches = body.match(EMAIL_RE);
+  if (!matches || matches.length === 0) return null;
+  const sorted = [...new Set(matches)].sort((a, b) => b.length - a.length);
+  return sorted[0] ?? null;
+}
 
 // parse_intent: takes the pasted email, returns a typed Intent. Phase 3
 // hardens the prompt with few-shot examples + low-confidence rule +
@@ -270,10 +286,38 @@ export async function parseIntent(
     });
   }
 
+  // Recognise the sender if their email address is in the body and
+  // matches a client_contacts row. Lookup failures (Supabase unhappy,
+  // contact missing) MUST NOT break the run; contact is best-effort.
+  let contact: HermesContact | null = null;
+  const senderEmail = extractSenderEmail(state.email_text);
+  if (senderEmail) {
+    try {
+      const row = await getContactByEmail(senderEmail);
+      if (row) {
+        contact = {
+          id: row.id,
+          name: row.name,
+          email: row.email,
+          role: row.role,
+          clientId: row.clientId,
+        };
+      }
+    } catch (err) {
+      console.warn({
+        event: "hermes.parse_intent.contact_lookup_failed",
+        run_id: state.run_id,
+        email: senderEmail,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   const endedAt = new Date().toISOString();
 
   return {
     intent,
+    contact,
     context: {
       knowledge: state.context.knowledge,
       history: state.context.history,
@@ -284,7 +328,7 @@ export async function parseIntent(
         node: "parse_intent",
         started_at: startedAt,
         ended_at: endedAt,
-        notes: `confidence=${intent.confidence.toFixed(2)} client=${intent.client}`,
+        notes: `confidence=${intent.confidence.toFixed(2)} client=${intent.client} contact=${contact?.name ?? "unknown"}`,
       },
     ],
   };

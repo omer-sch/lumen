@@ -68,10 +68,13 @@ type AssembleArgs = {
   bullets: Bullet[];
   runId: string;
   ownerUserId: string;
+  /** Recognised contact (workstream B chunk B4). When set, Atelier
+   *  stamps Report.preparedFor for the cover byline. */
+  contactName?: string | null;
 };
 
 export function assembleHermesReport(args: AssembleArgs): Report {
-  const { intent, snapshot, bullets, runId, ownerUserId } = args;
+  const { intent, snapshot, bullets, runId, ownerUserId, contactName } = args;
   const grouped = groupBulletsBySlide(bullets);
   const client = findClient(intent.client);
 
@@ -135,6 +138,7 @@ export function assembleHermesReport(args: AssembleArgs): Report {
     authoredBy: "hermes",
     source: "hermes",
     agentRunId: runId,
+    preparedFor: contactName ?? null,
     sections,
   };
 

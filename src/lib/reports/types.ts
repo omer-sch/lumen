@@ -241,6 +241,10 @@ export type Report = {
   /** Set on Hermes-drafted reports; links back to agent_runs for trace
    *  view and per-section regenerate. */
   agentRunId?: string | null;
+  /** Display name of the recognised contact ("Emily Foster"), shown
+   *  as "Prepared for ..." on the cover when set. Populated by Atelier
+   *  from state.contact (see chunk B4). */
+  preparedFor?: string | null;
   sections: ReportSection[];
   /** Audit trail. Entries are append-only and shaped per kind:
    *  - {kind:"regenerate_section", slide_target, at, by}

@@ -53,6 +53,7 @@ export async function atelier(
     bullets: state.bullets,
     runId: state.run_id,
     ownerUserId: state.user_id,
+    contactName: state.contact?.name ?? null,
   });
 
   const saved = await upsertReport(report, state.user_id);

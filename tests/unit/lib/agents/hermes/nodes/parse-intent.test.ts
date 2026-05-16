@@ -95,6 +95,7 @@ describe("parseIntent", () => {
       bullets: [],
       user_id: null,
       snapshot: null,
+      contact: null,
       deck: { pptx_path: null, slides: [], report_id: null },
       approval: {
         approved: false,
@@ -125,6 +126,7 @@ describe("parseIntent", () => {
       bullets: [],
       user_id: null,
       snapshot: null,
+      contact: null,
       deck: { pptx_path: null, slides: [], report_id: null },
       approval: {
         approved: false,
@@ -156,6 +158,7 @@ describe("parseIntent", () => {
       bullets: [],
       user_id: null,
       snapshot: null,
+      contact: null,
       deck: { pptx_path: null, slides: [], report_id: null },
       approval: {
         approved: false,
@@ -199,6 +202,7 @@ describe("parseIntent", () => {
       bullets: [],
       user_id: null,
       snapshot: null,
+      contact: null,
       deck: { pptx_path: null, slides: [], report_id: null },
       approval: {
         approved: false,
@@ -239,6 +243,7 @@ describe("parseIntent", () => {
       bullets: [],
       user_id: null,
       snapshot: null,
+      contact: null,
       deck: { pptx_path: null, slides: [], report_id: null },
       approval: {
         approved: false,

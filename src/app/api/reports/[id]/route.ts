@@ -137,6 +137,7 @@ export async function PUT(
     authoredBy: parsed.data.authoredBy,
     source: parsed.data.source,
     agentRunId: parsed.data.agentRunId ?? null,
+    preparedFor: parsed.data.preparedFor ?? null,
     sections: parsed.data.sections as ReportSection[],
     audit: [...(prior?.audit ?? []), ...newEntries],
     createdAt: parsed.data.createdAt ?? Date.now(),

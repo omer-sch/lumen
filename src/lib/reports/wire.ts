@@ -21,6 +21,7 @@ export const ReportPayloadSchema = z.object({
   authoredBy: z.enum(AGENT_IDS).optional(),
   source: z.enum(["manual", "hermes"]).optional(),
   agentRunId: z.string().nullable().optional(),
+  preparedFor: z.string().max(160).nullable().optional(),
   sections: z.array(z.unknown()).max(40),
   // createdAt/updatedAt are accepted from the client but the server
   // ignores them on insert (defaults to now) and the trigger refreshes

@@ -106,6 +106,16 @@ export const BulletsResponseSchema = z.object({
   bullets: z.array(BulletSchema).max(20),
 });
 
+// ---------- Contact (recognised inbound email sender) ----------
+
+export type HermesContact = {
+  id: string;
+  name: string;
+  email: string;
+  role: string | null;
+  clientId: string;
+};
+
 // ---------- Snapshot (structural data tables sourced by Analyze) ----------
 
 // The structured tables Atelier needs to assemble a Report whose
@@ -199,6 +209,14 @@ export const HermesStateAnnotation = Annotation.Root({
       comms: b.comms ?? a.comms,
     }),
     default: () => ({ knowledge: [], history: [], comms: [] }),
+  }),
+  // Recognised sender of the inbound email. Set by parse_intent when
+  // the body carries an email address that maps to a client_contacts
+  // row. Atelier reads it for the "Prepared for ..." byline; the
+  // future review_gate Gmail reply prefill uses it for the salutation.
+  contact: Annotation<HermesContact | null>({
+    reducer: (_a, b) => b,
+    default: () => null,
   }),
   snapshot: Annotation<HermesSnapshot | null>({
     reducer: (_a, b) => b,

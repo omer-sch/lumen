@@ -181,6 +181,16 @@ export function ReportCoverHeader({
             Filter: {report.filterRange}
           </p>
         )}
+        {report.preparedFor && (
+          <p
+            className={cn(
+              "font-body",
+              isCarousel ? "text-xs text-white/55" : "text-[11px] text-[color:var(--text-light-muted)]",
+            )}
+          >
+            Prepared for {report.preparedFor}
+          </p>
+        )}
       </div>
 
       {/* 5. Author byline */}

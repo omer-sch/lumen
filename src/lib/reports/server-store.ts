@@ -53,6 +53,11 @@ function rowToReport(row: ReportRow): Report {
     authoredBy: (row.authored_by as AgentId) ?? undefined,
     source: row.source === "hermes" ? "hermes" : "manual",
     agentRunId: row.agent_run_id ?? null,
+    preparedFor:
+      ((row.cover as Record<string, unknown> | null) ?? {})["prepared_for"] as
+        | string
+        | null
+        | undefined ?? null,
     // sections is jsonb. The renderer guards on section.id, so a row
     // with a bad shape falls into ReportDocument's legacy fallback
     // rather than throwing here.
@@ -78,6 +83,7 @@ function reportToInsert(
     filter_range: report.filterRange ?? null,
     sections: report.sections as unknown as Json,
     audit: (report.audit ?? []) as unknown as Json,
+    cover: { prepared_for: report.preparedFor ?? null } as unknown as Json,
     authored_by: report.authoredBy ?? "nova",
     source: report.source ?? "manual",
     agent_run_id: report.agentRunId ?? null,
