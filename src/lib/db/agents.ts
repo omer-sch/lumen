@@ -12,7 +12,7 @@ import {
 } from "@/lib/mock/agents";
 
 const HISTORY_PER_AGENT = 3;
-const KNOWN_AGENT_IDS: readonly AgentId[] = ["aria", "max", "nova"];
+const KNOWN_AGENT_IDS: readonly AgentId[] = ["aria", "max", "nova", "hermes"];
 
 // Local PostgrestError-ish shape — narrow enough that we never have to
 // import @supabase/supabase-js types just to log a failure.
