@@ -3,10 +3,12 @@ import { cn } from "@/lib/utils";
 import type {
   HistoricalWeekRow,
   MetricValue,
+  ProseBlock,
   WeeklyBullet,
   WeeklySummaryRow,
   WeeklySummaryTable,
 } from "@/lib/reports/types";
+import { ProseBlockView } from "./ProseBlock";
 
 type WeeklyBreakdownProps = {
   /** Used by both the platform-overall (multi-row summary table) and the
@@ -16,6 +18,9 @@ type WeeklyBreakdownProps = {
   /** Optional last 3-4 weeks of context, only on channel-weekly. */
   history?: HistoricalWeekRow[];
   bullets: WeeklyBullet[];
+  /** Smart Reports prose (Phase 1). When populated, the renderer
+   *  shows prose blocks; bullets fall back to a secondary list below. */
+  prose?: ProseBlock[];
   /** Slide-fit variant: tighter padding + smaller fonts so the table +
    *  bullets pack into a 16:9 frame. */
   compact?: boolean;
@@ -48,6 +53,7 @@ export function WeeklyBreakdown({
   currentWeek,
   history,
   bullets,
+  prose,
   compact = false,
 }: WeeklyBreakdownProps) {
   // The platform-overall variant: one row per channel + totals.
@@ -198,6 +204,14 @@ export function WeeklyBreakdown({
 
       {history && history.length > 0 && (
         <HistoryTable rows={history} compact={compact} />
+      )}
+
+      {prose && prose.length > 0 && (
+        <div className={cn("flex flex-col", compact ? "gap-2" : "gap-3", "pt-1")}>
+          {prose.map((block, i) => (
+            <ProseBlockView key={i} block={block} compact={compact} />
+          ))}
+        </div>
       )}
 
       {bullets.length > 0 && (

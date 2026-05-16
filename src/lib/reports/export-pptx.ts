@@ -22,6 +22,7 @@ import type {
   CampaignRow,
   HistoricalWeekRow,
   MetricValue,
+  ProseBlock,
   Report,
   WeeklyBullet,
   WeeklySummaryRow,
@@ -322,7 +323,9 @@ function buildPlatformOverallSlide(
     cursor.advance(SUMMARY_HEADER_H + rows.length * SUMMARY_ROW_H + GAP_AFTER_TABLE);
   }
 
-  if (slide.bullets.length > 0) {
+  if (slide.prose && slide.prose.length > 0) {
+    paintProseBlocks(pptSlide, slide.prose, cursor);
+  } else if (slide.bullets.length > 0) {
     paintBullets(pptSlide, slide.bullets, cursor);
   }
 
@@ -422,7 +425,9 @@ function buildChannelWeeklySlide(
     );
   }
 
-  if (slide.bullets.length > 0) {
+  if (slide.prose && slide.prose.length > 0) {
+    paintProseBlocks(pptSlide, slide.prose, cursor);
+  } else if (slide.bullets.length > 0) {
     paintBullets(pptSlide, slide.bullets, cursor);
   }
 
@@ -517,7 +522,12 @@ function buildChannelCampaignSlide(
     );
   }
 
-  if (slide.commentary.length > 0) {
+  // Prose blocks (Phase 1 Smart Reports output) take precedence over
+  // the legacy per-campaign commentary list. The renderer falls back
+  // to commentary when no prose is populated.
+  if (slide.prose && slide.prose.length > 0) {
+    paintProseBlocks(pptSlide, slide.prose, cursor);
+  } else if (slide.commentary.length > 0) {
     for (const c of slide.commentary) {
       if (cursor.y + COMMENTARY_BLOCK_H > CONTENT_BOTTOM) {
         if (process.env.NODE_ENV !== "production") {
@@ -1032,6 +1042,99 @@ function paintFooter(
     color: TEXT_MUTED_HEX,
     align: "right",
   });
+}
+
+// Render Smart Reports prose blocks on the pptx slide. Each block's
+// `text` carries `[[highlight:N]]` placeholders that resolve to entries
+// in `highlights` (kind: "good" | "bad", colored fill in the deck).
+// pptxgenjs accepts a text-runs array where each run has its own
+// options, including `highlight` and `bold` — perfect for emitting a
+// styled phrase mid-paragraph without splitting the visual baseline.
+function paintProseBlocks(
+  slide: Slide,
+  blocks: ProseBlock[],
+  cursor: Cursor,
+) {
+  const PROSE_BLOCK_H = 0.6;
+  const HEADING_H = 0.22;
+  const PROSE_FONT_SIZE = 11;
+  for (const block of blocks) {
+    if (block.heading) {
+      slide.addText(block.heading, {
+        x: PAGE_LEFT,
+        y: cursor.y,
+        w: PAGE_W,
+        h: HEADING_H,
+        fontFace: REPORT_BRAND.fontBody,
+        fontSize: 9,
+        bold: true,
+        color: hex(REPORT_BRAND.textMuted),
+        valign: "top",
+      });
+      cursor.advance(HEADING_H + 0.04);
+    }
+
+    // Split `text` on `[[highlight:N]]` placeholders into a flat list of
+    // pptxgenjs text-runs. Each run renders inline; pptx auto-wraps.
+    const runs = splitProseIntoRuns(block);
+    slide.addText(runs, {
+      x: PAGE_LEFT,
+      y: cursor.y,
+      w: PAGE_W,
+      h: PROSE_BLOCK_H,
+      fontFace: REPORT_BRAND.fontBody,
+      fontSize: PROSE_FONT_SIZE,
+      color: hex(REPORT_BRAND.textPrimary),
+      valign: "top",
+    });
+    cursor.advance(PROSE_BLOCK_H + 0.08);
+  }
+}
+
+const PROSE_PLACEHOLDER_RE = /\[\[highlight:(\d+)\]\]/g;
+
+function splitProseIntoRuns(
+  block: ProseBlock,
+): { text: string; options?: Record<string, unknown> }[] {
+  const out: { text: string; options?: Record<string, unknown> }[] = [];
+  if (block.highlights.length === 0) {
+    return [{ text: block.text }];
+  }
+  let cursor = 0;
+  PROSE_PLACEHOLDER_RE.lastIndex = 0;
+  for (
+    let m = PROSE_PLACEHOLDER_RE.exec(block.text);
+    m != null;
+    m = PROSE_PLACEHOLDER_RE.exec(block.text)
+  ) {
+    const idx = Number(m[1]);
+    const token = block.highlights[idx];
+    if (m.index > cursor) {
+      out.push({ text: block.text.slice(cursor, m.index) });
+    }
+    if (token) {
+      // pptxgenjs supports `highlight` (cell background) on text runs;
+      // we approximate the DOM rendering by setting a per-run color +
+      // bold. The deck uses brand yellow for "good" and creative coral
+      // for "bad" to match the on-screen highlight pills.
+      const highlightColor =
+        token.kind === "good"
+          ? hex(REPORT_BRAND.yellow)
+          : hex(REPORT_BRAND.creative);
+      out.push({
+        text: token.text,
+        options: {
+          bold: true,
+          highlight: highlightColor,
+        },
+      });
+    }
+    cursor = m.index + m[0].length;
+  }
+  if (cursor < block.text.length) {
+    out.push({ text: block.text.slice(cursor) });
+  }
+  return out;
 }
 
 function paintBullets(

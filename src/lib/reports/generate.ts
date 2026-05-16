@@ -3,6 +3,8 @@ import "server-only";
 import { getReadyData } from "@/lib/analyst";
 import type { Intent } from "@/lib/analyst/types";
 import { buildHermesSnapshot } from "@/lib/agents/hermes/snapshot";
+import { composeReport } from "@/lib/smart-reports";
+import { serverEnv } from "@/lib/env.server";
 import { clientHasReportData, findClient } from "@/lib/mock/clients";
 
 import { isoWeek } from "./week";
@@ -158,6 +160,35 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
   const intent = defaultIntentFor({ client, period, weekStart, weekEnd });
   const ready = await getReadyData(intent);
   const { networks, campaigns, trend, history } = ready;
+
+  // Smart Reports cutover (Phase 1, gated). When USE_SMART_REPORTS=live,
+  // delegate the entire prose + assembly path to composeReport. The
+  // result is byte-identical to the snapshot-based assembly below for
+  // sections that don't have prose, plus a `prose` field on the channel
+  // sections. Off / shadow keep the legacy snapshot-only assembly.
+  if (serverEnv.USE_SMART_REPORTS === "live") {
+    const c = findClient(client);
+    const composed = await composeReport({
+      readyData: ready,
+      intent,
+      ownerUserId: "mock-user-1",
+      options: { template: "single-channel-weekly" },
+    });
+    const titleSeed = deriveTitleSeed(prompt);
+    const week = isoWeek(to);
+    const title =
+      titleSeed.length > 6
+        ? titleSeed
+        : `${c.name} · Week ${week} Review`;
+    return {
+      ...composed.report,
+      prompt,
+      title,
+      period,
+      filterRange,
+      suppressPlatformChannelPills: true,
+    };
+  }
 
   const snapshot = buildHermesSnapshot({
     intent,

@@ -1,6 +1,9 @@
 import "server-only";
 
+import { getReadyData } from "@/lib/analyst";
+import { serverEnv } from "@/lib/env.server";
 import { upsertReport } from "@/lib/reports/server-store";
+import { composeReport } from "@/lib/smart-reports";
 
 import { assembleHermesReport } from "../assemble";
 import type {
@@ -47,14 +50,41 @@ export async function atelier(
   if (!state.run_id) return skip("skipped: missing run_id");
   if (!state.user_id) return skip("skipped: missing user_id");
 
-  const report = assembleHermesReport({
-    intent: state.intent,
-    snapshot: state.snapshot,
-    bullets: state.bullets,
-    runId: state.run_id,
-    ownerUserId: state.user_id,
-    contactName: state.contact?.name ?? null,
-  });
+  // Smart Reports cutover (Phase 1, gated). When USE_SMART_REPORTS=live,
+  // atelier delegates to composeReport: the prose-writer reads
+  // ReadyData directly and emits a Report with prose blocks; quill's
+  // bullet output is ignored. Off / shadow keep the legacy
+  // bullets + assembleHermesReport path.
+  let report;
+  let assembleMode: "legacy" | "smart-reports";
+  if (serverEnv.USE_SMART_REPORTS === "live") {
+    // Re-fetch ReadyData. In USE_SHARED_ANALYST=live mode this is a
+    // cache hit (analyze.ts already called getReadyData in the same
+    // run and the analyst-layer cache holds the result for 5 minutes).
+    // In shadow / off mode we pay one extra getReadyData but it's
+    // still a cache hit at the per-query BQ layer.
+    const ready = await getReadyData(state.intent);
+    const composed = await composeReport({
+      readyData: ready,
+      intent: state.intent,
+      ownerUserId: state.user_id,
+      options: { template: "single-channel-weekly" },
+      runId: state.run_id,
+      contactName: state.contact?.name ?? null,
+    });
+    report = composed.report;
+    assembleMode = "smart-reports";
+  } else {
+    report = assembleHermesReport({
+      intent: state.intent,
+      snapshot: state.snapshot,
+      bullets: state.bullets,
+      runId: state.run_id,
+      ownerUserId: state.user_id,
+      contactName: state.contact?.name ?? null,
+    });
+    assembleMode = "legacy";
+  }
 
   const saved = await upsertReport(report, state.user_id);
 
@@ -75,7 +105,7 @@ export async function atelier(
         node: "atelier",
         started_at: startedAt,
         ended_at: new Date().toISOString(),
-        notes: `wrote report ${saved.id} (${report.sections.length} sections, ${state.bullets.length} bullets)`,
+        notes: `wrote report ${saved.id} via ${assembleMode} (${report.sections.length} sections, ${state.bullets.length} bullets)`,
       },
     ],
   };

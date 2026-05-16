@@ -8,11 +8,16 @@ import type {
   CalloutColor,
   CampaignCommentary,
   CampaignRow,
+  ProseBlock,
 } from "@/lib/reports/types";
+import { ProseBlockView } from "./ProseBlock";
 
 type CampaignBreakdownProps = {
   rows: CampaignRow[];
   commentary: CampaignCommentary[];
+  /** Smart Reports prose (Phase 1). When populated, replaces the
+   *  per-campaign commentary list with one prose block per family. */
+  prose?: ProseBlock[];
   /** Editable in the document view, read-only in share / print. */
   readOnly?: boolean;
   onCommentaryChange?: (next: CampaignCommentary[]) => void;
@@ -32,6 +37,7 @@ type CampaignBreakdownProps = {
 export function CampaignBreakdown({
   rows,
   commentary,
+  prose,
   readOnly,
   onCommentaryChange,
   compact = false,
@@ -66,8 +72,14 @@ export function CampaignBreakdown({
   // Continuation slides can carry just rows or just commentary; the layout
   // step decides what fits. Both halves render independently so a missing
   // half doesn't leave a header band hanging.
+  //
+  // Phase 1 cutover: when Smart Reports populates the `prose` field,
+  // we render those blocks (one per campaign family) and skip the
+  // legacy per-campaign commentary list. Legacy reports still render
+  // commentary as before.
   const hasRows = rows.length > 0;
-  const hasCommentary = commentary.length > 0;
+  const hasProse = (prose?.length ?? 0) > 0;
+  const hasCommentary = commentary.length > 0 && !hasProse;
 
   const cellPad = compact ? "px-1.5 py-1" : "px-2 py-2.5";
   const headerPad = compact ? "px-1.5 py-1" : "px-2 py-2";
@@ -139,6 +151,23 @@ export function CampaignBreakdown({
           </tbody>
         </table>
       </div>
+      )}
+
+      {hasProse && prose && (
+        <div className="flex flex-col gap-3">
+          {prose.map((block, i) => (
+            <div
+              key={i}
+              className={cn(
+                "flex flex-col border-t first:border-t-0 first:pt-1",
+                compact ? "gap-1 py-2" : "gap-2 py-4",
+              )}
+              style={{ borderColor: "var(--surface-light-line)" }}
+            >
+              <ProseBlockView block={block} compact={compact} />
+            </div>
+          ))}
+        </div>
       )}
 
       {hasCommentary && (

@@ -178,7 +178,11 @@ function SectionRenderer({
           />
           {regenerateButton}
         </div>
-        <WeeklyBreakdown summary={section.summary} bullets={section.bullets} />
+        <WeeklyBreakdown
+          summary={section.summary}
+          bullets={section.bullets}
+          prose={section.prose}
+        />
       </div>
     );
   }
@@ -200,6 +204,7 @@ function SectionRenderer({
           currentWeek={section.currentWeek}
           history={section.history}
           bullets={section.bullets}
+          prose={section.prose}
         />
       </div>
     );
@@ -221,6 +226,7 @@ function SectionRenderer({
         <CampaignBreakdown
           rows={section.rows}
           commentary={section.commentary}
+          prose={section.prose}
           readOnly={readOnly}
           onCommentaryChange={(next) =>
             updateSection("channel_campaign", { commentary: next })

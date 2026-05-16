@@ -187,6 +187,33 @@ export const serverEnv = {
   get USE_ANALYST_KNOWLEDGE() {
     return read("USE_ANALYST_KNOWLEDGE", { optional: true }) || "off";
   },
+  /**
+   * Rollout knob for the Smart Reports prose-writer module
+   * (src/lib/smart-reports/composeReport). Three states:
+   *   - "off":    Legacy path only. Hermes uses quill + atelier;
+   *               the manual builder calls buildHermesSnapshot and
+   *               emits a Report with no prose blocks. Default.
+   *   - "shadow": Legacy path is the source of truth. Smart Reports
+   *               also runs (when ANTHROPIC_API_KEY is set) and the
+   *               diagnostics are logged under [smart-reports:shadow]
+   *               for offline comparison. No behavior change.
+   *   - "live":   Smart Reports is the source of truth. Hermes
+   *               atelier and the manual builder both delegate to
+   *               composeReport; the resulting Report carries prose
+   *               blocks instead of bullets.
+   * Default: "off". Flip to "shadow" once Phase 0 lands and is live,
+   * then to "live" after the shadow comparison holds.
+   */
+  get USE_SMART_REPORTS() {
+    const raw =
+      read("USE_SMART_REPORTS", { optional: true }) || "off";
+    if (raw !== "off" && raw !== "shadow" && raw !== "live") {
+      throw new Error(
+        `USE_SMART_REPORTS must be "off" | "shadow" | "live", got ${raw}`,
+      );
+    }
+    return raw;
+  },
 } as const;
 
 // True when LangSmith tracing is opt-in and credentials are present.

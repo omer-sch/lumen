@@ -162,6 +162,30 @@ export type CampaignCommentary = {
   highlights?: { color: CalloutColor; phrase: string }[];
 };
 
+/**
+ * One paragraph of LLM-emitted prose. Phase 1 of the Lumen Reports
+ * lifecycle introduces this as an additive field on the section
+ * union; sections produced by the legacy bullet pipeline (today's
+ * Hermes quill + atelier flow, the bare manual builder) leave it
+ * undefined and the renderer falls back to bullet rendering. Sections
+ * produced by Smart Reports (src/lib/smart-reports/composeReport)
+ * populate it; the renderer prefers prose when present.
+ *
+ * `highlights` carries the structured highlight markup tokens parsed
+ * out of the prose text. Each token resolves a `[[highlight:N]]`
+ * placeholder in `text` to a colored span in the deck (yellow for
+ * "good", pink for "bad").
+ */
+export type ProseBlock = {
+  /** Optional sub-heading (used in campaign-breakdown for family
+   *  grouping). Empty / undefined for a single flowing paragraph. */
+  heading?: string;
+  /** Prose with `[[highlight:N]]` placeholders. */
+  text: string;
+  /** Resolved highlight tokens in placeholder order. */
+  highlights: { kind: "good" | "bad"; text: string }[];
+};
+
 export type PlatformOverallSection = {
   id: "platform_overall";
   platform: Platform;
@@ -169,6 +193,9 @@ export type PlatformOverallSection = {
   title: string;
   summary: WeeklySummaryTable;
   bullets: WeeklyBullet[];
+  /** Smart Reports prose. Optional / additive; legacy renderers
+   *  ignore. */
+  prose?: ProseBlock[];
 };
 
 export type ChannelWeeklySection = {
@@ -181,6 +208,9 @@ export type ChannelWeeklySection = {
   /** Last 3 to 4 weeks for context. */
   history: HistoricalWeekRow[];
   bullets: WeeklyBullet[];
+  /** Smart Reports prose. Optional / additive; the renderer falls
+   *  back to `bullets` when absent. */
+  prose?: ProseBlock[];
 };
 
 export type ChannelCampaignSection = {
@@ -192,6 +222,9 @@ export type ChannelCampaignSection = {
   rows: CampaignRow[];
   /** One paragraph per campaign group. */
   commentary: CampaignCommentary[];
+  /** Smart Reports prose, one block per family. The renderer prefers
+   *  prose blocks over commentary when both are populated. */
+  prose?: ProseBlock[];
 };
 
 export type ReportSection =

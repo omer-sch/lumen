@@ -7,6 +7,7 @@ import type {
   HistoricalWeekRow,
   Platform,
   PlatformOverallSection,
+  ProseBlock,
   Report,
   ReportSection,
   WeeklyBullet,
@@ -38,6 +39,10 @@ export type PlatformOverallSlide = {
    *  so the renderer knows to skip the data area entirely. */
   summary: WeeklySummaryTable | null;
   bullets: WeeklyBullet[];
+  /** Smart Reports prose (Phase 1). Optional; renderer falls back to
+   *  bullets when absent. Lives on partIndex === 0 only; continuation
+   *  slides leave it undefined. */
+  prose?: ProseBlock[];
   platform: Platform;
 };
 
@@ -49,6 +54,7 @@ export type ChannelWeeklySlide = {
   currentWeek: WeeklySummaryRow | null;
   history: HistoricalWeekRow[];
   bullets: WeeklyBullet[];
+  prose?: ProseBlock[];
   platform: Platform;
   channel: Channel;
 };
@@ -59,6 +65,7 @@ export type ChannelCampaignSlide = {
   continuation: ContinuationInfo;
   rows: CampaignRow[];
   commentary: CampaignCommentary[];
+  prose?: ProseBlock[];
   platform: Platform;
   channel: Channel;
 };
@@ -181,6 +188,7 @@ function layoutPlatformOverall(
     continuation: { partIndex: 0, partTotal: 0 },
     summary: section.summary,
     bullets: bullets.slice(0, firstCap),
+    prose: section.prose,
     platform: section.platform,
   });
   cursor += firstCap;
@@ -225,6 +233,7 @@ function layoutChannelWeekly(section: ChannelWeeklySection): LaidOutSlide[] {
     currentWeek: section.currentWeek ?? null,
     history: history.slice(0, FIRST_HISTORY_WEEKLY),
     bullets: bullets.slice(0, firstBulletsCap),
+    prose: section.prose,
     platform: section.platform,
     channel: section.channel,
   });
@@ -293,6 +302,7 @@ function layoutChannelCampaign(
     continuation: { partIndex: 0, partTotal: 0 },
     rows: rows.slice(0, FIRST_ROWS_CAMPAIGN),
     commentary: commentary.slice(0, firstCommentaryCap),
+    prose: section.prose,
     platform: section.platform,
     channel: section.channel,
   });

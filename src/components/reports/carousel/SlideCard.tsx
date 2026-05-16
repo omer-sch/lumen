@@ -140,6 +140,7 @@ function PlatformOverallCard({
         <WeeklyBreakdown
           summary={slide.summary ?? undefined}
           bullets={slide.bullets}
+          prose={slide.prose}
           compact
         />
       </div>
@@ -169,6 +170,7 @@ function ChannelWeeklyCard({
           currentWeek={slide.currentWeek ?? undefined}
           history={slide.history}
           bullets={slide.bullets}
+          prose={slide.prose}
           compact
         />
       </div>
@@ -223,6 +225,7 @@ function ChannelCampaignCard({
         <CampaignBreakdown
           rows={slide.rows}
           commentary={slide.commentary}
+          prose={slide.prose}
           readOnly={readOnly}
           onCommentaryChange={onCommentaryChange}
           compact
