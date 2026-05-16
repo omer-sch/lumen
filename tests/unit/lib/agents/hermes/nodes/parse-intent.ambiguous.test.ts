@@ -200,8 +200,12 @@ describe("parseIntent — ambiguous-input behavior", () => {
     expect(scope).toBe("parse_intent");
     expect(slice).toBe("globalcomix");
     expect(payload).toMatchObject({ intent: { client: "globalcomix" } });
-    expect((payload as { sample_email_excerpt: string }).sample_email_excerpt)
-      .toContain("Weekly review");
+    // v0.5-C security fix: agent_memory_kv has no user_id column and
+    // Gmail widens the input source, so we no longer persist an
+    // excerpt of the (now third-party) email body.
+    expect(
+      (payload as Record<string, unknown>).sample_email_excerpt,
+    ).toBeUndefined();
   });
 
   it("client allowlist: unknown slug forces confidence under 0.5 + prepends a doubt", async () => {

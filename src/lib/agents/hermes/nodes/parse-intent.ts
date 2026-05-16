@@ -262,18 +262,19 @@ export async function parseIntent(
 
   // Cross-run memory: remember the parsed intent per client so future
   // runs can be informed by phrasing patterns Hermes has seen before.
-  // TODO(phase-5): persisting the first 280 chars of email_text into
-  // agent_memory_kv is acceptable for v0 because all email_text is
-  // admin-pasted today. Re-evaluate before Gmail OAuth widens the
-  // input source,at that point either redact PII or shorten the
-  // TTL on this slice.
+  //
+  // v0.5-C security fix: agent_memory_kv is keyed (scope, slice) with
+  // no user_id column, so the row is shared across users for a given
+  // client. Workstream C widens the input source from "admin pasted"
+  // to "third-party Gmail body", which means persisting an excerpt
+  // here would leak PII across users on the same client. The intent
+  // object itself is structured / non-PII; we persist that only.
   // Stored separately from RAG's History corpus (which holds bullets
   // and findings, not intent). Failures here MUST NOT break the run;
   // memory is best-effort.
   try {
     await rememberSlice("parse_intent", intent.client, {
       intent,
-      sample_email_excerpt: state.email_text.slice(0, 280),
     });
   } catch (err) {
     // The run's primary contract is the typed intent, not the memory

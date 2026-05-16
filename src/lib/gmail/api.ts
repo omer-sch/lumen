@@ -130,10 +130,13 @@ export function extractMessageBody(message: GmailMessage): string | null {
 
   if (candidates.length === 0) return message.snippet ?? null;
 
-  // Prefer text/plain.
+  // Prefer text/plain, then text/html. Never fall back to a non-text
+  // part (a PDF or image attachment would otherwise feed binary
+  // base64-decoded bytes straight into Hermes).
   const plain = candidates.find((c) => c.mime === "text/plain");
   const html = candidates.find((c) => c.mime === "text/html");
-  const chosen = plain ?? html ?? candidates[0];
+  const chosen = plain ?? html;
+  if (!chosen) return message.snippet ?? null;
   if (!chosen.data) return null;
   const decoded = Buffer.from(chosen.data, "base64url").toString("utf8");
   if (chosen.mime === "text/html") {

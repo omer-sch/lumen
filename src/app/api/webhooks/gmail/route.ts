@@ -74,10 +74,13 @@ function verifyToken(provided: string | undefined): boolean {
 async function lookupUserByEmail(
   emailAddress: string,
 ): Promise<string | null> {
+  // eq() against the lower(email) index from migration 0015 so
+  // `%`/`_` characters in a local-part (legal but rare) cannot expand
+  // into a wildcard match and resolve to the wrong user.
   const { data, error } = await supabaseAdmin()
     .from("gmail_oauth_tokens")
     .select("user_id")
-    .ilike("email", emailAddress)
+    .eq("email", emailAddress.toLowerCase())
     .maybeSingle();
   if (error) {
     console.warn({
@@ -199,15 +202,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "unknown_user" });
   }
 
+  // Defensive coerce: Pub/Sub payload.historyId is typed string | number
+  // in the spec but a malformed envelope could leave it undefined. We
+  // never want to write the literal string "undefined" into the
+  // gmail_watches.history_id column.
+  const payloadHistoryId =
+    typeof payload.historyId === "string" || typeof payload.historyId === "number"
+      ? String(payload.historyId)
+      : null;
+
   const watch = await loadWatch(userId);
-  const startHistoryId =
-    watch?.historyId ?? String(payload.historyId ?? "1");
+  // Fresh users with no watch row + no payload historyId have nowhere
+  // to start; Gmail rejects history.list without a valid id. Skip
+  // cleanly so the next push (which will follow a real watch
+  // registration through /api/auth/gmail/start) has something to work
+  // with.
+  const startHistoryId = watch?.historyId ?? payloadHistoryId;
+  if (!startHistoryId) {
+    return NextResponse.json({ ok: true, skipped: "no_history_anchor" });
+  }
 
   const filters = await listFiltersForUser(userId);
   if (filters.filter((f) => f.active).length === 0) {
     // User has no active filters; bump historyId so we do not re-scan
     // this window the next time and exit clean.
-    await setWatchHistoryId(userId, String(payload.historyId));
+    if (payloadHistoryId) {
+      await setWatchHistoryId(userId, payloadHistoryId).catch(() => {});
+    }
     return NextResponse.json({ ok: true, skipped: "no_active_filters" });
   }
 
@@ -257,8 +278,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Advance the cursor regardless of dispatch outcome so a poison
-  // message doesn't lock the user's pipeline forever.
-  await setWatchHistoryId(userId, String(payload.historyId)).catch(() => {});
+  // message doesn't lock the user's pipeline forever. Use the
+  // canonical historyId from the history.list response when present
+  // (it represents the latest seen state), falling back to the
+  // payload value.
+  const nextHistoryId = history.historyId ?? payloadHistoryId;
+  if (nextHistoryId) {
+    await setWatchHistoryId(userId, nextHistoryId).catch(() => {});
+  }
 
   return NextResponse.json({
     ok: true,
