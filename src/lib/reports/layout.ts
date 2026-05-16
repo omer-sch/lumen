@@ -137,6 +137,22 @@ const FIRST_ROWS_CAMPAIGN = 5;
 const CONT_ROWS_CAMPAIGN = 6;
 const FIRST_COMMENTARY_CAMPAIGN = 1;
 const CONT_COMMENTARY_CAMPAIGN = 2;
+
+// Prose pagination (Phase 1 cutover). When Smart Reports populates
+// `prose`, the carousel slide frame's `overflow:hidden` will clip
+// anything past the 16:9 cut. Cap the first slide at a small number
+// of prose blocks and push the rest to continuation slides. The
+// per-slide budgets below assume a single-row campaign table on
+// slide 1 followed by `FIRST_PROSE_CAMPAIGN` prose blocks; ratchet
+// the rows down accordingly when prose is present so the prose has
+// room to breathe.
+const FIRST_PROSE_CAMPAIGN = 2;
+const CONT_PROSE_CAMPAIGN = 3;
+const FIRST_ROWS_CAMPAIGN_WITH_PROSE = 4;
+// Same idea for the channel-weekly slide: when prose is present we
+// shrink the history table on slide 1 so the prose paragraph fits.
+const FIRST_PROSE_WEEKLY = 1;
+const CONT_PROSE_WEEKLY = 3;
 /** When a channel_campaign section has no rows at all, the first slide
  *  hands the entire data area to commentary. We let it absorb more blocks
  *  in that case so a commentary-only section doesn't unnecessarily spill. */
@@ -289,6 +305,9 @@ function layoutChannelWeekly(section: ChannelWeeklySection): LaidOutSlide[] {
   let histCursor = 0;
   let bulletsCursor = 0;
 
+  const prose = section.prose ?? [];
+  const hasProse = prose.length > 0;
+
   partials.push({
     id: `${idPrefix}-p0`,
     title: section.title,
@@ -296,17 +315,17 @@ function layoutChannelWeekly(section: ChannelWeeklySection): LaidOutSlide[] {
     currentWeek: section.currentWeek ?? null,
     history: history.slice(0, FIRST_HISTORY_WEEKLY),
     bullets: bullets.slice(0, firstBulletsCap),
-    prose: section.prose,
+    prose: hasProse ? prose.slice(0, FIRST_PROSE_WEEKLY) : undefined,
     platform: section.platform,
     channel: section.channel,
   });
   histCursor = Math.min(FIRST_HISTORY_WEEKLY, history.length);
   bulletsCursor = firstBulletsCap;
+  let proseCursor = Math.min(FIRST_PROSE_WEEKLY, prose.length);
 
-  // Continuation rule: history first (up to 6 per slide), then bullets
-  // (up to 9 per slide). A single continuation slide carries one or the
-  // other, never both, so the visual hierarchy stays predictable. Mixing
-  // would also make the height budget harder to defend.
+  // Continuation rule: history first, then prose (when smart-reports is
+  // active), then bullets. Each continuation slide carries ONE kind so
+  // the visual hierarchy stays predictable.
   while (histCursor < history.length) {
     const partIndex = partials.length;
     partials.push({
@@ -320,6 +339,22 @@ function layoutChannelWeekly(section: ChannelWeeklySection): LaidOutSlide[] {
       channel: section.channel,
     });
     histCursor += CONT_HISTORY_WEEKLY;
+  }
+
+  while (proseCursor < prose.length) {
+    const partIndex = partials.length;
+    partials.push({
+      id: `${idPrefix}-p${partIndex}`,
+      title: appendCont(section.title, partIndex),
+      continuation: { partIndex, partTotal: 0 },
+      currentWeek: null,
+      history: [],
+      bullets: [],
+      prose: prose.slice(proseCursor, proseCursor + CONT_PROSE_WEEKLY),
+      platform: section.platform,
+      channel: section.channel,
+    });
+    proseCursor += CONT_PROSE_WEEKLY;
   }
 
   while (bulletsCursor < bullets.length) {
@@ -348,7 +383,17 @@ function layoutChannelCampaign(
 
   const rows = section.rows;
   const commentary = section.commentary;
+  const prose = section.prose ?? [];
   const hasRows = rows.length > 0;
+  const hasProse = prose.length > 0;
+
+  // Slide-1 row budget shrinks when prose is in play so the prose
+  // paragraphs have vertical space. Without this the carousel's
+  // `overflow:hidden` frame clips the prose (and the `<> AI:` action
+  // callouts at the bottom of it).
+  const firstRowsCap = hasProse
+    ? FIRST_ROWS_CAMPAIGN_WITH_PROSE
+    : FIRST_ROWS_CAMPAIGN;
 
   // When there are no rows, slide 1 hands the table area to commentary,
   // so its commentary budget gets the no-rows allowance.
@@ -358,21 +403,25 @@ function layoutChannelCampaign(
 
   let rowsCursor = 0;
   let commCursor = 0;
+  let proseCursor = 0;
 
   partials.push({
     id: `${idPrefix}-p0`,
     title: section.title,
     continuation: { partIndex: 0, partTotal: 0 },
-    rows: rows.slice(0, FIRST_ROWS_CAMPAIGN),
+    rows: rows.slice(0, firstRowsCap),
     commentary: commentary.slice(0, firstCommentaryCap),
-    prose: section.prose,
+    prose: hasProse ? prose.slice(0, FIRST_PROSE_CAMPAIGN) : undefined,
     platform: section.platform,
     channel: section.channel,
   });
-  rowsCursor = Math.min(FIRST_ROWS_CAMPAIGN, rows.length);
+  rowsCursor = Math.min(firstRowsCap, rows.length);
   commCursor = Math.min(firstCommentaryCap, commentary.length);
+  proseCursor = Math.min(FIRST_PROSE_CAMPAIGN, prose.length);
 
-  // Continuations: rows first (8 per slide), then commentary (3 per slide).
+  // Continuations: rows first, then prose (when smart-reports is in
+  // play), then commentary (legacy). Each continuation slide carries
+  // ONE kind so the layout stays visually honest.
   while (rowsCursor < rows.length) {
     const partIndex = partials.length;
     partials.push({
@@ -385,6 +434,21 @@ function layoutChannelCampaign(
       channel: section.channel,
     });
     rowsCursor += CONT_ROWS_CAMPAIGN;
+  }
+
+  while (proseCursor < prose.length) {
+    const partIndex = partials.length;
+    partials.push({
+      id: `${idPrefix}-p${partIndex}`,
+      title: appendCont(section.title, partIndex),
+      continuation: { partIndex, partTotal: 0 },
+      rows: [],
+      commentary: [],
+      prose: prose.slice(proseCursor, proseCursor + CONT_PROSE_CAMPAIGN),
+      platform: section.platform,
+      channel: section.channel,
+    });
+    proseCursor += CONT_PROSE_CAMPAIGN;
   }
 
   while (commCursor < commentary.length) {
