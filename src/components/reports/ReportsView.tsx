@@ -46,21 +46,28 @@ const PROMPT_PRESETS = [
 type ViewMode = "carousel" | "document";
 const VIEW_STORAGE_KEY = "lumen.reports.viewMode";
 
-export function ReportsView() {
+type ReportsViewProps = {
+  /** Server-loaded report passed from /reports/[id] so the page paints
+   *  immediately with the right content even before useReports() hydrates
+   *  from /api/reports. */
+  preloadedReport?: Report;
+};
+
+export function ReportsView({ preloadedReport }: ReportsViewProps = {}) {
   return (
     <Suspense fallback={null}>
-      <ReportsInner />
+      <ReportsInner preloadedReport={preloadedReport} />
     </Suspense>
   );
 }
 
-function ReportsInner() {
+function ReportsInner({ preloadedReport }: ReportsViewProps) {
   const { from, to, client } = useGlobalFilters();
   const { items, save, remove, get, hydrated } = useReports();
   const searchParams = useSearchParams();
   const sharedId = searchParams.get("id");
 
-  const [draft, setDraft] = useState<Report | null>(null);
+  const [draft, setDraft] = useState<Report | null>(preloadedReport ?? null);
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -127,7 +134,9 @@ function ReportsInner() {
 
   const handleCopyShare = async () => {
     if (!activeReport) return;
-    const url = `${window.location.origin}/reports?id=${activeReport.id}`;
+    // Canonical URL is /reports/<id>. The /reports?id=<id> form still
+    // works as a soft-redirect for links shared before v0.5-A.
+    const url = `${window.location.origin}/reports/${activeReport.id}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
