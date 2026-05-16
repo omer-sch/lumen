@@ -55,6 +55,12 @@ export async function atelier(
   // ReadyData directly and emits a Report with prose blocks; quill's
   // bullet output is ignored. Off / shadow keep the legacy
   // bullets + assembleHermesReport path.
+  console.info({
+    event: "hermes.atelier.path",
+    use_smart_reports: serverEnv.USE_SMART_REPORTS,
+    has_anthropic_key: Boolean(process.env.ANTHROPIC_API_KEY),
+    run_id: state.run_id,
+  });
   let report;
   let assembleMode: "legacy" | "smart-reports";
   if (serverEnv.USE_SMART_REPORTS === "live") {
@@ -74,6 +80,19 @@ export async function atelier(
     });
     report = composed.report;
     assembleMode = "smart-reports";
+    const proseCounts = report.sections
+      .map((s) => {
+        const pose = (s as { prose?: unknown[] }).prose;
+        return Array.isArray(pose) ? pose.length : 0;
+      })
+      .reduce((a, b) => a + b, 0);
+    console.info({
+      event: "hermes.atelier.smart_reports_done",
+      run_id: state.run_id,
+      sections: report.sections.length,
+      prose_blocks_total: proseCounts,
+      diagnostics: composed.diagnostics,
+    });
   } else {
     report = assembleHermesReport({
       intent: state.intent,

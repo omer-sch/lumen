@@ -171,6 +171,12 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
   // result is byte-identical to the snapshot-based assembly below for
   // sections that don't have prose, plus a `prose` field on the channel
   // sections. Off / shadow keep the legacy snapshot-only assembly.
+  console.info({
+    event: "reports.generate.path",
+    use_smart_reports: serverEnv.USE_SMART_REPORTS,
+    has_anthropic_key: Boolean(process.env.ANTHROPIC_API_KEY),
+    has_action_notes: Boolean(actionNotes && actionNotes.length > 0),
+  });
   if (serverEnv.USE_SMART_REPORTS === "live") {
     const c = findClient(client);
     const composed = await composeReport({
@@ -188,6 +194,21 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
       titleSeed.length > 6
         ? titleSeed
         : `${c.name} · Week ${week} Review`;
+    // Surface the prose-block counts so we can confirm Smart Reports
+    // actually emitted prose for the sections (and didn't silently
+    // fall back to empty arrays after an LLM error).
+    const proseCounts = composed.report.sections
+      .map((s) => {
+        const pose = (s as { prose?: unknown[] }).prose;
+        return Array.isArray(pose) ? pose.length : 0;
+      })
+      .reduce((a, b) => a + b, 0);
+    console.info({
+      event: "reports.generate.smart_reports_done",
+      sections: composed.report.sections.length,
+      prose_blocks_total: proseCounts,
+      diagnostics: composed.diagnostics,
+    });
     return {
       ...composed.report,
       prompt,
@@ -197,6 +218,7 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
       suppressPlatformChannelPills: true,
     };
   }
+  console.info({ event: "reports.generate.legacy_path" });
 
   const snapshot = buildHermesSnapshot({
     intent,
