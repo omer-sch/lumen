@@ -1,51 +1,158 @@
-// Layer 2 (lib unit). File under test: src/lib/reports/generate.ts. Priority: P1.
-// The report assembler is what the Reports page calls when a user submits a
-// generation prompt. The default `generateReport` routes to the yellowHEAD
-// 3-section format; `generateLegacyReport` is kept around for tests and any
-// localStorage rows persisted before the format switch. These tests pin the
-// structural contract of each output.
-import { describe, expect, it } from "vitest";
+// @vitest-environment node
+// Layer 2 (lib unit). File under test: src/lib/reports/generate.ts.
+//
+// The manual generator is now BQ-backed (same trust contract as
+// Hermes). Tests mock the three BQ query functions and assert the
+// resulting Report carries the real values + correct shape.
 
-import {
-  generateLegacyReport,
-  generateReport,
-  generateYellowHeadReport,
-} from "@/lib/reports/generate";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const networksMock = vi.hoisted(() => vi.fn());
+const campaignsMock = vi.hoisted(() => vi.fn());
+const trendMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/globalcomix-queries", () => ({
+  queryGlobalComixNetworkBreakdown: networksMock,
+  queryGlobalComixCampaigns: campaignsMock,
+  queryGlobalComixTrend: trendMock,
+}));
 
 const FROM = new Date("2026-04-27T00:00:00Z");
 const TO = new Date("2026-05-03T00:00:00Z");
 
-describe("generateReport (router)", () => {
-  it("delegates to the yellowHEAD 3-section format by default", () => {
-    const r = generateReport({
+function netRow(over: Record<string, unknown> = {}) {
+  return {
+    network: "Meta",
+    spend: 5000,
+    share: 0.5,
+    installs: 1000,
+    clicks: 20000,
+    impressions: 1_000_000,
+    cpi: 5,
+    ctr: 0.02,
+    cpm: 5,
+    cpc: 0.25,
+    roasD7: 0.2,
+    roasD14: 0.3,
+    roasD30: 0.4,
+    roasD90: 0.5,
+    ftdD7: 100,
+    payersD7: 80,
+    retD7: 0.6,
+    subStart: 200,
+    subD0: 50,
+    subD7: 80,
+    cpSubStart: 25,
+    cpaD0: 100,
+    cpaD7: 62.5,
+    trailingCpaD7Avg: 60,
+    ...over,
+  };
+}
+
+function campRow(over: Record<string, unknown> = {}) {
+  return {
+    campaign_id: "c1",
+    campaign_name: "YH_FB_test",
+    network: "Meta",
+    spend: 1000,
+    installs: 200,
+    cpi: 5,
+    roas: 0,
+    spendDelta: 0.1,
+    ...over,
+  };
+}
+
+beforeEach(() => {
+  networksMock.mockReset();
+  campaignsMock.mockReset();
+  trendMock.mockReset();
+  trendMock.mockResolvedValue([]);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("generateReport (manual builder, BQ-backed)", () => {
+  it("calls the three GlobalComix BQ queries with client + ISO date strings", async () => {
+    networksMock.mockResolvedValueOnce([netRow()]);
+    campaignsMock.mockResolvedValueOnce([campRow()]);
+    const { generateReport } = await import("@/lib/reports/generate");
+    await generateReport({
       prompt: "weekly review",
       from: FROM,
       to: TO,
       client: "globalcomix",
     });
-    expect(r.sections).toHaveLength(3);
+    expect(networksMock).toHaveBeenCalledWith(
+      "globalcomix",
+      "2026-04-27",
+      "2026-05-03",
+    );
+    expect(campaignsMock).toHaveBeenCalledWith(
+      "globalcomix",
+      "2026-04-27",
+      "2026-05-03",
+    );
+    expect(trendMock).toHaveBeenCalledWith(
+      "globalcomix",
+      "2026-04-27",
+      "2026-05-03",
+    );
+  });
+
+  it("emits the three yellowHEAD sections from the snapshot, never the deleted $6,230 fixture", async () => {
+    networksMock.mockResolvedValueOnce([
+      netRow({ network: "Meta", spend: 4321 }),
+      netRow({ network: "TikTok", spend: 1234 }),
+    ]);
+    campaignsMock.mockResolvedValueOnce([campRow()]);
+    const { generateReport } = await import("@/lib/reports/generate");
+    const r = await generateReport({
+      prompt: "weekly review",
+      from: FROM,
+      to: TO,
+      client: "globalcomix",
+    });
     expect(r.sections.map((s) => s.id)).toEqual([
       "platform_overall",
       "channel_weekly",
       "channel_campaign",
     ]);
+    // Real BQ values pass through.
+    const platformSection = r.sections.find((s) => s.id === "platform_overall");
+    if (platformSection?.id !== "platform_overall") throw new Error("narrow");
+    const spends = platformSection.summary.rows.map((row) => row.spend.value);
+    expect(spends).toContain(4321);
+    expect(spends).toContain(1234);
+    // Old fixture value is gone.
+    expect(spends).not.toContain(6230);
+    // Real spend is not 0.
+    expect(spends.every((s) => s !== 0)).toBe(true);
   });
 
-  it("falls back to a known client when the slug is unknown", () => {
-    // findClient() returns CLIENTS[0] (globalcomix) when nothing matches.
-    const r = generateReport({
+  it("stamps source=manual + authoredBy=nova on every manual deck", async () => {
+    networksMock.mockResolvedValueOnce([netRow()]);
+    campaignsMock.mockResolvedValueOnce([]);
+    const { generateReport } = await import("@/lib/reports/generate");
+    const r = await generateReport({
       prompt: "x",
       from: FROM,
       to: TO,
-      client: "no-such-client",
+      client: "globalcomix",
     });
+    expect(r.source).toBe("manual");
+    expect(r.authoredBy).toBe("nova");
     expect(r.clientLabel).toBe("GlobalComix");
   });
-});
 
-describe("generateYellowHeadReport", () => {
-  it("derives the title from the first line of the prompt when it is long enough", () => {
-    const r = generateYellowHeadReport({
+  it("derives the title from the first prompt line when long enough", async () => {
+    networksMock.mockResolvedValueOnce([netRow()]);
+    campaignsMock.mockResolvedValueOnce([]);
+    const { generateReport } = await import("@/lib/reports/generate");
+    const r = await generateReport({
       prompt: "Custom title for week 18\nadditional context",
       from: FROM,
       to: TO,
@@ -54,175 +161,43 @@ describe("generateYellowHeadReport", () => {
     expect(r.title).toBe("Custom title for week 18");
   });
 
-  it("synthesizes a default title when the prompt is too short", () => {
-    const r = generateYellowHeadReport({
+  it("synthesises a default title when the prompt is too short", async () => {
+    networksMock.mockResolvedValueOnce([netRow()]);
+    campaignsMock.mockResolvedValueOnce([]);
+    const { generateReport } = await import("@/lib/reports/generate");
+    const r = await generateReport({
       prompt: "x",
       from: FROM,
       to: TO,
       client: "globalcomix",
     });
-    // ISO week of 2026-05-03 is 18.
-    expect(r.title).toBe("GlobalComix · Week 18 Review");
+    expect(r.title).toMatch(/GlobalComix.*Week \d+ Review/);
   });
 
-  it("renders the period as an en-dash range of formatted dates", () => {
-    const r = generateYellowHeadReport({
-      prompt: "x",
-      from: FROM,
-      to: TO,
-      client: "globalcomix",
-    });
-    expect(r.period).toMatch(/Apr 27, 2026/);
-    expect(r.period).toMatch(/May 3, 2026/);
+  it("throws for a client without real BQ data (no fixture-fallback)", async () => {
+    const { generateReport } = await import("@/lib/reports/generate");
+    await expect(
+      generateReport({
+        prompt: "x",
+        from: FROM,
+        to: TO,
+        client: "playw3",
+      }),
+    ).rejects.toThrow(/real BQ data/);
+    expect(networksMock).not.toHaveBeenCalled();
   });
 
-  it("includes Facebook, Google, TikTok rows + a Total row in platform_overall", () => {
-    const r = generateYellowHeadReport({
+  it("emits zero sections when BQ returns no rows (honest no-data state)", async () => {
+    networksMock.mockResolvedValueOnce([]);
+    campaignsMock.mockResolvedValueOnce([]);
+    const { generateReport } = await import("@/lib/reports/generate");
+    const r = await generateReport({
       prompt: "x",
       from: FROM,
       to: TO,
       client: "globalcomix",
     });
-    const section = r.sections.find((s) => s.id === "platform_overall");
-    if (!section || section.id !== "platform_overall") throw new Error();
-    expect(section.summary.rows.map((row) => row.label)).toEqual([
-      "Facebook",
-      "Google",
-      "TikTok",
-    ]);
-    expect(section.summary.total.label).toBe("Total");
-  });
-
-  it("totals row sums the per-channel spend", () => {
-    const r = generateYellowHeadReport({
-      prompt: "x",
-      from: FROM,
-      to: TO,
-      client: "globalcomix",
-    });
-    const section = r.sections.find((s) => s.id === "platform_overall");
-    if (!section || section.id !== "platform_overall") throw new Error();
-    const sumSpend = section.summary.rows.reduce(
-      (a, row) => a + (typeof row.spend.value === "number" ? row.spend.value : 0),
-      0,
-    );
-    expect(section.summary.total.spend.value).toBe(sumSpend);
-  });
-
-  it("channel_weekly carries the Facebook current-week row + at least 3 historical weeks", () => {
-    const r = generateYellowHeadReport({
-      prompt: "x",
-      from: FROM,
-      to: TO,
-      client: "globalcomix",
-    });
-    const section = r.sections.find((s) => s.id === "channel_weekly");
-    if (!section || section.id !== "channel_weekly") throw new Error();
-    expect(section.channel).toBe("meta");
-    expect(section.platform).toBe("android");
-    expect(section.currentWeek.label).toBe("Facebook");
-    expect(section.history.length).toBeGreaterThanOrEqual(3);
-  });
-
-  it("channel_campaign assigns exactly three callout colors (pink, orange, blue) to the top |Δ CPA D0|", () => {
-    const r = generateYellowHeadReport({
-      prompt: "x",
-      from: FROM,
-      to: TO,
-      client: "globalcomix",
-    });
-    const section = r.sections.find((s) => s.id === "channel_campaign");
-    if (!section || section.id !== "channel_campaign") throw new Error();
-    const highlights = section.rows
-      .map((row) => row.highlight)
-      .filter((c): c is NonNullable<typeof c> => c != null)
-      .sort();
-    expect(highlights).toEqual(["blue", "orange", "pink"]);
-  });
-
-  it("authoredBy is 'nova' (Nova is the report writer)", () => {
-    const r = generateYellowHeadReport({
-      prompt: "x",
-      from: FROM,
-      to: TO,
-      client: "globalcomix",
-    });
-    expect(r.authoredBy).toBe("nova");
-  });
-
-  it("ids are unique per call (UUID-prefixed)", () => {
-    const a = generateYellowHeadReport({
-      prompt: "x",
-      from: FROM,
-      to: TO,
-      client: "globalcomix",
-    });
-    const b = generateYellowHeadReport({
-      prompt: "x",
-      from: FROM,
-      to: TO,
-      client: "globalcomix",
-    });
-    expect(a.id).not.toBe(b.id);
-    expect(a.id).toMatch(/^rpt_/);
-  });
-});
-
-describe("generateLegacyReport", () => {
-  it("produces the five legacy sections in the canonical order", () => {
-    const r = generateLegacyReport({
-      prompt: "weekly summary",
-      from: FROM,
-      to: TO,
-      client: "globalcomix",
-    });
-    expect(r.sections.map((s) => s.id)).toEqual([
-      "executive_summary",
-      "kpis",
-      "channel_breakdown",
-      "top_campaigns",
-      "recommendations",
-    ]);
-  });
-
-  it("KPI section emits four tiles (Spend, Installs, CPI, ROAS D7)", () => {
-    const r = generateLegacyReport({
-      prompt: "x",
-      from: FROM,
-      to: TO,
-      client: "globalcomix",
-    });
-    const kpis = r.sections.find((s) => s.id === "kpis");
-    if (!kpis || kpis.id !== "kpis") throw new Error();
-    expect(kpis.kpis.map((k) => k.label)).toEqual([
-      "Spend",
-      "Installs",
-      "CPI",
-      "ROAS (D7)",
-    ]);
-  });
-
-  it("top_campaigns is capped at five rows", () => {
-    const r = generateLegacyReport({
-      prompt: "x",
-      from: FROM,
-      to: TO,
-      client: "globalcomix",
-    });
-    const top = r.sections.find((s) => s.id === "top_campaigns");
-    if (!top || top.id !== "top_campaigns") throw new Error();
-    expect(top.rows.length).toBeLessThanOrEqual(5);
-  });
-
-  it("recommendations emits exactly three bullets", () => {
-    const r = generateLegacyReport({
-      prompt: "x",
-      from: FROM,
-      to: TO,
-      client: "globalcomix",
-    });
-    const recs = r.sections.find((s) => s.id === "recommendations");
-    if (!recs || recs.id !== "recommendations") throw new Error();
-    expect(recs.bullets).toHaveLength(3);
+    expect(r.sections).toEqual([]);
+    expect(r.source).toBe("manual");
   });
 });

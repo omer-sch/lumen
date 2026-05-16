@@ -15,6 +15,15 @@ export type Client = {
    * query module is wired.
    */
   apiBase?: string;
+  /**
+   * True when a per-client query module (BQ networks/campaigns/trend)
+   * exists for this client. Only GlobalComix is wired today; playw3 +
+   * 100play return data through other routes but lack the per-client
+   * query module the Reports surface needs to assemble a deck. The
+   * Reports builder gates on this so we never produce a fixture-only
+   * deck and label it real.
+   */
+  hasRealData: boolean;
 };
 
 /**
@@ -28,12 +37,14 @@ export const CLIENTS: Client[] = [
     name: "GlobalComix",
     vertical: "Gaming",
     networks: ["Meta", "TikTok", "Google", "AppsFlyer"],
+    hasRealData: true,
   },
   {
     slug: "playw3",
     name: "Playw3",
     vertical: "Gaming",
     networks: ["Meta", "Twitter"],
+    hasRealData: false,
   },
   {
     slug: "100play",
@@ -41,11 +52,24 @@ export const CLIENTS: Client[] = [
     vertical: "Gaming",
     networks: ["Meta"],
     apiBase: "/api/bq/100play",
+    hasRealData: false,
   },
 ];
 
 export const findClient = (slug: string): Client =>
   CLIENTS.find((c) => c.slug === slug) ?? CLIENTS[0];
+
+/** True when the Reports builder can assemble a real-data deck for
+ *  this client. Other surfaces (dashboard, campaigns, ask) are not
+ *  gated by this flag. */
+export function clientHasReportData(slug: string): boolean {
+  return Boolean(CLIENTS.find((c) => c.slug === slug)?.hasRealData);
+}
+
+/** Subset of CLIENTS the Reports builder picker should show. */
+export function clientsWithReportData(): Client[] {
+  return CLIENTS.filter((c) => c.hasRealData);
+}
 
 /** Where the dashboard hook should fetch this client's data from. */
 export function getClientApiBase(slug: string): string {

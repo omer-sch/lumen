@@ -27,7 +27,8 @@ import {
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
-import { generateReport } from "@/lib/reports/generate";
+import { generateReportAction } from "@/app/(app)/reports/actions";
+import { clientHasReportData, findClient } from "@/lib/mock/clients";
 import { useReports } from "@/lib/reports/store";
 import type { Report } from "@/lib/reports/types";
 import { ReportDocument } from "./ReportDocument";
@@ -109,15 +110,31 @@ function ReportsInner({ preloadedReport }: ReportsViewProps) {
     setActiveSlide(0);
   }, [activeReport?.id]);
 
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const handleGenerate = async (input: string) => {
     const q = (input ?? prompt).trim();
     if (!q || generating) return;
+    if (!clientHasReportData(client)) {
+      setGenerateError(
+        `Reports are not available for ${findClient(client).name} yet. Switch the global filter to GlobalComix to draft a report.`,
+      );
+      return;
+    }
     setGenerating(true);
+    setGenerateError(null);
     setPrompt("");
-    await new Promise((r) => setTimeout(r, 900));
-    const r = generateReport({ prompt: q, from, to, client });
-    setDraft(r);
-    save(r);
+    const result = await generateReportAction({
+      prompt: q,
+      fromIso: from.toISOString(),
+      toIso: to.toISOString(),
+      client,
+    });
+    if (result.ok) {
+      setDraft(result.report);
+      save(result.report);
+    } else {
+      setGenerateError(result.error);
+    }
     setGenerating(false);
   };
 
@@ -273,12 +290,47 @@ function ReportsInner({ preloadedReport }: ReportsViewProps) {
       {/* Main column */}
       <main className="flex flex-col gap-6">
         {!activeReport ? (
-          <BuilderInput
-            prompt={prompt}
-            setPrompt={setPrompt}
-            generating={generating}
-            onGenerate={handleGenerate}
-          />
+          <>
+            {!clientHasReportData(client) && (
+              <div
+                role="alert"
+                className="rounded-md px-4 py-3 font-body text-sm"
+                style={{
+                  background:
+                    "color-mix(in oklab, var(--color-yellow) 14%, transparent)",
+                  color: "var(--text-secondary)",
+                  border:
+                    "1px solid color-mix(in oklab, var(--color-yellow) 35%, transparent)",
+                }}
+              >
+                Reports are only available for clients with real BQ data
+                today. {findClient(client).name} is not wired yet, switch the
+                global filter to GlobalComix to draft a report.
+              </div>
+            )}
+            {generateError && (
+              <div
+                role="alert"
+                className="rounded-md px-4 py-3 font-body text-sm"
+                style={{
+                  background:
+                    "color-mix(in oklab, var(--color-creative) 14%, transparent)",
+                  color: "var(--color-creative)",
+                  border:
+                    "1px solid color-mix(in oklab, var(--color-creative) 35%, transparent)",
+                }}
+              >
+                {generateError}
+              </div>
+            )}
+            <BuilderInput
+              prompt={prompt}
+              setPrompt={setPrompt}
+              generating={generating}
+              onGenerate={handleGenerate}
+              disabled={!clientHasReportData(client)}
+            />
+          </>
         ) : (
           <>
             <div
@@ -461,11 +513,13 @@ function BuilderInput({
   setPrompt,
   generating,
   onGenerate,
+  disabled = false,
 }: {
   prompt: string;
   setPrompt: (s: string) => void;
   generating: boolean;
   onGenerate: (s: string) => void;
+  disabled?: boolean;
 }) {
   const sections: { Icon: typeof BarChart3; label: string; body: string }[] = [
     {
@@ -541,7 +595,7 @@ function BuilderInput({
               background: "var(--surface-input)",
               border: "1px solid var(--border-default)",
             }}
-            disabled={generating}
+            disabled={generating || disabled}
           />
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-body text-xs text-[color:var(--text-muted)]">
@@ -550,7 +604,7 @@ function BuilderInput({
             </p>
             <button
               type="submit"
-              disabled={generating || !prompt.trim()}
+              disabled={generating || !prompt.trim() || disabled}
               className="inline-flex items-center gap-1.5 rounded-md bg-yellow px-4 py-2 font-body text-sm font-semibold text-navy shadow-yellow transition-[transform,box-shadow] duration-280 ease-out-quart hover:-translate-y-px active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
             >
               <Send className="h-3.5 w-3.5" strokeWidth={2.5} />
@@ -569,7 +623,7 @@ function BuilderInput({
             <button
               key={p}
               type="button"
-              disabled={generating}
+              disabled={generating || disabled}
               onClick={() => onGenerate(p)}
               className="group rounded-md border px-3 py-2.5 text-left font-body text-xs font-medium leading-snug text-[color:var(--text-secondary)] transition-[transform,background-color,color,border-color] duration-280 ease-out-quart hover:-translate-y-px hover:border-ua hover:bg-[color:var(--surface-hover)] hover:text-cloud-white disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
               style={{
