@@ -4,10 +4,30 @@ import { withSentryConfig } from "@sentry/nextjs";
 // Note on `'unsafe-inline'`: Next.js App Router still injects inline bootstrap
 // scripts in production. Removing it requires per-request nonces in middleware,
 // which we'll add when we ship our first /api route. Tracking: TODO Phase 1.
-// We've removed `'unsafe-eval'` because nothing in this stack needs it.
+//
+// Note on `'unsafe-eval'`: production CSP omits it (and should stay that way).
+// Next.js dev mode's React Fast Refresh runtime evaluates strings to swap
+// modules without a full reload; without `'unsafe-eval'` the dev bundle dies
+// at hydrate with `Uncaught EvalError: Evaluating a string as JavaScript
+// violates the following Content Security Policy directive`, the page is
+// stuck on its skeleton, and no `/api/bq/*` fetches ever fire. The dev-only
+// addition below restores Fast Refresh without weakening prod headers.
+const isDev = process.env.NODE_ENV !== "production";
+const scriptSrc = [
+  "'self'",
+  "'unsafe-inline'",
+  isDev ? "'unsafe-eval'" : null,
+  "https://*.clerk.accounts.dev",
+  "https://*.clerk.com",
+  "https://challenges.cloudflare.com",
+  "https://browser.sentry-cdn.com",
+  "https://*.posthog.com",
+]
+  .filter(Boolean)
+  .join(" ");
 const ContentSecurityPolicy = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com https://browser.sentry-cdn.com https://*.posthog.com",
+  `script-src ${scriptSrc}`,
   "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
