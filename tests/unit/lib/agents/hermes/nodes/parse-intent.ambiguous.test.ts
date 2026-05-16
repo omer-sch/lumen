@@ -53,6 +53,7 @@ afterEach(async () => {
 function makeState(email_text: string) {
   return {
     email_text,
+    action_notes: null as string | null,
     run_id: "amb-run-1",
     intent: null,
     context: { knowledge: [], history: [], comms: [] },

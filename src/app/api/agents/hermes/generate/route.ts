@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
     const finalState = await invokeHermesGraph(
       {
         email_text: parsed.data.email_text,
+        action_notes: parsed.data.action_notes ?? null,
         run_id: run.id,
         user_id: authResult.userId,
       },

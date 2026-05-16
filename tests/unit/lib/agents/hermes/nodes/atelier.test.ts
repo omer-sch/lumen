@@ -215,6 +215,7 @@ describe("atelier node skip paths", () => {
   function baseState(over: Partial<HermesState> = {}): HermesState {
     return {
       email_text: "x",
+    action_notes: null as string | null,
       run_id: "run-1",
       user_id: "user-1",
       intent: intent(),

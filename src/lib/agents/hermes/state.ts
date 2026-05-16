@@ -183,6 +183,18 @@ export type HistoryEvent = {
 
 export const HermesStateAnnotation = Annotation.Root({
   email_text: Annotation<string>(),
+  // Optional free-form analyst notes ("What did you do this week?")
+  // pasted into the Hermes draft modal alongside the email body. The
+  // API route forwards them into state; atelier feeds them into
+  // composeReport.options.actionNotes where the action-items parser
+  // classifies each line against the campaigns in ReadyData and the
+  // prose-writer weaves matching items into family prose as
+  // `<> AI:` callouts. Empty / null when the user left the field
+  // blank.
+  action_notes: Annotation<string | null>({
+    reducer: (a, b) => b ?? a,
+    default: () => null,
+  }),
   run_id: Annotation<string | null>({
     reducer: (a, b) => b ?? a,
     default: () => null,
@@ -261,5 +273,11 @@ export type HermesStateUpdate = Partial<HermesState>;
 
 export const GenerateRequestSchema = z.object({
   email_text: z.string().min(30).max(20_000),
+  /** Optional free-form analyst notes the user pastes into the
+   *  modal's "What did you do this week?" textarea. Forwarded to
+   *  atelier where action-items parses each line and the
+   *  campaign-breakdown prose-writer weaves matches in as
+   *  `<> AI:` callouts. */
+  action_notes: z.string().max(20_000).optional(),
 });
 export type GenerateRequest = z.infer<typeof GenerateRequestSchema>;

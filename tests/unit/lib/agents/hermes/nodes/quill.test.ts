@@ -77,6 +77,7 @@ function baseBullet(over: Partial<Bullet> = {}): Bullet {
 function baseState() {
   return {
     email_text: "x",
+    action_notes: null as string | null,
     run_id: "run-quill-1",
     intent: {
       client: "globalcomix",

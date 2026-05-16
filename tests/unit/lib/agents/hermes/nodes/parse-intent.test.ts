@@ -95,6 +95,7 @@ describe("parseIntent", () => {
     );
     const update = await parseIntent({
       email_text: CANONICAL_FIXTURE,
+    action_notes: null as string | null,
       run_id: "run-1",
       intent: null,
       context: { knowledge: [], history: [], comms: [] },
@@ -126,6 +127,7 @@ describe("parseIntent", () => {
     );
     await parseIntent({
       email_text: CANONICAL_FIXTURE,
+    action_notes: null as string | null,
       run_id: "run-2",
       intent: null,
       context: { knowledge: [], history: [], comms: [] },
@@ -158,6 +160,7 @@ describe("parseIntent", () => {
     );
     await parseIntent({
       email_text: "Generic email body that names no recognised client.",
+    action_notes: null as string | null,
       run_id: "run-3",
       intent: null,
       context: { knowledge: [], history: [], comms: [] },
@@ -202,6 +205,7 @@ describe("parseIntent", () => {
     );
     const update = await parseIntent({
       email_text: CANONICAL_FIXTURE,
+    action_notes: null as string | null,
       run_id: "run-4",
       intent: null,
       context: { knowledge: [], history: [], comms: [] },
@@ -243,6 +247,7 @@ describe("parseIntent", () => {
     );
     const update = await parseIntent({
       email_text: CANONICAL_FIXTURE,
+    action_notes: null as string | null,
       run_id: "run-5",
       intent: null,
       context: { knowledge: [], history: [], comms: [] },
@@ -281,6 +286,7 @@ describe("parseIntent", () => {
     );
     const update = await parseIntent({
       email_text: bodyWithSignature,
+    action_notes: null as string | null,
       run_id: "run-contact-1",
       intent: null,
       context: { knowledge: [], history: [], comms: [] },
@@ -317,6 +323,7 @@ describe("parseIntent", () => {
     );
     const update = await parseIntent({
       email_text: bodyWithSignature,
+    action_notes: null as string | null,
       run_id: "run-contact-fail",
       intent: null,
       context: { knowledge: [], history: [], comms: [] },

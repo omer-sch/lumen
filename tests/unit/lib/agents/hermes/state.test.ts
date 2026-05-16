@@ -96,4 +96,12 @@ describe("GenerateRequestSchema", () => {
     });
     expect(ok.email_text).toMatch(/GlobalComix/);
   });
+
+  it("accepts an optional action_notes field", () => {
+    const ok = GenerateRequestSchema.parse({
+      email_text: "Hi team, please send me a weekly review for GlobalComix.",
+      action_notes: "We paused the WW Sub Seasonal campaign last week.",
+    });
+    expect(ok.action_notes).toMatch(/Sub Seasonal/);
+  });
 });

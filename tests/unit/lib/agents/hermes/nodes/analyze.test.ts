@@ -100,6 +100,7 @@ afterEach(async () => {
 function baseState() {
   return {
     email_text: "x",
+    action_notes: null as string | null,
     run_id: "run-analyze-1",
     intent: {
       client: "globalcomix",

@@ -208,6 +208,7 @@ describe("buildHermesGraph", () => {
     const graph = buildHermesGraph();
     const final = await graph.invoke({
       email_text: "Please send the weekly review for GlobalComix focused on Meta.",
+    action_notes: null as string | null,
       run_id: "test-run-1",
       user_id: "user-test-1",
     });
@@ -386,6 +387,7 @@ describe("buildHermesGraph", () => {
     );
     await buildHermesGraph().invoke({
       email_text: "Weekly review please for GlobalComix.",
+    action_notes: null as string | null,
       run_id: "test-run-2",
     });
     expect(retrieveMock).toHaveBeenCalledWith(
@@ -403,6 +405,7 @@ describe("buildHermesGraph", () => {
     );
     const final = await buildHermesGraph().invoke({
       email_text: "Weekly review please for GlobalComix.",
+    action_notes: null as string | null,
       run_id: "test-run-3",
     });
     expect(final.intent?.client).toBe("globalcomix");
@@ -419,6 +422,7 @@ describe("buildHermesGraph", () => {
     await expect(
       buildHermesGraph().invoke({
         email_text: "Weekly review please for GlobalComix.",
+    action_notes: null as string | null,
         run_id: "test-run-4",
       }),
     ).rejects.toThrow(/no tool_use/);

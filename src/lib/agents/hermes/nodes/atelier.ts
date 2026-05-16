@@ -74,7 +74,14 @@ export async function atelier(
       readyData: ready,
       intent: state.intent,
       ownerUserId: state.user_id,
-      options: { template: "single-channel-weekly" },
+      options: {
+        template: "single-channel-weekly",
+        // Phase 3: forward the action_notes the user pasted into the
+        // Hermes modal. Empty / null when omitted; the action-items
+        // parser short-circuits to [] in that case and the prose-writer
+        // emits no `<> AI:` callouts.
+        actionNotes: state.action_notes ?? undefined,
+      },
       runId: state.run_id,
       contactName: state.contact?.name ?? null,
     });

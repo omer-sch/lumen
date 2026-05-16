@@ -57,6 +57,14 @@ export function DraftFromEmailModal({ open, onClose }: Props): React.ReactElemen
   const textareaId = useId();
 
   const [emailText, setEmailText] = useState("");
+  // Phase 3: optional analyst notes ("What did you do this week?").
+  // Posted to /api/agents/hermes/generate as `action_notes`; the
+  // server pipes them into HermesState.action_notes and atelier
+  // hands them to composeReport.options.actionNotes where the
+  // action-items parser classifies each line against the campaigns
+  // in ReadyData and the campaign-breakdown prose-writer weaves
+  // matching items into the family prose as `<> AI:` callouts.
+  const [actionNotes, setActionNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stepIdx, setStepIdx] = useState(0);
@@ -142,7 +150,10 @@ export function DraftFromEmailModal({ open, onClose }: Props): React.ReactElemen
         const res = await fetch("/api/agents/hermes/generate", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email_text: emailText.trim() }),
+          body: JSON.stringify({
+            email_text: emailText.trim(),
+            action_notes: actionNotes.trim() || undefined,
+          }),
         });
         if (!res.ok) {
           const body = (await res.json().catch(() => ({}))) as {
@@ -170,7 +181,7 @@ export function DraftFromEmailModal({ open, onClose }: Props): React.ReactElemen
         setSubmitting(false);
       }
     },
-    [canSubmit, emailText, router],
+    [canSubmit, emailText, actionNotes, router],
   );
 
   if (!open) return null;
@@ -265,6 +276,33 @@ export function DraftFromEmailModal({ open, onClose }: Props): React.ReactElemen
           <p className="font-body text-xs text-[color:var(--text-secondary)]">
             {emailText.trim().length} / {MAX_LEN} characters · minimum {MIN_LEN}.
           </p>
+
+          <div className="flex flex-col gap-2">
+            <div className="flex items-baseline justify-between">
+              <label
+                htmlFor="hermes-action-notes"
+                className="font-body text-sm font-medium text-cloud-white"
+              >
+                What did you do this week?
+              </label>
+              <span className="font-body text-xs text-[color:var(--text-secondary)]">
+                optional
+              </span>
+            </div>
+            <p className="font-body text-xs text-[color:var(--text-secondary)]">
+              Lumen will weave matching notes into the relevant campaign-breakdown paragraphs as `&lt;&gt; AI:` callouts.
+            </p>
+            <textarea
+              id="hermes-action-notes"
+              value={actionNotes}
+              onChange={(e) => setActionNotes(e.target.value)}
+              rows={4}
+              maxLength={20_000}
+              disabled={submitting}
+              placeholder={"We paused the WW Sub Seasonal Invincible campaign last week.\nAdded fresh creatives to the Archetype ad groups on TikTok."}
+              className="w-full resize-y rounded-2xl border border-[color:var(--border-glass)] bg-[color:var(--surface-base)] p-3 font-body text-sm text-cloud-white placeholder:text-[color:var(--text-secondary)] focus:border-[color:var(--color-ua)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-ua)] disabled:opacity-60"
+            />
+          </div>
 
           {submitting && (
             <div
