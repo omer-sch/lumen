@@ -12,8 +12,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -433,6 +431,102 @@ export type Database = {
         }
         Relationships: []
       }
+      gmail_oauth_tokens: {
+        Row: {
+          access_token_enc: string
+          created_at: string
+          email: string
+          expires_at: string
+          refresh_token_enc: string
+          scope: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token_enc: string
+          created_at?: string
+          email: string
+          expires_at: string
+          refresh_token_enc: string
+          scope: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token_enc?: string
+          created_at?: string
+          email?: string
+          expires_at?: string
+          refresh_token_enc?: string
+          scope?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      gmail_watches: {
+        Row: {
+          expires_at: string
+          failure_reason: string | null
+          history_id: string
+          registered_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          expires_at: string
+          failure_reason?: string | null
+          history_id: string
+          registered_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          expires_at?: string
+          failure_reason?: string | null
+          history_id?: string
+          registered_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          kind: string
+          link: string | null
+          read_at: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          link?: string | null
+          read_at?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          link?: string | null
+          read_at?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       pinned_tiles: {
         Row: {
           chart_config_json: Json
@@ -592,6 +686,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_email_filters: {
+        Row: {
+          active: boolean
+          created_at: string
+          filter_type: string
+          filter_value: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          filter_type: string
+          filter_value: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          filter_type?: string
+          filter_value?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {

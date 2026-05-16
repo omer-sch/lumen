@@ -29,6 +29,10 @@ const isPublicRoute = createRouteMatcher([
   // paths before the route's own check runs.
   "/api/rag/index",
   "/api/rag/index-history",
+  // External webhook surfaces. Google Cloud Pub/Sub posts here with no
+  // Clerk session; the route handler does its own verification via
+  // GOOGLE_PUBSUB_VERIFICATION_TOKEN constant-time check.
+  "/api/webhooks/(.*)",
 ]);
 
 // Routes that must stay behind Clerk even in PREVIEW mode:

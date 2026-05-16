@@ -107,7 +107,62 @@ export const serverEnv = {
   get SUPABASE_SERVICE_ROLE_KEY() {
     return read("SUPABASE_SERVICE_ROLE_KEY", { optional: true });
   },
+
+  /**
+   * Google OAuth client credentials for the Gmail integration
+   * (workstream C). Optional at read-time; isGmailConfigured() decides
+   * whether the routes serve real OAuth or 503.
+   */
+  get GOOGLE_OAUTH_CLIENT_ID() {
+    return read("GOOGLE_OAUTH_CLIENT_ID", { optional: true });
+  },
+  get GOOGLE_OAUTH_CLIENT_SECRET() {
+    return read("GOOGLE_OAUTH_CLIENT_SECRET", { optional: true });
+  },
+  /**
+   * Full topic resource path:
+   * projects/<project-id>/topics/lumen-gmail-notifications.
+   */
+  get GOOGLE_PUBSUB_TOPIC() {
+    return read("GOOGLE_PUBSUB_TOPIC", { optional: true });
+  },
+  /**
+   * Shared secret embedded in the Pub/Sub message body via the topic's
+   * verification token. The webhook handler checks this is constant-time
+   * equal to what we expect before processing the push.
+   */
+  get GOOGLE_PUBSUB_VERIFICATION_TOKEN() {
+    return read("GOOGLE_PUBSUB_VERIFICATION_TOKEN", { optional: true });
+  },
+  /**
+   * 32-byte (64 hex chars) symmetric key for AES-256-GCM encryption of
+   * Gmail OAuth tokens at rest. Generate via:
+   *   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   * Never log, never commit.
+   */
+  get GMAIL_TOKEN_ENCRYPTION_KEY() {
+    return read("GMAIL_TOKEN_ENCRYPTION_KEY", { optional: true });
+  },
+  /**
+   * Public base URL of this Lumen deployment (e.g. https://lumen.yellowhead.com
+   * or http://localhost:3000). Used to construct the OAuth redirect_uri
+   * which must match what's registered in the GCP OAuth client.
+   */
+  get LUMEN_APP_URL() {
+    return (
+      read("LUMEN_APP_URL", { optional: true }) ?? "http://localhost:3000"
+    );
+  },
 } as const;
+
+export function isGmailConfigured(): boolean {
+  return Boolean(
+    process.env.GOOGLE_OAUTH_CLIENT_ID &&
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
+      process.env.GOOGLE_PUBSUB_TOPIC &&
+      process.env.GMAIL_TOKEN_ENCRYPTION_KEY,
+  );
+}
 
 /**
  * True when both the project URL and the service-role key are set.

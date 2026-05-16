@@ -21,7 +21,8 @@ import { listRecentHermesRunsForUser } from "@/lib/agents/hermes/recent-runs";
 import { loadHermesSkills } from "@/lib/agents/hermes/skills";
 import { AGENT_IDENTITIES } from "@/lib/agents/identity";
 import { getContactsForClient } from "@/lib/contacts";
-import { isSupabaseConfigured } from "@/lib/env.server";
+import { isGmailConfigured, isSupabaseConfigured } from "@/lib/env.server";
+import { loadGmailTokens } from "@/lib/gmail/tokens";
 
 export const metadata = { title: "Hermes · Lumen" };
 
@@ -102,7 +103,8 @@ export default async function HermesProfilePage() {
   const { userId: clerkUserId } = await auth();
   const userId = clerkUserId ?? (PREVIEW ? PREVIEW_USER_ID : null);
 
-  const [skills, contacts, recentRuns] = await Promise.all([
+  const gmailReady = isGmailConfigured();
+  const [skills, contacts, recentRuns, gmailTokens] = await Promise.all([
     loadHermesSkills(),
     supabaseOK
       ? getContactsForClient("globalcomix").catch(() => [])
@@ -110,7 +112,11 @@ export default async function HermesProfilePage() {
     supabaseOK && userId
       ? listRecentHermesRunsForUser(userId, 8).catch(() => [])
       : Promise.resolve([]),
+    gmailReady && supabaseOK && userId
+      ? loadGmailTokens(userId).catch(() => null)
+      : Promise.resolve(null),
   ]);
+  const gmailConnected = Boolean(gmailTokens);
 
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-10 px-6 py-10">
@@ -156,16 +162,26 @@ export default async function HermesProfilePage() {
                 >
                   UA team
                 </span>
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-body text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--text-secondary)]"
+                <Link
+                  href="/settings/integrations"
+                  className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-body text-[10px] font-semibold uppercase tracking-[0.16em] transition-colors hover:bg-[color:var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-ua)]"
                   style={{
-                    background: "var(--surface-glass)",
-                    border: "1px solid var(--border-subtle)",
+                    background: gmailConnected
+                      ? "var(--tint-ua-soft)"
+                      : "var(--surface-glass)",
+                    border: gmailConnected
+                      ? "1px solid color-mix(in oklab, var(--color-ua) 35%, transparent)"
+                      : "1px solid var(--border-subtle)",
+                    color: gmailConnected
+                      ? "var(--color-ua)"
+                      : "var(--text-secondary)",
                   }}
                 >
                   <Mailbox className="h-3 w-3" aria-hidden strokeWidth={2.25} />
-                  Gmail not connected
-                </span>
+                  {gmailConnected
+                    ? `Gmail · ${gmailTokens?.email ?? "connected"}`
+                    : "Gmail not connected"}
+                </Link>
               </div>
             </div>
           </div>
