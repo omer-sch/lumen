@@ -272,18 +272,20 @@ export default async function HermesProfilePage() {
         </div>
       </section>
 
-      {/* Section 4 · My contacts */}
+      {/* Section 4 · GlobalComix contacts (v0.5 single-client demo;
+          when multi-client filtering lands the heading + getContactsForClient
+          arg become driven by the global filter). */}
       <section className="flex flex-col gap-4">
         <SectionHeading
           icon={<Users className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />}
-          eyebrow="My contacts"
+          eyebrow="GlobalComix contacts"
           title="People I recognise"
         />
         {contacts.length === 0 ? (
           <EmptyState
             text={
               supabaseOK
-                ? "No contacts seeded yet for the active client."
+                ? "No contacts seeded yet for GlobalComix."
                 : "Supabase not configured; contact lookup unavailable."
             }
           />

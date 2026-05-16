@@ -279,7 +279,10 @@
       "Bash(jobs -p)",
       "Bash(LUMEN_APP_URL=http://localhost:3000 LUMEN_VAULT_PATH='/Users/omer/Documents/Claude/Projects/yellow head/Lumen Vault' node --env-file=.env.local scripts/backfill-knowledge-corpus.mjs)",
       "Bash(awk '/create table.*agent_reports/,/^[^ ]/{print NR\": \"$0; if \\(/^\\\\\\);/\\) exit}' supabase/migrations/0001_init_schema.sql)",
-      "Bash(set -o pipefail)"
+      "Bash(set -o pipefail)",
+      "Bash(sips -Z 512 public/avatars/hermes.png --out public/avatars/hermes.png)",
+      "Bash(sips -g pixelWidth -g pixelHeight public/avatars/aria.png public/avatars/hermes.png)",
+      "Bash(sips -Z 256 public/avatars/hermes.png --out public/avatars/hermes.png)"
     ]
   },
   "enableAllProjectMcpServers": true,
