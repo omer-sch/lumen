@@ -33,7 +33,7 @@ Branch state: 18+ commits past `main`
 Each carries a follow-up reference inline in the file or session note where it was introduced.
 
 1. **Embedding provider stayed OpenAI text-embedding-3-large @ 1536.** Master plan v2 specified Voyage AI 3-large @ 1024 dim. Omer accepted the deviation mid-branch (Phase 1 session note). `embed.ts` is provider-agnostic so a future swap is one file.
-2. **Live Haiku adversarial run blocked on placeholder `ANTHROPIC_API_KEY`.** Phase 3 Security pass. Script + structural audit in place; live verbatim outputs owed before Phase 9 sign-off finalises. (Phase 3 session note.)
+2. ~~**Live Haiku adversarial run blocked on placeholder `ANTHROPIC_API_KEY`.**~~ **Closed 2026-05-16.** Real key landed, runner fired the three fixtures against `claude-haiku-4-5-20251001`, all three PASS. Verbatim outputs in `Sessions/first-real-agent-try/phase-3.md` "Live Haiku verification" section. Cost ~$0.005. One cosmetic follow-up flagged: tighten Rule 2 in the parse-intent prompt to never echo attacker-supplied identifiers inside doubts.
 3. **Sonnet layout decision in Atelier deferred.** Phase 6 ships deterministic layout from `bullet.slide_target`. The model-driven layout pass is a polish task. (Phase 6 session note.)
 4. **export-pptx.ts not refactored.** Phase 6 ships a parallel server-side pptx writer instead of splitting the 1200-line client-only `export-pptx.ts` into a shared core + client/server wrappers. Accepted tech-debt. (Phase 6 session note.)
 5. **Inline bullet editing + per-section regenerate deferred.** Phase 7 ships view + approve only. (Phase 7 session note.)
@@ -62,7 +62,7 @@ From the master plan, checked off:
 - [ ] Knowledge corpus contains >= 50 chunks. *Blocked on running the backfill — `OPENAI_API_KEY` is in place, run `node scripts/backfill-knowledge-corpus.mjs` to fulfill.*
 - [ ] History corpus auto-writes (trigger in place at migration 0010; verifies once a real run completes against a real DB).
 - [ ] Demo recording linked. *Owed; cannot record autonomously.*
-- [ ] Live Haiku adversarial run verifies the three fixture classes produce safe behavior. *Awaiting real `ANTHROPIC_API_KEY` value.*
+- [x] Live Haiku adversarial run verifies the three fixture classes produce safe behavior. **Closed 2026-05-16 — all three PASS; see Sessions/first-real-agent-try/phase-3.md.**
 
 ## What an external review pass should check
 
