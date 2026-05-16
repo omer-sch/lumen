@@ -93,6 +93,12 @@ async function deleteReportOnServer(id: string): Promise<boolean> {
 
 type Source = "server" | "local";
 
+// Per-report debounce for save(). Edits in EditableText fire onChange
+// every keystroke; without a debounce each one would round-trip to the
+// server and emit an audit entry. 800ms catches a typing pause and a
+// "click into next field" gesture without feeling laggy.
+const SAVE_DEBOUNCE_MS = 800;
+
 /** Hook for the Reports surface. v0.5-A swaps the storage seam from
  *  localStorage to Supabase. Backward compat: on first mount, if the
  *  server returns zero rows and localStorage has any, drain them to
@@ -105,6 +111,26 @@ export function useReports() {
   const [hydrated, setHydrated] = useState(false);
   const [source, setSource] = useState<Source>("server");
   const drainedRef = useRef(false);
+  // Per-report-id debounce handles + latest-value pointers. A new
+  // edit cancels the pending push and re-arms with the freshest value.
+  const saveTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
+  const latestSaveRef = useRef<Map<string, Report>>(new Map());
+
+  useEffect(() => {
+    return () => {
+      // On unmount, fire pending pushes immediately so a half-typed
+      // edit isn't dropped because the user navigated away mid-debounce.
+      saveTimersRef.current.forEach((handle, id) => {
+        clearTimeout(handle);
+        const pending = latestSaveRef.current.get(id);
+        if (pending) void pushReportToServer(pending);
+      });
+      saveTimersRef.current.clear();
+      latestSaveRef.current.clear();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,7 +223,25 @@ export function useReports() {
         return next;
       });
       if (source === "server") {
-        void pushReportToServer(stamped);
+        // Debounce per-report-id so each typing burst lands as one
+        // PUT (and one audit-diff pass on the server). The first PUT
+        // for a brand-new report still goes out after a single
+        // debounce window; that's fine because Atelier already wrote
+        // the initial row server-side for Hermes drafts, and the
+        // manual create path creates the row from the prompt button
+        // (one save call) before any editing.
+        const existing = saveTimersRef.current.get(stamped.id);
+        if (existing) clearTimeout(existing);
+        latestSaveRef.current.set(stamped.id, stamped);
+        const handle = setTimeout(() => {
+          saveTimersRef.current.delete(stamped.id);
+          const latest = latestSaveRef.current.get(stamped.id);
+          if (latest) {
+            latestSaveRef.current.delete(stamped.id);
+            void pushReportToServer(latest);
+          }
+        }, SAVE_DEBOUNCE_MS);
+        saveTimersRef.current.set(stamped.id, handle);
       }
     },
     [source],

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/auth/require-user";
 import { isSupabaseConfigured } from "@/lib/env.server";
+import { diffSectionsForAudit } from "@/lib/reports/audit";
 import {
   deleteReport,
   getReportForUser,
@@ -106,6 +107,21 @@ export async function PUT(
     );
   }
 
+  // Diff the prior sections (if any) against the new ones so each
+  // section the caller actually changed lands as one "edit" audit
+  // entry. New reports skip this; the create path produces zero
+  // entries. The lookup also doubles as a defensive ownership check
+  // alongside upsertReport's own.
+  const prior = await getReportForUser(parsed.data.id, authResult.userId);
+  const newEntries =
+    prior != null
+      ? diffSectionsForAudit(
+          prior.sections,
+          parsed.data.sections as ReportSection[],
+          authResult.userId,
+        )
+      : [];
+
   const report: Report = {
     id: parsed.data.id,
     userId: authResult.userId,
@@ -119,6 +135,7 @@ export async function PUT(
     source: parsed.data.source,
     agentRunId: parsed.data.agentRunId ?? null,
     sections: parsed.data.sections as ReportSection[],
+    audit: [...(prior?.audit ?? []), ...newEntries],
     createdAt: parsed.data.createdAt ?? Date.now(),
     updatedAt: Date.now(),
   };
