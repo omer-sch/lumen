@@ -6,6 +6,8 @@ import path from "node:path";
 
 import pptxgen from "pptxgenjs";
 
+import { REPORT_BRAND } from "@/lib/reports/brand";
+
 import {
   type Bullet,
   type Deck,
@@ -29,9 +31,16 @@ import {
 // writer that produces a real .pptx the demo can download today.
 
 const HERMES_RUN_DIR = "/tmp/hermes-runs";
-const PRIMARY_HEX = "54F0A3"; // brand-ua mint
-const INK_HEX = "0A1428"; //    surface base
-const PAPER_HEX = "FFFFFF";
+// Brand tokens sourced from src/lib/reports/brand.ts so a brand change
+// updates the Hermes deck in lockstep with the Reports export path.
+// pptxgenjs accepts hex without the leading "#", so we strip it.
+const stripHash = (hex: string): string =>
+  hex.startsWith("#") ? hex.slice(1) : hex;
+const PRIMARY_HEX = stripHash(REPORT_BRAND.ua);
+const INK_HEX = stripHash(REPORT_BRAND.navy);
+const PAPER_HEX = stripHash(REPORT_BRAND.white);
+// REPORT_BRAND.textMuted is an rgba string; for pptxgenjs we want a
+// flat hex equivalent of the muted-on-paper appearance.
 const MUTED_HEX = "6B7280";
 
 const SLIDE_TITLES: Record<SlideTarget, string> = {
