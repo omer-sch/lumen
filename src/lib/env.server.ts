@@ -155,6 +155,18 @@ export const serverEnv = {
   },
 } as const;
 
+// True when LangSmith tracing is opt-in and credentials are present.
+// Opt-out by default: an empty key disables tracing silently. The
+// LangChain ecosystem reads LANGSMITH_TRACING + LANGSMITH_API_KEY
+// from process.env on its own; this helper exists so we can log one
+// startup line and gate our own traceable() calls.
+export function isLangSmithConfigured(): boolean {
+  return (
+    process.env.LANGSMITH_TRACING === "true" &&
+    Boolean(process.env.LANGSMITH_API_KEY)
+  );
+}
+
 export function isGmailConfigured(): boolean {
   return Boolean(
     process.env.GOOGLE_OAUTH_CLIENT_ID &&

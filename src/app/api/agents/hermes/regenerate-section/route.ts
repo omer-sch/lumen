@@ -165,24 +165,40 @@ export async function POST(req: NextRequest) {
   let nextBullets: Bullet[];
   try {
     const graph = buildQuillRegenerateGraph();
-    const finalState = await graph.invoke({
-      email_text: "",
-      run_id: original_run_id,
-      user_id: userId,
-      intent,
-      findings,
-      context: { knowledge: [], history: [], comms: [] },
-      snapshot: null,
-      bullets: [],
-      deck: { pptx_path: null, slides: [], report_id: null },
-      approval: {
-        approved: false,
-        approved_by: null,
-        approved_at: null,
-        edits: [],
+    const finalState = await graph.invoke(
+      {
+        email_text: "",
+        run_id: original_run_id,
+        user_id: userId,
+        intent,
+        findings,
+        context: { knowledge: [], history: [], comms: [] },
+        snapshot: null,
+        bullets: [],
+        deck: { pptx_path: null, slides: [], report_id: null },
+        approval: {
+          approved: false,
+          approved_by: null,
+          approved_at: null,
+          edits: [],
+        },
+        history: [],
       },
-      history: [],
-    });
+      {
+        runName: `hermes-regenerate-${original_run_id.slice(0, 8)}-${slide_target}`,
+        tags: [
+          "agent:hermes",
+          "source:regenerate",
+          `env:${process.env.NODE_ENV ?? "unknown"}`,
+        ],
+        metadata: {
+          original_run_id,
+          report_id,
+          slide_target,
+          client: intent.client,
+        },
+      },
+    );
     nextBullets = filterBulletsToTarget(
       finalState.bullets,
       slide_target as RegenerateTarget,

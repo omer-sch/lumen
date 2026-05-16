@@ -57,6 +57,14 @@ vi.mock("@/lib/agents/_scaffold/run", () => ({
 
 vi.mock("@/lib/agents/hermes/graph", () => ({
   buildHermesGraph: buildHermesGraphMock,
+  // Route uses invokeHermesGraph (LangSmith wrapper) since v0.5-D;
+  // delegate to the existing buildHermesGraphMock so tests keep their
+  // single-mock-per-call shape.
+  invokeHermesGraph: async (input: unknown) => {
+    const graph = buildHermesGraphMock();
+    return graph.invoke(input);
+  },
+  logLangSmithStatusOnce: () => undefined,
 }));
 
 vi.mock("@/lib/db/client", () => ({

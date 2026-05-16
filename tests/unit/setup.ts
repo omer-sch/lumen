@@ -1,6 +1,13 @@
 import "@testing-library/jest-dom/vitest";
 import { vi, beforeEach } from "vitest";
 
+// LangSmith tracing must never fire from a unit run (would phone home
+// to app.smith.langchain.com on every test). Force off explicitly;
+// the traceable() wrappers in src/lib/agents/_scaffold/model.ts and
+// the BQ wrappers in nodes/analyze.ts become no-ops.
+process.env.LANGSMITH_TRACING = "false";
+delete process.env.LANGSMITH_API_KEY;
+
 // ResizeObserver: Recharts and Radix-style measurers need it.
 class MockResizeObserver {
   observe(): void {}

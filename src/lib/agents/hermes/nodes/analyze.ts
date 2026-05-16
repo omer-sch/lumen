@@ -1,5 +1,7 @@
 import "server-only";
 
+import { traceable } from "langsmith/traceable";
+
 import { getAnthropicClient, pickModel } from "@/lib/agents/_scaffold/model";
 import {
   queryGlobalComixCampaigns,
@@ -7,6 +9,26 @@ import {
   queryGlobalComixTrend,
 } from "@/lib/globalcomix-queries";
 import { retrieve } from "@/lib/rag/retrieve";
+
+// Wrap each BQ query so a slow query shows up as a discrete span in
+// the LangSmith trace timeline. run_type="tool" puts it under the
+// LLM-call type taxonomy as "external call", which is what BQ is from
+// the agent's perspective.
+const tracedQueryNetworks = traceable(
+  (client: string, from: string, to: string) =>
+    queryGlobalComixNetworkBreakdown(client, from, to),
+  { name: "bq.networks", run_type: "tool", tags: ["bigquery"] },
+);
+const tracedQueryCampaigns = traceable(
+  (client: string, from: string, to: string) =>
+    queryGlobalComixCampaigns(client, from, to),
+  { name: "bq.campaigns", run_type: "tool", tags: ["bigquery"] },
+);
+const tracedQueryTrend = traceable(
+  (client: string, from: string, to: string) =>
+    queryGlobalComixTrend(client, from, to),
+  { name: "bq.trend", run_type: "tool", tags: ["bigquery"] },
+);
 
 import { runAnomstack, type RawAnomaly } from "../anomstack";
 import { ANALYZE_SYSTEM_PROMPT } from "../prompts/analyze.prompt";
@@ -151,11 +173,12 @@ export async function analyze(
     intent.period.iso_end,
   );
 
-  // Atlas fetch: reuse existing cached BQ query functions.
+  // Atlas fetch: reuse existing cached BQ query functions. The
+  // traced wrappers above are no-ops when LangSmith tracing is off.
   const [networks, campaigns, trend] = await Promise.all([
-    queryGlobalComixNetworkBreakdown(intent.client, period.from, period.to),
-    queryGlobalComixCampaigns(intent.client, period.from, period.to),
-    queryGlobalComixTrend(intent.client, period.from, period.to),
+    tracedQueryNetworks(intent.client, period.from, period.to),
+    tracedQueryCampaigns(intent.client, period.from, period.to),
+    tracedQueryTrend(intent.client, period.from, period.to),
   ]);
 
   // Anomstack pre-pass,deterministic.

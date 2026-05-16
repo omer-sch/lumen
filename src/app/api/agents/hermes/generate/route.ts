@@ -4,7 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireAgentAuth } from "@/lib/agents/_scaffold/auth";
 import { completeRun, failRun, startRun } from "@/lib/agents/_scaffold/run";
-import { buildHermesGraph } from "@/lib/agents/hermes/graph";
+import {
+  invokeHermesGraph,
+  logLangSmithStatusOnce,
+} from "@/lib/agents/hermes/graph";
 import { GenerateRequestSchema } from "@/lib/agents/hermes/state";
 
 export const runtime = "nodejs";
@@ -58,12 +61,18 @@ export async function POST(req: NextRequest) {
   });
 
   try {
-    const graph = buildHermesGraph();
-    const finalState = await graph.invoke({
-      email_text: parsed.data.email_text,
-      run_id: run.id,
-      user_id: authResult.userId,
-    });
+    logLangSmithStatusOnce();
+    const finalState = await invokeHermesGraph(
+      {
+        email_text: parsed.data.email_text,
+        run_id: run.id,
+        user_id: authResult.userId,
+      },
+      {
+        tags: ["source:paste"],
+        metadata: { trigger: "paste_modal" },
+      },
+    );
 
     await completeRun(run.id, {
       intent: finalState.intent,

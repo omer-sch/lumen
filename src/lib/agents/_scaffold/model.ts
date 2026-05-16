@@ -1,6 +1,7 @@
 import "server-only";
 
 import Anthropic from "@anthropic-ai/sdk";
+import { traceable } from "langsmith/traceable";
 
 import { serverEnv } from "@/lib/env.server";
 
@@ -30,6 +31,41 @@ export function pickModel(tier: ModelTier): string {
 
 let _anthropic: Anthropic | null = null;
 
+// Wrap the SDK's messages.create in a traceable() span so when
+// LangSmith tracing is enabled, every Anthropic call from any Hermes
+// node appears as a child span inside that node's run with the model
+// id + prompt + response visible in the timeline. The wrapping is a
+// no-op when LANGSMITH_TRACING is unset; traceable() just calls
+// through without recording, so production runs without an API key
+// pay zero overhead.
+function wrapTracedMessagesCreate(client: Anthropic): Anthropic {
+  const original = client.messages.create.bind(client.messages);
+  const traced = traceable(
+    async (
+      params: Parameters<typeof original>[0],
+      options?: Parameters<typeof original>[1],
+    ) => original(params, options),
+    {
+      name: "anthropic.messages.create",
+      run_type: "llm",
+      tags: ["anthropic"],
+    },
+  );
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      if (prop === "messages") {
+        return new Proxy(target.messages, {
+          get(mTarget, mProp, mReceiver) {
+            if (mProp === "create") return traced;
+            return Reflect.get(mTarget, mProp, mReceiver);
+          },
+        });
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+}
+
 export function getAnthropicClient(): Anthropic {
   if (_anthropic) return _anthropic;
   const key = serverEnv.ANTHROPIC_API_KEY;
@@ -38,12 +74,14 @@ export function getAnthropicClient(): Anthropic {
       "ANTHROPIC_API_KEY not set; agent code calling getAnthropicClient() needs it. Add to .env.local.",
     );
   }
-  _anthropic = new Anthropic({ apiKey: key });
+  _anthropic = wrapTracedMessagesCreate(new Anthropic({ apiKey: key }));
   return _anthropic;
 }
 
 // Test seam: tests inject a fake client; resetting to null forces
-// re-creation. Not part of the public API.
+// re-creation. Not part of the public API. Tests pass their own
+// mock; we do not wrap it so the test harness can introspect the
+// raw mock methods.
 export function __setAnthropicClientForTesting(
   client: Anthropic | null,
 ): void {

@@ -124,6 +124,20 @@ User question → /api/ask
 
 The AI consumes precomputed summaries — never raw records — to stay fast and cost-efficient. Each chart comes with a one-line "why I picked this" explanation and a suggested alternative.
 
+### Hermes observability (LangSmith)
+
+Hermes runs are traceable end-to-end through LangSmith when opted in. Every paste-to-draft (and Gmail-watch-to-draft) run shows up at app.smith.langchain.com as one clickable trace: the five-node graph (`parse_intent` → `analyze` → `quill` → `atelier` → `review_gate`), each Anthropic SDK call inside a node as a child span with the model id + prompt + response, and each BigQuery query (`bq.networks`, `bq.campaigns`, `bq.trend`) as a duration-bearing tool span.
+
+To enable, get an API key at smith.langchain.com → Settings → API keys, then add to `.env.local`:
+
+```
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=
+LANGSMITH_PROJECT=lumen-hermes-dev
+```
+
+Restart the dev server. The runs surface under the configured project; filter by `run_id`, `client`, `platform`, or `channel` tags. Opt-out is the default (with `LANGSMITH_API_KEY` empty, the `traceable()` wrappers are no-ops and nothing phones home). Tests force tracing off in `tests/unit/setup.ts`.
+
 ---
 
 ## The Global Filter

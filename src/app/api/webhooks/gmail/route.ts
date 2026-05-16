@@ -16,7 +16,10 @@ import {
 } from "@/lib/gmail/api";
 import { setWatchHistoryId, loadWatch } from "@/lib/gmail/watch";
 import { rateLimit } from "@/lib/rate-limit";
-import { buildHermesGraph } from "@/lib/agents/hermes/graph";
+import {
+  invokeHermesGraph,
+  logLangSmithStatusOnce,
+} from "@/lib/agents/hermes/graph";
 import { startRun, completeRun, failRun } from "@/lib/agents/_scaffold/run";
 import { pushNotification } from "@/lib/notifications/server";
 
@@ -123,12 +126,22 @@ async function runHermesOnMessage(args: {
     },
   });
   try {
-    const graph = buildHermesGraph();
-    const final = await graph.invoke({
-      email_text: args.body,
-      run_id: run.id,
-      user_id: args.userId,
-    });
+    logLangSmithStatusOnce();
+    const final = await invokeHermesGraph(
+      {
+        email_text: args.body,
+        run_id: run.id,
+        user_id: args.userId,
+      },
+      {
+        tags: ["source:gmail-watch"],
+        metadata: {
+          trigger: "gmail_watch",
+          gmail_message_id: args.messageId,
+          sender: args.fromAddress,
+        },
+      },
+    );
     await completeRun(run.id, {
       intent: final.intent,
       findings: final.findings,
