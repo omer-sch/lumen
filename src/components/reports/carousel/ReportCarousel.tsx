@@ -14,6 +14,12 @@ import { SlideCard } from "./SlideCard";
 import { buildSlides, slideAriaLabel, slideKey } from "./slides";
 import type { Report } from "@/lib/reports/types";
 
+type RegenerateContext = {
+  reportId: string;
+  originalRunId: string;
+  onRegenerated: () => void;
+};
+
 type ReportCarouselProps = {
   report: Report;
   onChange: (next: Report) => void;
@@ -22,6 +28,12 @@ type ReportCarouselProps = {
    *  across view-toggles. */
   activeIndex: number;
   onActiveIndexChange: (idx: number) => void;
+  /** Same shape ReportDocument accepts. When set, content slides
+   *  (platform_overall, channel_weekly, channel_campaign) render a
+   *  "Regenerate" button in the slide header, hitting the Hermes
+   *  regenerate-section route. Mirrors the document-view affordance
+   *  so the regenerate flow works from both views. */
+  regenerateContext?: RegenerateContext;
 };
 
 const SWIPE_THRESHOLD_PX = 50;
@@ -38,6 +50,7 @@ export function ReportCarousel({
   readOnly,
   activeIndex,
   onActiveIndexChange,
+  regenerateContext,
 }: ReportCarouselProps) {
   const slides = useMemo(() => buildSlides(report), [report]);
   const total = slides.length;
@@ -138,6 +151,7 @@ export function ReportCarousel({
           report={report}
           onChange={onChange}
           readOnly={readOnly}
+          regenerateContext={regenerateContext}
         />
 
         {/* Prev / Next buttons */}
@@ -234,12 +248,14 @@ function CarouselViewport({
   report,
   onChange,
   readOnly,
+  regenerateContext,
 }: {
   slides: ReturnType<typeof buildSlides>;
   activeIndex: number;
   report: Report;
   onChange: (next: Report) => void;
   readOnly?: boolean;
+  regenerateContext?: RegenerateContext;
 }) {
   // Only the active slide is rendered. The previous coverflow-style
   // peek-and-slide animation made the off-screen neighbors hover into
@@ -268,6 +284,7 @@ function CarouselViewport({
           report={report}
           readOnly={readOnly}
           onChange={onChange}
+          regenerateContext={regenerateContext}
         />
       </div>
     </div>

@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { EditableText } from "../EditableText";
+import { RegenerateSectionButton } from "../RegenerateSectionButton";
 import { ReportCoverHeader } from "../ReportCoverHeader";
 import { SectionDivider } from "../sections/SectionDivider";
 import { WeeklyBreakdown } from "../sections/WeeklyBreakdown";
@@ -24,6 +25,12 @@ import type {
 } from "@/lib/reports/types";
 import type { Slide } from "./slides";
 
+type RegenerateContext = {
+  reportId: string;
+  originalRunId: string;
+  onRegenerated: () => void;
+};
+
 type SlideCardProps = {
   slide: Slide;
   report: Report;
@@ -35,7 +42,17 @@ type SlideCardProps = {
    *  artifacts. */
   capture?: boolean;
   onChange?: (next: Report) => void;
+  /** Hermes-drafted reports pass this through from ReportCarousel so
+   *  each content slide (platform_overall / channel_weekly /
+   *  channel_campaign) gets a "Regenerate" button in its header. */
+  regenerateContext?: RegenerateContext;
 };
+
+const SLIDE_TARGET_FOR = {
+  platform_overall: "platform_overall",
+  channel_weekly: "channel_weekly",
+  channel_campaign: "campaign_breakdown",
+} as const;
 
 const PLATFORM_TITLE = {
   android: "Android",
@@ -56,7 +73,14 @@ const CHANNEL_TITLE = {
  * caller (so this component works at both on-screen and off-screen 16:9
  * dimensions); we only render the content.
  */
-export function SlideCard({ slide, report, readOnly, capture, onChange }: SlideCardProps) {
+export function SlideCard({
+  slide,
+  report,
+  readOnly,
+  capture,
+  onChange,
+  regenerateContext,
+}: SlideCardProps) {
   const ro = readOnly || capture;
   switch (slide.kind) {
     case "cover":
@@ -64,9 +88,19 @@ export function SlideCard({ slide, report, readOnly, capture, onChange }: SlideC
     case "chapter_divider":
       return <ChapterDividerCard slide={slide.slide} />;
     case "platform_overall":
-      return <PlatformOverallCard slide={slide.slide} />;
+      return (
+        <PlatformOverallCard
+          slide={slide.slide}
+          regenerateContext={regenerateContext}
+        />
+      );
     case "channel_weekly":
-      return <ChannelWeeklyCard slide={slide.slide} />;
+      return (
+        <ChannelWeeklyCard
+          slide={slide.slide}
+          regenerateContext={regenerateContext}
+        />
+      );
     case "channel_campaign":
       return (
         <ChannelCampaignCard
@@ -74,6 +108,7 @@ export function SlideCard({ slide, report, readOnly, capture, onChange }: SlideC
           report={report}
           readOnly={ro}
           onChange={onChange}
+          regenerateContext={regenerateContext}
         />
       );
     case "closer":
@@ -184,12 +219,14 @@ function CoverCard({
 
 function PlatformOverallCard({
   slide,
+  regenerateContext,
 }: {
   slide: PlatformOverallSlide;
+  regenerateContext?: RegenerateContext;
 }) {
   return (
     <div className="flex h-full w-full flex-col bg-[color:var(--surface-light-base)]">
-      <div className="px-6 pt-4">
+      <div className="flex items-start justify-between gap-3 px-6 pt-4">
         <SectionDivider
           platform={slide.platform}
           title={PLATFORM_TITLE[slide.platform]}
@@ -197,6 +234,14 @@ function PlatformOverallCard({
           continuation={slide.continuation}
           compact
         />
+        {regenerateContext ? (
+          <RegenerateSectionButton
+            reportId={regenerateContext.reportId}
+            originalRunId={regenerateContext.originalRunId}
+            slideTarget={SLIDE_TARGET_FOR.platform_overall}
+            onRegenerated={regenerateContext.onRegenerated}
+          />
+        ) : null}
       </div>
       <div className="flex-1 px-6 pb-4 pt-3">
         <WeeklyBreakdown
@@ -212,12 +257,14 @@ function PlatformOverallCard({
 
 function ChannelWeeklyCard({
   slide,
+  regenerateContext,
 }: {
   slide: ChannelWeeklySlide;
+  regenerateContext?: RegenerateContext;
 }) {
   return (
     <div className="flex h-full w-full flex-col bg-[color:var(--surface-light-base)]">
-      <div className="px-6 pt-4">
+      <div className="flex items-start justify-between gap-3 px-6 pt-4">
         <SectionDivider
           platform={slide.platform}
           channel={slide.channel}
@@ -226,6 +273,14 @@ function ChannelWeeklyCard({
           continuation={slide.continuation}
           compact
         />
+        {regenerateContext ? (
+          <RegenerateSectionButton
+            reportId={regenerateContext.reportId}
+            originalRunId={regenerateContext.originalRunId}
+            slideTarget={SLIDE_TARGET_FOR.channel_weekly}
+            onRegenerated={regenerateContext.onRegenerated}
+          />
+        ) : null}
       </div>
       <div className="flex-1 px-6 pb-4 pt-3">
         <WeeklyBreakdown
@@ -245,11 +300,13 @@ function ChannelCampaignCard({
   report,
   readOnly,
   onChange,
+  regenerateContext,
 }: {
   slide: ChannelCampaignSlide;
   report: Report;
   readOnly?: boolean;
   onChange?: (next: Report) => void;
+  regenerateContext?: RegenerateContext;
 }) {
   // Commentary edits write back to the original section in the Report's
   // sections array. Match by platform + channel + section id since the
@@ -273,7 +330,7 @@ function ChannelCampaignCard({
 
   return (
     <div className="flex h-full w-full flex-col bg-[color:var(--surface-light-base)]">
-      <div className="px-6 pt-4">
+      <div className="flex items-start justify-between gap-3 px-6 pt-4">
         <SectionDivider
           platform={slide.platform}
           channel={slide.channel}
@@ -282,6 +339,14 @@ function ChannelCampaignCard({
           continuation={slide.continuation}
           compact
         />
+        {regenerateContext ? (
+          <RegenerateSectionButton
+            reportId={regenerateContext.reportId}
+            originalRunId={regenerateContext.originalRunId}
+            slideTarget={SLIDE_TARGET_FOR.channel_campaign}
+            onRegenerated={regenerateContext.onRegenerated}
+          />
+        ) : null}
       </div>
       <div className="flex-1 px-6 pb-4 pt-3">
         <CampaignBreakdown

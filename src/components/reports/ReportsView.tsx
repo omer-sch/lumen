@@ -420,42 +420,48 @@ function ReportsInner({ preloadedReport }: ReportsViewProps) {
               </p>
             )}
 
-            {viewMode === "carousel" ? (
-              <ReportCarousel
-                report={activeReport}
-                onChange={handleDocChange}
-                activeIndex={activeSlide}
-                onActiveIndexChange={setActiveSlide}
-              />
-            ) : (
-              <ReportDocument
-                report={activeReport}
-                onChange={handleDocChange}
-                regenerateContext={
-                  sourceParam === "hermes" &&
-                  activeReport.source === "hermes" &&
-                  activeReport.agentRunId
-                    ? {
-                        reportId: activeReport.id,
-                        originalRunId: activeReport.agentRunId,
-                        onRegenerated: async () => {
-                          // Refetch the canonical row so the UI reflects the
-                          // server-side regenerate + audit append.
-                          const res = await fetch(
-                            `/api/reports/${encodeURIComponent(activeReport.id)}`,
-                          );
-                          if (!res.ok) return;
-                          const body = (await res.json()) as {
-                            report: Report;
-                          };
-                          setDraft(body.report);
-                          save(body.report);
-                        },
-                      }
-                    : undefined
-                }
-              />
-            )}
+            {(() => {
+              // Same regenerateContext for both views. Hermes-drafted
+              // reports get a Regenerate button per content section in
+              // the document view AND per content slide in the carousel;
+              // legacy / manual reports leave it undefined so the
+              // button doesn't render.
+              const regenerateContext =
+                sourceParam === "hermes" &&
+                activeReport.source === "hermes" &&
+                activeReport.agentRunId
+                  ? {
+                      reportId: activeReport.id,
+                      originalRunId: activeReport.agentRunId,
+                      onRegenerated: async () => {
+                        const res = await fetch(
+                          `/api/reports/${encodeURIComponent(activeReport.id)}`,
+                        );
+                        if (!res.ok) return;
+                        const body = (await res.json()) as {
+                          report: Report;
+                        };
+                        setDraft(body.report);
+                        save(body.report);
+                      },
+                    }
+                  : undefined;
+              return viewMode === "carousel" ? (
+                <ReportCarousel
+                  report={activeReport}
+                  onChange={handleDocChange}
+                  activeIndex={activeSlide}
+                  onActiveIndexChange={setActiveSlide}
+                  regenerateContext={regenerateContext}
+                />
+              ) : (
+                <ReportDocument
+                  report={activeReport}
+                  onChange={handleDocChange}
+                  regenerateContext={regenerateContext}
+                />
+              );
+            })()}
 
             {/* Off-screen deck used by the PDF exporter. Mounted only
                 while a PDF export is in progress so we don't pay the
