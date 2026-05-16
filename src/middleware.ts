@@ -21,6 +21,14 @@ const isPublicRoute = createRouteMatcher([
   // constant time. Letting these past Clerk's auth gate is the only
   // way the cron job can ever reach the handler.
   "/api/cron/(.*)",
+  // RAG admin / backfill / history-trigger routes. Each handler does
+  // its own auth: /api/rag/index accepts EITHER a Clerk admin session
+  // OR an `x-backfill-secret` header (CRON_SECRET); /api/rag/index-
+  // history is CRON_SECRET-only (called by the Supabase pg_net
+  // trigger). Middleware Clerk-gating here would block the secret
+  // paths before the route's own check runs.
+  "/api/rag/index",
+  "/api/rag/index-history",
 ]);
 
 // Routes that must stay behind Clerk even in PREVIEW mode:
