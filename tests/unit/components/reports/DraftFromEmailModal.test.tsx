@@ -92,7 +92,7 @@ describe("DraftFromEmailModal", () => {
     });
   });
 
-  it("falls back to the playground when Atelier did not produce a report_id", async () => {
+  it("falls back to the Hermes profile when Atelier did not produce a report_id", async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ run_id: "run-xyz", report_id: null }), {
         status: 200,
@@ -108,7 +108,7 @@ describe("DraftFromEmailModal", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /Draft report/i }));
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/agents/hermes?run=run-xyz");
+      expect(pushMock).toHaveBeenCalledWith("/agents/hermes");
     });
   });
 

@@ -51,7 +51,10 @@ export async function POST(req: NextRequest) {
 
   const run = await startRun({
     agentId: "hermes",
-    input: { email_text: parsed.data.email_text },
+    // user_id stamped into input so the /agents/hermes profile page
+    // can scope its Recent Runs table per-user (agent_runs has no
+    // first-class user_id column today).
+    input: { email_text: parsed.data.email_text, user_id: authResult.userId },
   });
 
   try {

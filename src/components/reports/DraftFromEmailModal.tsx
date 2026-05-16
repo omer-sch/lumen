@@ -160,8 +160,9 @@ export function DraftFromEmailModal({ open, onClose }: Props): React.ReactElemen
           router.push(`/reports/${data.report_id}?source=hermes`);
         } else {
           // Defensive fallback (Atelier skipped or report id missing):
-          // land on the playground so the user still sees the run trace.
-          router.push(`/agents/hermes?run=${data.run_id}`);
+          // land on the Hermes profile so the failed run shows up in
+          // Recent Runs and the user can paste again.
+          router.push(`/agents/hermes`);
         }
         // Don't reset state here; the route change will unmount us.
       } catch (err) {
