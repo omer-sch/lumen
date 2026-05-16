@@ -77,7 +77,9 @@ function makeState(email_text: string) {
     context: { knowledge: [], history: [], comms: [] },
     findings: [],
     bullets: [],
-    deck: { pptx_path: null, slides: [] },
+    user_id: null,
+    snapshot: null,
+    deck: { pptx_path: null, slides: [], report_id: null },
     approval: {
       approved: false,
       approved_by: null,

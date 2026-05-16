@@ -90,7 +90,9 @@ function baseState() {
     context: { knowledge: [], history: [], comms: [] },
     findings: [baseFinding()] as Finding[],
     bullets: [] as Bullet[],
-    deck: { pptx_path: null as string | null, slides: [] as Array<{ index: number; layout: string; title: string }> },
+    user_id: null as string | null,
+    snapshot: null,
+    deck: { pptx_path: null as string | null, slides: [] as Array<{ index: number; layout: string; title: string }>, report_id: null as string | null },
     approval: { approved: false, approved_by: null, approved_at: null, edits: [] as Array<{ bullet_index: number; original: string; revised: string }> },
     history: [] as Array<{ node: string; started_at: string; ended_at: string; notes?: string }>,
   };

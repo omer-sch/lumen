@@ -10,6 +10,7 @@ import { retrieve } from "@/lib/rag/retrieve";
 
 import { runAnomstack, type RawAnomaly } from "../anomstack";
 import { ANALYZE_SYSTEM_PROMPT } from "../prompts/analyze.prompt";
+import { buildHermesSnapshot } from "../snapshot";
 import {
   type ContextChunk,
   type Finding,
@@ -249,9 +250,16 @@ export async function analyze(
   const parsed = FindingsResponseSchema.parse(toolUse.input);
   const findings: Finding[] = parsed.findings;
 
+  // Snapshot: the structural data tables Atelier lifts into the Report.
+  // Mock-anchored today (see snapshot.ts header); the BQ-overlay seam is
+  // here so a future iteration can swap real values in without changing
+  // Atelier or the Report shape.
+  const snapshot = buildHermesSnapshot(intent);
+
   const endedAt = new Date().toISOString();
   return {
     findings,
+    snapshot,
     context: {
       knowledge: knowledgeChunks,
       history: historyChunks,
@@ -262,7 +270,7 @@ export async function analyze(
         node: "analyze",
         started_at: startedAt,
         ended_at: endedAt,
-        notes: `anomalies=${anomstack.anomalies.length} findings=${findings.length} (z=${anomstack.counts.z_score} pct_net=${anomstack.counts.percent_delta_network} pct_camp=${anomstack.counts.percent_delta_campaign})`,
+        notes: `anomalies=${anomstack.anomalies.length} findings=${findings.length} snapshot=${snapshot.platformOverall ? "present" : "skipped"} (z=${anomstack.counts.z_score} pct_net=${anomstack.counts.percent_delta_network} pct_camp=${anomstack.counts.percent_delta_campaign})`,
       },
     ],
   };

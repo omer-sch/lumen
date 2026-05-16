@@ -1,6 +1,12 @@
 import { Annotation } from "@langchain/langgraph";
 import { z } from "zod";
 
+import type {
+  CampaignRow as ReportCampaignRow,
+  HistoricalWeekRow,
+  WeeklySummaryRow,
+} from "@/lib/reports/types";
+
 // Hermes graph state. Two flavors:
 //   - HermesStateAnnotation: LangGraph's typed state shape. Each field
 //     gets a reducer (how an update folds in) and a default. parse_intent
@@ -100,8 +106,43 @@ export const BulletsResponseSchema = z.object({
   bullets: z.array(BulletSchema).max(20),
 });
 
-// ---------- Deck (Atelier output, stubbed in chunk 1) ----------
+// ---------- Snapshot (structural data tables sourced by Analyze) ----------
 
+// The structured tables Atelier needs to assemble a Report whose
+// sections render at the same fidelity as a manually-built one. Analyze
+// produces this from BQ where data exists and falls back to mock
+// fixtures (cloned from src/lib/reports/generate.ts) where it does not,
+// so the Report renders fully even when BQ is sparse. As BQ data
+// quality improves the snapshot picks up real values without any
+// downstream change.
+export type HermesSnapshot = {
+  clientLabel: string;
+  period: {
+    label: string;
+    filterRange?: string;
+    isoStart?: string | null;
+    isoEnd?: string | null;
+  };
+  platformOverall: {
+    rows: WeeklySummaryRow[];
+    total: WeeklySummaryRow;
+  } | null;
+  channelWeekly: {
+    currentWeek: WeeklySummaryRow;
+    history: HistoricalWeekRow[];
+  } | null;
+  channelCampaign: {
+    rows: ReportCampaignRow[];
+  } | null;
+};
+
+// ---------- Deck (Atelier output) ----------
+
+// Phase 6 wrote a server-side .pptx via pptxgenjs. v0.5-A chunk 4
+// replaces that with a Supabase reports-row insert; the .pptx export
+// path is the existing client-side renderer in src/lib/reports/
+// export-pptx.ts, fired by Lior from the /reports surface. The Deck
+// slot kept for trace compatibility; pptx_path is always null now.
 export type DeckSlide = {
   index: number;
   layout: string;
@@ -111,6 +152,7 @@ export type DeckSlide = {
 export type Deck = {
   pptx_path: string | null;
   slides: DeckSlide[];
+  report_id?: string | null;
 };
 
 // ---------- Approval (review_gate state) ----------
@@ -139,6 +181,13 @@ export const HermesStateAnnotation = Annotation.Root({
     reducer: (a, b) => b ?? a,
     default: () => null,
   }),
+  // Owner of the report Atelier writes. Passed from the API route
+  // (Clerk userId or "preview-user" under LUMEN_PREVIEW); never read
+  // from the LLM. Atelier hands it to upsertReport() as the row owner.
+  user_id: Annotation<string | null>({
+    reducer: (a, b) => b ?? a,
+    default: () => null,
+  }),
   intent: Annotation<Intent | null>({
     reducer: (_a, b) => b,
     default: () => null,
@@ -150,6 +199,10 @@ export const HermesStateAnnotation = Annotation.Root({
       comms: b.comms ?? a.comms,
     }),
     default: () => ({ knowledge: [], history: [], comms: [] }),
+  }),
+  snapshot: Annotation<HermesSnapshot | null>({
+    reducer: (_a, b) => b,
+    default: () => null,
   }),
   findings: Annotation<Finding[]>({
     reducer: (_a, b) => b,
@@ -163,8 +216,9 @@ export const HermesStateAnnotation = Annotation.Root({
     reducer: (a, b) => ({
       pptx_path: b.pptx_path ?? a.pptx_path,
       slides: b.slides ?? a.slides,
+      report_id: b.report_id ?? a.report_id,
     }),
-    default: () => ({ pptx_path: null, slides: [] }),
+    default: () => ({ pptx_path: null, slides: [], report_id: null }),
   }),
   approval: Annotation<Approval>({
     reducer: (a, b) => ({ ...a, ...b }),

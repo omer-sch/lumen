@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
     const finalState = await graph.invoke({
       email_text: parsed.data.email_text,
       run_id: run.id,
+      user_id: authResult.userId,
     });
 
     await completeRun(run.id, {
@@ -77,11 +78,13 @@ export async function POST(req: NextRequest) {
       intent_client: finalState.intent?.client ?? null,
       intent_confidence: finalState.intent?.confidence ?? null,
       bullets_count: finalState.bullets.length,
+      report_id: finalState.deck?.report_id ?? null,
       latencyMs: Date.now() - start,
     });
 
     return NextResponse.json({
       run_id: run.id,
+      report_id: finalState.deck?.report_id ?? null,
       intent: finalState.intent,
       findings: finalState.findings,
       bullets: finalState.bullets,

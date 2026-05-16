@@ -147,8 +147,19 @@ export function DraftFromEmailModal({ open, onClose }: Props): React.ReactElemen
           };
           throw new Error(body.error ?? `HTTP ${res.status}`);
         }
-        const data = (await res.json()) as { run_id: string };
-        router.push(`/agents/hermes/runs/${data.run_id}`);
+        const data = (await res.json()) as {
+          run_id: string;
+          report_id: string | null;
+        };
+        if (data.report_id) {
+          // v0.5-A: Hermes drafts land in the canonical Reports surface.
+          // The byline + per-section regenerate affordance live there.
+          router.push(`/reports/${data.report_id}?source=hermes`);
+        } else {
+          // Defensive fallback (Atelier skipped or report id missing):
+          // land on the playground so the user still sees the run trace.
+          router.push(`/agents/hermes?run=${data.run_id}`);
+        }
         // Don't reset state here; the route change will unmount us.
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));

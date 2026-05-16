@@ -1,17 +1,30 @@
 // @vitest-environment node
-// Layer 2 (lib unit). File under test:
-// src/lib/agents/hermes/nodes/atelier.ts. Writes to a real tmp dir so
-// we can validate the .pptx survives round-trip; pptxgenjs is the real
-// dep (we want to know it built a structurally valid file, not just
-// the manifest counts).
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
+// Layer 2 (lib unit). Files under test:
+//   src/lib/agents/hermes/assemble.ts
+//   src/lib/agents/hermes/nodes/atelier.ts (skip path)
+//
+// v0.5-A chunk 4 replaced the pptxgenjs writer with a Report-row
+// inserter. The pure assembleHermesReport helper carries the
+// renderer-bound contract (Report shape, byline, section mapping); the
+// node-level test only covers the skip paths (missing intent /
+// snapshot / user_id) because the supabase write is integration-level
+// and lives in the e2e squad gate.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { buildHermesPptx } from "@/lib/agents/hermes/nodes/atelier";
-import type { Bullet } from "@/lib/agents/hermes/state";
+import { assembleHermesReport } from "@/lib/agents/hermes/assemble";
+import { atelier } from "@/lib/agents/hermes/nodes/atelier";
+import { buildHermesSnapshot } from "@/lib/agents/hermes/snapshot";
+import type {
+  Bullet,
+  HermesState,
+  Intent,
+} from "@/lib/agents/hermes/state";
+import type {
+  ChannelCampaignSection,
+  ChannelWeeklySection,
+  PlatformOverallSection,
+} from "@/lib/reports/types";
 
 function bullet(over: Partial<Bullet> = {}): Bullet {
   return {
@@ -26,83 +39,166 @@ function bullet(over: Partial<Bullet> = {}): Bullet {
   };
 }
 
-let scratch: string;
+function intent(over: Partial<Intent> = {}): Intent {
+  return {
+    client: "globalcomix",
+    platforms: ["android"],
+    channels: ["meta"],
+    period: { label: "Week 19", iso_start: null, iso_end: null },
+    focus: null,
+    confidence: 0.9,
+    doubts: [],
+    ...over,
+  };
+}
 
-beforeEach(async () => {
-  scratch = await mkdtemp(path.join(tmpdir(), "hermes-atelier-"));
-});
-
-afterEach(async () => {
-  await rm(scratch, { recursive: true, force: true });
-});
-
-describe("buildHermesPptx", () => {
-  it("writes a non-empty .pptx file at the expected path", async () => {
-    const result = await buildHermesPptx({
-      run_id: "run-test-1",
-      client: "globalcomix",
-      period_label: "last week",
-      finding_count: 3,
-      bullets: [
-        bullet({ slide_target: "platform_overall" }),
-        bullet({ slide_target: "channel_weekly" }),
-      ],
-      outputDir: scratch,
-    });
-    const expectedPath = path.join(scratch, "run-test-1.pptx");
-    expect(result.pptx_path).toBe(expectedPath);
-    const s = await stat(expectedPath);
-    expect(s.size).toBeGreaterThan(5000);
-    // Sanity: .pptx is a zip, magic bytes "PK\x03\x04".
-    const head = await readFile(expectedPath);
-    expect(head[0]).toBe(0x50); // P
-    expect(head[1]).toBe(0x4b); // K
-  });
-
-  it("paginates bullets past the per-slide cap into continuation slides", async () => {
-    const many = Array.from({ length: 12 }, (_, i) =>
-      bullet({ claim: `Bullet #${i}`, slide_target: "channel_weekly" }),
-    );
-    const result = await buildHermesPptx({
-      run_id: "run-test-2",
-      client: "globalcomix",
-      period_label: "last week",
-      finding_count: 0,
-      bullets: many,
-      outputDir: scratch,
-    });
-    // cover + 12/5 = 3 slides for channel_weekly + 0 for other empty
-    // targets + closing.
-    const channelSlides = result.slides.filter(
-      (s) => s.layout === "channel_weekly",
-    );
-    expect(channelSlides).toHaveLength(3);
-    expect(channelSlides[1].title).toMatch(/\(cont\.\)/);
-  });
-
-  it("includes cover and closing slides in every output", async () => {
-    const result = await buildHermesPptx({
-      run_id: "run-test-3",
-      client: "globalcomix",
-      period_label: "last week",
-      finding_count: 1,
-      bullets: [bullet({ slide_target: "platform_overall" })],
-      outputDir: scratch,
-    });
-    expect(result.slides[0].layout).toBe("cover");
-    expect(result.slides[result.slides.length - 1].layout).toBe("closing");
-  });
-
-  it("handles zero bullets gracefully", async () => {
-    const result = await buildHermesPptx({
-      run_id: "run-test-4",
-      client: "globalcomix",
-      period_label: "last week",
-      finding_count: 0,
+describe("assembleHermesReport", () => {
+  it("produces a Report whose sections match the manual yellowHEAD format", () => {
+    const i = intent();
+    const snapshot = buildHermesSnapshot(i);
+    const report = assembleHermesReport({
+      intent: i,
+      snapshot,
       bullets: [],
-      outputDir: scratch,
+      runId: "run-abc",
+      ownerUserId: "user-xyz",
     });
-    // cover + one empty page per target (3) + closing.
-    expect(result.slides.length).toBeGreaterThanOrEqual(2);
+
+    expect(report.source).toBe("hermes");
+    expect(report.authoredBy).toBe("hermes");
+    expect(report.agentRunId).toBe("run-abc");
+    expect(report.userId).toBe("user-xyz");
+    expect(report.client).toBe("globalcomix");
+    expect(report.clientLabel).toBe("GlobalComix");
+
+    const ids = report.sections.map((s) => s.id);
+    expect(ids).toEqual([
+      "platform_overall",
+      "channel_weekly",
+      "channel_campaign",
+    ]);
+  });
+
+  it("overlays Quill bullets onto each section keyed by slide_target", () => {
+    const i = intent();
+    const snapshot = buildHermesSnapshot(i);
+    const report = assembleHermesReport({
+      intent: i,
+      snapshot,
+      bullets: [
+        bullet({ slide_target: "platform_overall", claim: "Plat A" }),
+        bullet({ slide_target: "platform_overall", claim: "Plat B" }),
+        bullet({ slide_target: "channel_weekly", claim: "Weekly A" }),
+        bullet({ slide_target: "campaign_breakdown", claim: "Camp A" }),
+      ],
+      runId: "run-1",
+      ownerUserId: "user-1",
+    });
+
+    const plat = report.sections.find(
+      (s) => s.id === "platform_overall",
+    ) as PlatformOverallSection;
+    expect(plat.bullets.map((b) => b.text)).toEqual(["Plat A", "Plat B"]);
+
+    const weekly = report.sections.find(
+      (s) => s.id === "channel_weekly",
+    ) as ChannelWeeklySection;
+    expect(weekly.bullets.map((b) => b.text)).toEqual(["Weekly A"]);
+
+    const camp = report.sections.find(
+      (s) => s.id === "channel_campaign",
+    ) as ChannelCampaignSection;
+    expect(camp.commentary).toHaveLength(1);
+    expect(camp.commentary[0].observation).toBe("Camp A");
+  });
+
+  it("falls back to neutral tone when bullets carry no directional signal", () => {
+    const i = intent();
+    const snapshot = buildHermesSnapshot(i);
+    const report = assembleHermesReport({
+      intent: i,
+      snapshot,
+      bullets: [
+        bullet({
+          slide_target: "channel_weekly",
+          claim: "Small move",
+          delta_value: 1.0,
+          action_item: null,
+        }),
+      ],
+      runId: "run-1",
+      ownerUserId: "user-1",
+    });
+
+    const weekly = report.sections.find(
+      (s) => s.id === "channel_weekly",
+    ) as ChannelWeeklySection;
+    expect(weekly.bullets[0].tone).toBeUndefined();
+  });
+
+  it("flags first bullet as headline when the signal is large or directional", () => {
+    const i = intent();
+    const snapshot = buildHermesSnapshot(i);
+    const report = assembleHermesReport({
+      intent: i,
+      snapshot,
+      bullets: [
+        bullet({
+          slide_target: "platform_overall",
+          claim: "Big move",
+          delta_value: 30,
+          action_item: null,
+        }),
+      ],
+      runId: "run-1",
+      ownerUserId: "user-1",
+    });
+
+    const plat = report.sections.find(
+      (s) => s.id === "platform_overall",
+    ) as PlatformOverallSection;
+    expect(plat.bullets[0].tone).toBe("headline-bad");
+  });
+});
+
+describe("atelier node skip paths", () => {
+  function baseState(over: Partial<HermesState> = {}): HermesState {
+    return {
+      email_text: "x",
+      run_id: "run-1",
+      user_id: "user-1",
+      intent: intent(),
+      context: { knowledge: [], history: [], comms: [] },
+      snapshot: buildHermesSnapshot(intent()),
+      findings: [],
+      bullets: [],
+      deck: { pptx_path: null, slides: [], report_id: null },
+      approval: {
+        approved: false,
+        approved_by: null,
+        approved_at: null,
+        edits: [],
+      },
+      history: [],
+      ...over,
+    };
+  }
+
+  it("skips when intent is null", async () => {
+    const out = await atelier(baseState({ intent: null }));
+    expect(out.deck?.report_id).toBeNull();
+    expect(out.history?.[0].notes).toMatch(/missing intent/);
+  });
+
+  it("skips when snapshot is null", async () => {
+    const out = await atelier(baseState({ snapshot: null }));
+    expect(out.deck?.report_id).toBeNull();
+    expect(out.history?.[0].notes).toMatch(/missing snapshot/);
+  });
+
+  it("skips when user_id is null", async () => {
+    const out = await atelier(baseState({ user_id: null }));
+    expect(out.deck?.report_id).toBeNull();
+    expect(out.history?.[0].notes).toMatch(/missing user_id/);
   });
 });

@@ -10,6 +10,7 @@ const retrieveMock = vi.hoisted(() => vi.fn());
 const networkBreakdownMock = vi.hoisted(() => vi.fn());
 const campaignsMock = vi.hoisted(() => vi.fn());
 const trendMock = vi.hoisted(() => vi.fn());
+const upsertReportMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/rag/retrieve", () => ({
   retrieve: retrieveMock,
@@ -19,6 +20,10 @@ vi.mock("@/lib/globalcomix-queries", () => ({
   queryGlobalComixNetworkBreakdown: networkBreakdownMock,
   queryGlobalComixCampaigns: campaignsMock,
   queryGlobalComixTrend: trendMock,
+}));
+
+vi.mock("@/lib/reports/server-store", () => ({
+  upsertReport: upsertReportMock,
 }));
 
 class FakeAnthropic {
@@ -49,6 +54,8 @@ beforeEach(async () => {
   networkBreakdownMock.mockResolvedValue([]);
   campaignsMock.mockResolvedValue([]);
   trendMock.mockResolvedValue([]);
+  upsertReportMock.mockReset();
+  upsertReportMock.mockImplementation((report) => Promise.resolve(report));
   const mod = await import("@/lib/agents/_scaffold/model");
   mod.__setAnthropicClientForTesting(fake as never);
 });
@@ -161,18 +168,24 @@ describe("buildHermesGraph", () => {
     const final = await graph.invoke({
       email_text: "Please send the weekly review for GlobalComix focused on Meta.",
       run_id: "test-run-1",
+      user_id: "user-test-1",
     });
 
     expect(final.intent?.client).toBe("globalcomix");
     expect(final.intent?.confidence).toBeCloseTo(0.91, 2);
     expect(final.findings).toHaveLength(1);
     expect(final.bullets).toHaveLength(1);
-    // Phase 6+: atelier writes a real .pptx with cover + per-target +
-    // closing. With one bullet on platform_overall: cover + one
-    // platform_overall + one channel_weekly (empty) + one
-    // campaign_breakdown (empty) + closing = 5 slides.
-    expect(final.deck.slides.length).toBeGreaterThanOrEqual(4);
-    expect(final.deck.pptx_path).toMatch(/test-run-1\.pptx$/);
+    // v0.5-A chunk 4: Atelier inserts a Report row instead of writing
+    // .pptx. The slides array now mirrors the assembled Report's
+    // sections (platform_overall + channel_weekly + channel_campaign).
+    expect(final.deck.report_id).toBe("rpt_test-run-1");
+    expect(final.deck.pptx_path).toBeNull();
+    expect(final.deck.slides).toHaveLength(3);
+    expect(upsertReportMock).toHaveBeenCalledOnce();
+    const [reportArg, ownerArg] = upsertReportMock.mock.calls[0];
+    expect(reportArg.authoredBy).toBe("hermes");
+    expect(reportArg.source).toBe("hermes");
+    expect(ownerArg).toBe("user-test-1");
     expect(final.approval.approved).toBe(false);
     // History trace has one event per node, in order.
     expect(final.history.map((h) => h.node)).toEqual([

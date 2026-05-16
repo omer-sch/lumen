@@ -250,7 +250,7 @@ export function generateYellowHeadReport({
   };
 }
 
-function sumRows(rows: WeeklySummaryRow[]): WeeklySummaryRow {
+export function sumRows(rows: WeeklySummaryRow[]): WeeklySummaryRow {
   const num = (v: WeeklySummaryRow["spend"]) =>
     typeof v.value === "number" ? v.value : 0;
   const totalSpend = rows.reduce((a, r) => a + num(r.spend), 0);
@@ -270,7 +270,7 @@ function sumRows(rows: WeeklySummaryRow[]): WeeklySummaryRow {
   };
 }
 
-function buildMetaHistory(): HistoricalWeekRow[] {
+export function buildMetaHistory(): HistoricalWeekRow[] {
   return [
     {
       label: "Week 17",
@@ -320,7 +320,7 @@ function buildMetaHistory(): HistoricalWeekRow[] {
   ];
 }
 
-function buildMetaCampaignRows(): CampaignRow[] {
+export function buildMetaCampaignRows(): CampaignRow[] {
   return [
     {
       campaignName:
@@ -411,7 +411,7 @@ function buildMetaCampaignRows(): CampaignRow[] {
  * orange and blue. The order is stable so the commentary highlights wired
  * below land on the same colors.
  */
-function assignCallouts(rows: CampaignRow[]) {
+export function assignCallouts(rows: CampaignRow[]) {
   const sorted = [...rows]
     .map((r, idx) => ({ idx, mag: Math.abs(r.cpaD0Delta) }))
     .sort((a, b) => b.mag - a.mag)
@@ -423,7 +423,7 @@ function assignCallouts(rows: CampaignRow[]) {
   });
 }
 
-function buildMetaCommentary(): CampaignCommentary[] {
+export function buildMetaCommentary(): CampaignCommentary[] {
   return [
     {
       groupLabel: "Sub (Evergreen)",
