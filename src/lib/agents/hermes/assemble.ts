@@ -36,7 +36,7 @@ function groupBulletsBySlide(bullets: Bullet[]): Record<SlideTarget, Bullet[]> {
   return groups;
 }
 
-function bulletToWeekly(b: Bullet, isFirst: boolean): WeeklyBullet {
+export function bulletToWeekly(b: Bullet, isFirst: boolean): WeeklyBullet {
   // Headline tone on the first bullet only, and only when the bullet
   // carries a clear directional signal (action_item set OR a large
   // absolute delta). Everything else stays neutral so the renderer
@@ -54,7 +54,7 @@ function bulletToWeekly(b: Bullet, isFirst: boolean): WeeklyBullet {
   return { text: b.claim };
 }
 
-function bulletToCommentary(b: Bullet, index: number): CampaignCommentary {
+export function bulletToCommentary(b: Bullet, index: number): CampaignCommentary {
   return {
     groupLabel: `Hermes note ${index + 1}`,
     observation: b.claim,

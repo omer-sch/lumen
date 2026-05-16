@@ -3,7 +3,7 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/db/client";
 import type { Database, Json } from "@/lib/db/types";
 
-import type { Report, ReportSection } from "./types";
+import type { Report, ReportAuditEntry, ReportSection } from "./types";
 import type { AgentId } from "@/lib/agents/identity";
 
 type ReportInsert = Database["public"]["Tables"]["reports"]["Insert"];
@@ -57,6 +57,9 @@ function rowToReport(row: ReportRow): Report {
     // with a bad shape falls into ReportDocument's legacy fallback
     // rather than throwing here.
     sections: (row.sections as unknown as ReportSection[]) ?? [],
+    audit: Array.isArray(row.audit)
+      ? (row.audit as unknown as ReportAuditEntry[])
+      : [],
   };
 }
 
@@ -74,6 +77,7 @@ function reportToInsert(
     period: report.period,
     filter_range: report.filterRange ?? null,
     sections: report.sections as unknown as Json,
+    audit: (report.audit ?? []) as unknown as Json,
     authored_by: report.authoredBy ?? "nova",
     source: report.source ?? "manual",
     agent_run_id: report.agentRunId ?? null,

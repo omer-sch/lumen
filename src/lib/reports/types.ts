@@ -242,4 +242,25 @@ export type Report = {
    *  view and per-section regenerate. */
   agentRunId?: string | null;
   sections: ReportSection[];
+  /** Audit trail. Entries are append-only and shaped per kind:
+   *  - {kind:"regenerate_section", slide_target, at, by}
+   *  - {kind:"edit", section_id, before, after, at, by}
+   *  Stored as jsonb so additional kinds can land without a migration. */
+  audit?: ReportAuditEntry[];
 };
+
+export type ReportAuditEntry =
+  | {
+      kind: "regenerate_section";
+      slide_target: string;
+      at: string;
+      by: string;
+    }
+  | {
+      kind: "edit";
+      section_id: string;
+      before: string;
+      after: string;
+      at: string;
+      by: string;
+    };

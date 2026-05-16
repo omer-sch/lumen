@@ -3,11 +3,27 @@
 import { useCallback } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { EditableText } from "./EditableText";
+import { RegenerateSectionButton } from "./RegenerateSectionButton";
 import { ReportCoverHeader } from "./ReportCoverHeader";
 import { SectionDivider } from "./sections/SectionDivider";
 import { WeeklyBreakdown } from "./sections/WeeklyBreakdown";
 import { CampaignBreakdown } from "./sections/CampaignBreakdown";
 import type { Report, ReportSection } from "@/lib/reports/types";
+
+type RegenerateContext = {
+  reportId: string;
+  originalRunId: string;
+  onRegenerated: () => void;
+};
+
+const SLIDE_TARGET_FOR: Record<
+  "platform_overall" | "channel_weekly" | "channel_campaign",
+  "platform_overall" | "channel_weekly" | "campaign_breakdown"
+> = {
+  platform_overall: "platform_overall",
+  channel_weekly: "channel_weekly",
+  channel_campaign: "campaign_breakdown",
+};
 
 type ReportDocumentProps = {
   report: Report;
@@ -15,6 +31,10 @@ type ReportDocumentProps = {
   onChange: (next: Report) => void;
   /** Read-only mode for the share view + PDF export. */
   readOnly?: boolean;
+  /** When set, each yellowHEAD section renders a "Regenerate" button
+   *  that fires the Hermes regenerate-section sub-graph. Only used on
+   *  Hermes-drafted reports opened with source=hermes. */
+  regenerateContext?: RegenerateContext;
 };
 
 /** Yellowhead deck convention: the first divider for each platform/channel
@@ -44,7 +64,12 @@ const CHANNEL_TITLE = {
   search: "Search",
 } as const;
 
-export function ReportDocument({ report, onChange, readOnly }: ReportDocumentProps) {
+export function ReportDocument({
+  report,
+  onChange,
+  readOnly,
+  regenerateContext,
+}: ReportDocumentProps) {
   const updateSection = useCallback(
     (id: ReportSection["id"], patch: Partial<ReportSection>) => {
       onChange({
@@ -88,6 +113,7 @@ export function ReportDocument({ report, onChange, readOnly }: ReportDocumentPro
           section={section}
           readOnly={readOnly}
           updateSection={updateSection}
+          regenerateContext={regenerateContext}
         />
       ))}
 
@@ -113,6 +139,7 @@ function SectionRenderer({
   section,
   readOnly,
   updateSection,
+  regenerateContext,
 }: {
   section: ReportSection;
   readOnly?: boolean;
@@ -120,16 +147,33 @@ function SectionRenderer({
     id: ReportSection["id"],
     patch: Partial<ReportSection>,
   ) => void;
+  regenerateContext?: RegenerateContext;
 }) {
+  const regenerateButton =
+    regenerateContext &&
+    (section.id === "platform_overall" ||
+      section.id === "channel_weekly" ||
+      section.id === "channel_campaign") ? (
+      <RegenerateSectionButton
+        reportId={regenerateContext.reportId}
+        originalRunId={regenerateContext.originalRunId}
+        slideTarget={SLIDE_TARGET_FOR[section.id]}
+        onRegenerated={regenerateContext.onRegenerated}
+      />
+    ) : null;
+
   // yellowHEAD format
   if (section.id === "platform_overall") {
     return (
       <div className="flex flex-col gap-5">
-        <SectionDivider
-          platform={section.platform}
-          title={PLATFORM_TITLE[section.platform]}
-          subtitle={SUBTITLE_FOR.platform_overall}
-        />
+        <div className="flex items-start justify-between gap-3">
+          <SectionDivider
+            platform={section.platform}
+            title={PLATFORM_TITLE[section.platform]}
+            subtitle={SUBTITLE_FOR.platform_overall}
+          />
+          {regenerateButton}
+        </div>
         <WeeklyBreakdown summary={section.summary} bullets={section.bullets} />
       </div>
     );
@@ -138,12 +182,15 @@ function SectionRenderer({
   if (section.id === "channel_weekly") {
     return (
       <div className="flex flex-col gap-5">
-        <SectionDivider
-          platform={section.platform}
-          channel={section.channel}
-          title={CHANNEL_TITLE[section.channel]}
-          subtitle={SUBTITLE_FOR.channel_weekly}
-        />
+        <div className="flex items-start justify-between gap-3">
+          <SectionDivider
+            platform={section.platform}
+            channel={section.channel}
+            title={CHANNEL_TITLE[section.channel]}
+            subtitle={SUBTITLE_FOR.channel_weekly}
+          />
+          {regenerateButton}
+        </div>
         <WeeklyBreakdown
           currentWeek={section.currentWeek}
           history={section.history}
@@ -156,12 +203,15 @@ function SectionRenderer({
   if (section.id === "channel_campaign") {
     return (
       <div className="flex flex-col gap-5">
-        <SectionDivider
-          platform={section.platform}
-          channel={section.channel}
-          title={CHANNEL_TITLE[section.channel]}
-          subtitle={SUBTITLE_FOR.channel_campaign}
-        />
+        <div className="flex items-start justify-between gap-3">
+          <SectionDivider
+            platform={section.platform}
+            channel={section.channel}
+            title={CHANNEL_TITLE[section.channel]}
+            subtitle={SUBTITLE_FOR.channel_campaign}
+          />
+          {regenerateButton}
+        </div>
         <CampaignBreakdown
           rows={section.rows}
           commentary={section.commentary}

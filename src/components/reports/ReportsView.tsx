@@ -66,6 +66,7 @@ function ReportsInner({ preloadedReport }: ReportsViewProps) {
   const { items, save, remove, get, hydrated } = useReports();
   const searchParams = useSearchParams();
   const sharedId = searchParams.get("id");
+  const sourceParam = searchParams.get("source");
 
   const [draft, setDraft] = useState<Report | null>(preloadedReport ?? null);
   const [prompt, setPrompt] = useState("");
@@ -362,6 +363,29 @@ function ReportsInner({ preloadedReport }: ReportsViewProps) {
               <ReportDocument
                 report={activeReport}
                 onChange={handleDocChange}
+                regenerateContext={
+                  sourceParam === "hermes" &&
+                  activeReport.source === "hermes" &&
+                  activeReport.agentRunId
+                    ? {
+                        reportId: activeReport.id,
+                        originalRunId: activeReport.agentRunId,
+                        onRegenerated: async () => {
+                          // Refetch the canonical row so the UI reflects the
+                          // server-side regenerate + audit append.
+                          const res = await fetch(
+                            `/api/reports/${encodeURIComponent(activeReport.id)}`,
+                          );
+                          if (!res.ok) return;
+                          const body = (await res.json()) as {
+                            report: Report;
+                          };
+                          setDraft(body.report);
+                          save(body.report);
+                        },
+                      }
+                    : undefined
+                }
               />
             )}
 
