@@ -90,6 +90,8 @@ export async function atelier(
     });
     // Stamp the regeneration context so the per-section regenerate
     // route can rebuild the same Intent without re-parsing the email.
+    // Persisting actionNotes lets a per-section regenerate replay
+    // the same `<> AI:` callouts.
     report = {
       ...composed.report,
       regenerationContext: state.intent.period.iso_start &&
@@ -99,6 +101,7 @@ export async function atelier(
             channels: state.intent.channels,
             periodIsoStart: state.intent.period.iso_start,
             periodIsoEnd: state.intent.period.iso_end,
+            actionNotes: state.action_notes ?? null,
           }
         : undefined,
     };
@@ -140,6 +143,16 @@ export async function atelier(
     report_id: saved.id,
   };
 
+  // Audit note: legacy path counts Quill's bullets, smart-reports
+  // path counts the rendered prose blocks. The "0 bullets" surface
+  // on smart-reports runs (when the conditional graph edge skips
+  // Quill) was misleading; switching the count source per mode
+  // keeps the log honest.
+  const auditCount =
+    assembleMode === "smart-reports"
+      ? `${countProseBlocks(report)} prose blocks`
+      : `${state.bullets.length} bullets`;
+
   return {
     deck,
     history: [
@@ -147,8 +160,15 @@ export async function atelier(
         node: "atelier",
         started_at: startedAt,
         ended_at: new Date().toISOString(),
-        notes: `wrote report ${saved.id} via ${assembleMode} (${report.sections.length} sections, ${state.bullets.length} bullets)`,
+        notes: `wrote report ${saved.id} via ${assembleMode} (${report.sections.length} sections, ${auditCount})`,
       },
     ],
   };
+}
+
+function countProseBlocks(report: { sections: readonly unknown[] }): number {
+  return report.sections.reduce<number>((a, s) => {
+    const prose = (s as { prose?: unknown }).prose;
+    return a + (Array.isArray(prose) ? prose.length : 0);
+  }, 0);
 }

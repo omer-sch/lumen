@@ -272,6 +272,100 @@ describe("composeReport (weekly-review-globalcomix template)", () => {
     ).rejects.toThrow(/fictional-query/);
   });
 
+  it("honors intent.channels: an iOS / Meta-only intent does not emit Google or TikTok sections", async () => {
+    // Sonnet call accounting:
+    //   - writePlatformOverall (1)
+    //   - meta weekly (2)
+    //   - meta campaign: short-circuits because the fixture's only
+    //     campaign is on Meta with platform=Android; the campaign
+    //     writer's family group still has one row, so it fires.
+    //     We mock it defensively.
+    messagesCreateMock
+      .mockResolvedValueOnce(toolResp("write_platform_overall", {
+        blocks: [
+          {
+            heading: "Facebook",
+            bullets: [
+              { text: "{{bad}}Decline across the funnel{{/bad}} [cite:network-breakdown]" },
+              { text: "CPA D7 still maturing [cite:network-breakdown]" },
+            ],
+            bottomLine: "Pause pending creative refresh.",
+          },
+        ],
+      }))
+      .mockResolvedValueOnce(toolResp("write_weekly_breakdown", {
+        bullets: [
+          { text: "Meta declined; {{bad}}CPA up 20%{{/bad}} [cite:network-breakdown]" },
+          { text: "Top-Geos drove the increase [cite:network-breakdown]" },
+        ],
+        bottomLine: "Meta is the bottleneck this week.",
+      }))
+      .mockResolvedValueOnce(toolResp("write_campaign_breakdown", {
+        blocks: [
+          {
+            heading: "Sub Evergreen",
+            bullets: [
+              { text: "WW continues to deliver [cite:campaigns]" },
+              { text: "Other geos held steady [cite:campaigns]" },
+            ],
+            bottomLine: "Keep WW; revisit India next week.",
+          },
+        ],
+      }));
+
+    const iosMetaIntent: Intent = {
+      ...intent,
+      platforms: ["ios"],
+      channels: ["meta"],
+    };
+    const composed = await composeReport({
+      readyData: fakeReadyData({ intent: iosMetaIntent }),
+      intent: iosMetaIntent,
+      ownerUserId: "test-user",
+      options: { template: "weekly-review-globalcomix" },
+    });
+
+    expect(composed.report.chapters).toHaveLength(1);
+    const chapter = composed.report.chapters![0];
+    // Degraded mode: emit the first requested platform (iOS).
+    expect(chapter.platform).toBe("ios");
+    const ids = chapter.sections.map((s) => s.id);
+    expect(ids).toEqual([
+      "platform_overall",
+      "channel_weekly",
+      "channel_campaign",
+    ]);
+    // No Google / TikTok / ASA sections leaked.
+    const channelSections = chapter.sections.filter(
+      (s) => s.id === "channel_weekly" || s.id === "channel_campaign",
+    );
+    for (const s of channelSections) {
+      if (s.id === "channel_weekly" || s.id === "channel_campaign") {
+        expect(s.channel).toBe("meta");
+      }
+    }
+    // Sonnet fired exactly 3 times -- not 5, not 9.
+    expect(messagesCreateMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("returns null chapters when no requested channel runs on the platform (e.g. ASA on Android)", async () => {
+    const intentAsaOnAndroid: Intent = {
+      ...intent,
+      platforms: ["android"],
+      channels: ["apple_search_ads"],
+    };
+    const composed = await composeReport({
+      readyData: fakeReadyData({ intent: intentAsaOnAndroid }),
+      intent: intentAsaOnAndroid,
+      ownerUserId: "test-user",
+      options: { template: "weekly-review-globalcomix" },
+    });
+
+    // PLATFORM_CHANNELS.android excludes ASA -> chapter is skipped.
+    expect(composed.report.chapters).toEqual([]);
+    expect(messagesCreateMock).not.toHaveBeenCalled();
+  });
+
   it("emits no chapters when ReadyData has no networks with spend", async () => {
     // Platform-overall writer short-circuits when the platform's
     // network list is empty; no Sonnet calls fire.

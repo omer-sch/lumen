@@ -139,14 +139,31 @@ export async function buildChapter(args: {
    *  prose as `<> AI:` callouts. */
   actionItems?: ActionItem[];
 }): Promise<ChapterBuildResult | null> {
+  const platformLabel = PLATFORM_LABEL[args.platform];
+
+  // Intersect the template's per-platform default channel list with
+  // intent.channels so the deck respects the user's scope. A channel
+  // the user did not pick is skipped entirely.
+  const requestedChannels = new Set<Intent["channels"][number]>(
+    args.intent.channels,
+  );
+  const channelsToEmit = PLATFORM_CHANNELS[args.platform].filter((c) =>
+    requestedChannels.has(c),
+  );
+  if (channelsToEmit.length === 0) return null;
+
+  // BQ network names that match any user-picked channel on this
+  // platform. Used to filter the platform-overall summary too so the
+  // overall table doesn't list channels the user did not ask for.
+  const allowedNetworkNames = new Set<string>(
+    channelsToEmit.flatMap((c) => BQ_NETWORK_NAMES_FOR_CHANNEL[c] ?? []),
+  );
   const platformNetworks = networksForPlatform(
     args.ready,
     args.platform,
     args.dataIsPlatformFiltered,
-  );
+  ).filter((n) => allowedNetworkNames.has(n.network));
   if (platformNetworks.length === 0) return null;
-
-  const platformLabel = PLATFORM_LABEL[args.platform];
 
   // 1) Platform overall prose (cross-channel synthesis). Phase 3
   // optionally threads in the freshness summary so the writer can
@@ -182,8 +199,9 @@ export async function buildChapter(args: {
     prose: overallRes.blocks,
   });
 
-  // 2) Per-channel: weekly breakdown + campaign breakdown.
-  for (const channel of PLATFORM_CHANNELS[args.platform]) {
+  // 2) Per-channel: weekly breakdown + campaign breakdown. Only the
+  // intersection of PLATFORM_CHANNELS[platform] and intent.channels.
+  for (const channel of channelsToEmit) {
     const bqNames = BQ_NETWORK_NAMES_FOR_CHANNEL[channel] ?? [];
     const hasSpend = args.ready.networks.some(
       (n) => bqNames.includes(n.network) && n.spend > 0,
@@ -354,9 +372,20 @@ export async function buildWeeklyReviewGlobalcomix(args: {
    *  to a single chapter. */
   dataIsPlatformFiltered: boolean;
 }): Promise<WeeklyReviewBuildResult> {
+  // Intersect intent.platforms with the template's deterministic
+  // platform order. When platform-filtered, emit every requested
+  // platform in canonical order; degraded mode emits only the FIRST
+  // requested platform so the cover caveat does not lie about scope.
+  const requestedPlatforms = new Set<Platform>(args.intent.platforms);
+  const platformsInOrder: Platform[] = (PLATFORM_ORDER as readonly Platform[])
+    .filter((p) => requestedPlatforms.has(p));
+  const fallbackPlatforms: Platform[] =
+    platformsInOrder.length > 0
+      ? platformsInOrder
+      : [pickSinglePlatform(args.intent)];
   const platformsToEmit: Platform[] = args.dataIsPlatformFiltered
-    ? [...PLATFORM_ORDER]
-    : [pickSinglePlatform(args.intent)];
+    ? fallbackPlatforms
+    : fallbackPlatforms.slice(0, 1);
 
   // Phase 3 context shared across every chapter: freshness summary
   // (pure inspection of ReadyData.provenance + per-network sparseness)

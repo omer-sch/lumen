@@ -2,6 +2,7 @@ import "server-only";
 
 import { END, START, StateGraph } from "@langchain/langgraph";
 
+import { serverEnv } from "@/lib/env.server";
 import { analyze } from "./nodes/analyze";
 import { atelier } from "./nodes/atelier";
 import { parseIntent } from "./nodes/parse-intent";
@@ -13,10 +14,19 @@ import {
   type HermesStateUpdate,
 } from "./state";
 
-// Linear five-node Hermes graph. Conditional edges land in Phase 7
-// (regenerate-section subgraph). For Phase 2 the topology is straight
-// through. Each node is defined in its own file so the build agent and
+// Five-node Hermes graph. The `analyze -> ?` edge is conditional on
+// USE_SMART_REPORTS: in "live" mode atelier regenerates prose from
+// ReadyData and never reads Quill's bullets, so we skip the dead
+// 10-15 second LLM call. In "off" / "shadow" the legacy snapshot path
+// in atelier still consumes state.bullets and Quill stays in the
+// graph. Each node is defined in its own file so the build agent and
 // later reviewers can swap one node at a time without touching this.
+
+/** Route function for the conditional analyze edge. Exported so tests
+ *  can assert the topology without compiling the graph. */
+export function routeAfterAnalyze(_state: HermesState): "atelier" | "quill" {
+  return serverEnv.USE_SMART_REPORTS === "live" ? "atelier" : "quill";
+}
 
 export function buildHermesGraph() {
   return new StateGraph(HermesStateAnnotation)
@@ -27,7 +37,10 @@ export function buildHermesGraph() {
     .addNode("review_gate", reviewGate)
     .addEdge(START, "parse_intent")
     .addEdge("parse_intent", "analyze")
-    .addEdge("analyze", "quill")
+    .addConditionalEdges("analyze", routeAfterAnalyze, {
+      atelier: "atelier",
+      quill: "quill",
+    })
     .addEdge("quill", "atelier")
     .addEdge("atelier", "review_gate")
     .addEdge("review_gate", END)

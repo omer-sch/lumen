@@ -244,7 +244,12 @@ export async function POST(
         ready,
         bqNetworkNames: bqNames,
         options: { template: "weekly-review-globalcomix" },
-        actionItems: parseActionItems(undefined, ready),
+        // Replay the original action notes so the regenerated block
+        // surfaces the same `<> AI:` callouts when a family matches.
+        actionItems: parseActionItems(
+          ctxData.actionNotes ?? undefined,
+          ready,
+        ),
         callouts,
       });
       proseBlocks = result.blocks;

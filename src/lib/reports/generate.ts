@@ -259,12 +259,14 @@ export async function generateReport(input: GenerateInput): Promise<Report> {
       suppressPlatformChannelPills: false,
       // Stamp the regeneration context so the per-section regenerate
       // route can rebuild the original Intent without round-tripping
-      // through the UI.
+      // through the UI. Persisting actionNotes here means a
+      // per-section regenerate replays the same `<> AI:` callouts.
       regenerationContext: {
         platforms,
         channels,
         periodIsoStart: fmtIso(weekStart),
         periodIsoEnd: fmtIso(weekEnd),
+        actionNotes: actionNotes ?? null,
       },
     };
   }

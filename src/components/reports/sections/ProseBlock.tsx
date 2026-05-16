@@ -37,6 +37,35 @@ type Props = {
 const PLACEHOLDER_RE = /\[\[highlight:(\d+)\]\]/g;
 
 export function ProseBlockView({ block, compact, editable, onChange }: Props) {
+  // Backward compat: reports persisted before the bullets+bottomLine
+  // shape rolled out carry `{ text, highlights }` instead. The new
+  // type makes those fields invalid at compile time, but old rows in
+  // Supabase still hydrate at runtime. Detect the legacy shape and
+  // render a regenerate-me placeholder rather than crashing on
+  // `block.bullets.map`. The SectionActions header button is the
+  // path forward.
+  const hasBullets = Array.isArray(block.bullets) && block.bullets.length > 0;
+  if (!hasBullets) {
+    return (
+      <div
+        className={cn(
+          "rounded-md font-body leading-relaxed",
+          compact ? "px-3 py-2 text-[12px]" : "px-4 py-3 text-[13px]",
+        )}
+        style={{
+          background: "var(--surface-light-base)",
+          color: "var(--text-light-muted)",
+          border: "1px dashed var(--surface-light-line)",
+        }}
+        role="note"
+      >
+        This section was drafted by an older version of Smart Reports. Click
+        Regenerate in the section header to refresh it into the current
+        bullets + bottom line shape.
+      </div>
+    );
+  }
+
   const setBulletText = (idx: number, nextText: string) => {
     if (!onChange) return;
     onChange({

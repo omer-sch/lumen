@@ -374,6 +374,11 @@ export type Report = {
     channels: ("meta" | "google" | "tiktok" | "apple_search_ads" | "applovin")[];
     periodIsoStart: string;
     periodIsoEnd: string;
+    /** Free-form analyst notes pasted into the manual builder /
+     *  Hermes modal. Persisted so per-section regenerate can re-parse
+     *  them against the latest ReadyData and emit the same
+     *  `<> AI:` callouts the original draft had. */
+    actionNotes?: string | null;
   };
   /** Audit trail. Entries are append-only and shaped per kind:
    *  - {kind:"regenerate_section", slide_target, at, by}

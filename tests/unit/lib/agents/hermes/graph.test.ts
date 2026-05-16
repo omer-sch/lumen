@@ -175,6 +175,16 @@ describe("buildHermesGraph", () => {
     ]);
   });
 
+  it("routeAfterAnalyze routes through quill when USE_SMART_REPORTS is off, skips to atelier when live", async () => {
+    const { routeAfterAnalyze } = await import("@/lib/agents/hermes/graph");
+    vi.stubEnv("USE_SMART_REPORTS", "off");
+    expect(routeAfterAnalyze({} as never)).toBe("quill");
+    vi.stubEnv("USE_SMART_REPORTS", "shadow");
+    expect(routeAfterAnalyze({} as never)).toBe("quill");
+    vi.stubEnv("USE_SMART_REPORTS", "live");
+    expect(routeAfterAnalyze({} as never)).toBe("atelier");
+  });
+
   it("runs end to end with parse_intent + analyze + quill (all mocked Anthropic) + atelier/review_gate stubs", async () => {
     fake.messages.create
       .mockResolvedValueOnce(mockHaikuResponse(TOOL_USE_INTENT))

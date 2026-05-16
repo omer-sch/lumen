@@ -307,7 +307,9 @@
       "Bash(xargs -0 perl -i -pe 's/\\(email_text:\\\\s*\\(?:\"[^\"]*\"|CANONICAL_FIXTURE|bodyWithSignature\\),\\)$/$1\\\\n    action_notes: null as string | null,/g')",
       "Bash(awk NR==270,NR==290 *)",
       "Bash(awk NR==45,NR==65 *)",
-      "Bash(awk NR==244,NR==270 *)"
+      "Bash(awk NR==244,NR==270 *)",
+      "Bash(kill 37986)",
+      "Bash(awk '{print \"PID=\"$2\" cpu=\"$3\"% mem=\"$4\"% etime=\"$10}')"
     ]
   },
   "enableAllProjectMcpServers": true,
