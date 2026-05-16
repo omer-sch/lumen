@@ -206,15 +206,21 @@ export type ReportSection =
 
 export type Report = {
   id: string;
-  /** Owner — phase 1 mock; phase 2 is the auth user id. */
+  /** Owner. Clerk userId on the server, "preview-user" under LUMEN_PREVIEW,
+   *  legacy "mock-user-1" for localStorage rows persisted before the
+   *  Supabase migration in v0.5-A. The server fills this from the auth
+   *  context on every write; the client field is informational. */
   userId: string;
+  /** Client filter key (e.g. "globalcomix"), the value the global filter
+   *  uses. clientLabel is the display string ("GlobalComix"). */
+  client: string;
   createdAt: number;
   updatedAt: number;
   /** Free-text prompt the user gave when generating. */
   prompt: string;
   /** "UA weekly summary for GlobalComix" — derived from the prompt + filter. */
   title: string;
-  /** Period the report covers, e.g. "Apr 1 – Apr 30, 2026". */
+  /** Period the report covers, e.g. "Apr 1 to Apr 30, 2026". */
   period: string;
   /** Set when the active global filter is wider than a single week and the
    *  report has narrowed itself to the most recent complete ISO week.
@@ -224,8 +230,16 @@ export type Report = {
   /** Display label for the active client (e.g. "GlobalComix"). */
   clientLabel: string;
   /** Which agent drafted the report — drives the byline under the title.
-   *  Nova is the report writer; legacy reports persisted before this field
-   *  existed default to her in the UI. */
+   *  Nova is the report writer; Hermes is the v0.5 drafter; legacy reports
+   *  persisted before this field existed default to Nova in the UI. */
   authoredBy?: AgentId;
+  /** "manual" for user-built reports via the Reports prompt; "hermes" for
+   *  agent-drafted reports landed from /api/agents/hermes/generate. The UI
+   *  uses this to surface the Hermes byline + the per-section regenerate
+   *  affordance. */
+  source?: "manual" | "hermes";
+  /** Set on Hermes-drafted reports; links back to agent_runs for trace
+   *  view and per-section regenerate. */
+  agentRunId?: string | null;
   sections: ReportSection[];
 };

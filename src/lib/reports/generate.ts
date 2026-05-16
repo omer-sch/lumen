@@ -236,6 +236,7 @@ export function generateYellowHeadReport({
   return {
     id: newId(),
     userId: "mock-user-1",
+    client,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     prompt,
@@ -244,6 +245,7 @@ export function generateYellowHeadReport({
     filterRange,
     clientLabel,
     authoredBy: "nova",
+    source: "manual",
     sections,
   };
 }
@@ -560,6 +562,7 @@ export function generateLegacyReport({
   return {
     id: newId(),
     userId: "mock-user-1",
+    client,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     prompt,
@@ -568,6 +571,7 @@ export function generateLegacyReport({
     filterRange,
     clientLabel,
     authoredBy: "nova",
+    source: "manual",
     sections,
   };
 }

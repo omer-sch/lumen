@@ -4,7 +4,6 @@ import {
   Suspense,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -175,10 +174,10 @@ function ReportsInner() {
     }
   };
 
-  const filteredCount = useMemo(
-    () => items.filter((r) => r.userId === "mock-user-1").length,
-    [items],
-  );
+  // After the v0.5-A Supabase migration the server scopes reports to the
+  // Clerk user; the legacy mock-user-1 filter would now hide reports
+  // that came back from /api/reports. Just count what the hook returns.
+  const filteredCount = items.length;
 
   return (
     <div className="grid grid-cols-1 gap-6 py-2 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8 lg:print:block">

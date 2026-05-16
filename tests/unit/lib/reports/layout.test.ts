@@ -150,11 +150,12 @@ function reportWith(sections: Report["sections"]): Report {
   return {
     id: "rpt_test",
     userId: "u",
+    client: "globalcomix",
     createdAt: 0,
     updatedAt: 0,
     prompt: "p",
     title: "Test report",
-    period: "Apr 27 – May 3, 2026",
+    period: "Apr 27 to May 3, 2026",
     clientLabel: "GlobalComix",
     sections,
   };
