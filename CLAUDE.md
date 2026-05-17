@@ -29,7 +29,9 @@ yellowHEAD is an Israeli performance marketing agency (~130 people, offices in I
 | Creative | Ad creatives, UGC, visual production | Coral `#F88673` |
 | CSM | Client success, reporting to clients | No accent (use neutral) |
 
-Each team touches data differently. UA cares about spend efficiency and ROAS by channel. Organic cares about keyword rankings, install volume, and store conversion rates. Creative cares about which ad formats and concepts are performing. CSM cares about what to show clients and how to tell the story.
+Each team touches data differently. UA cares about spend efficiency and unit economics by channel (the specific metrics depend on the client's monetization model -- see below). Organic cares about keyword rankings, install volume, and store conversion rates. Creative cares about which ad formats and concepts are performing. CSM cares about what to show clients and how to tell the story.
+
+**UA metric framing depends on the client's monetization model.** Performance / e-commerce clients are framed around CPI and ROAS. Subscription clients are framed around a multi-step cohort funnel and blended cost. **For the current pilot (GlobalComix, a subscription product), the metric vocabulary Lumen must support is:** funnel events Start Trial -> Sub Start D0 -> Sub D0 -> Sub D7 -> Sub D14, with cohort-attributed unit costs at each step (CP Start Trial, CP Sub Start D0, CPA D0, CPA D7, CPA D14). The headline success metric is **CPA D7** (cost per subscriber at the 7-day cohort window), and the strategic top-line metric is **BCAC** (Blended Customer Acquisition Cost = total spend / total subs including organic halo). ROI D7 is the headline efficiency metric. Adjust is the MMP and authoritative source for all cohort metrics; iOS adds SKAdNetwork from Meta and Google as a secondary attribution path. Do not assume ROAS is the right KPI for UA until the client's monetization model is known. See `Lumen Vault/Research/Prior Art - GlobalComix UA Looker Dashboard (2026-05-17).md` for the full vocabulary and the source-of-truth mapping.
 
 **What is NOT part of yellowHEAD:** Alison.AI is a separate company. Do not include it in scope, feature thinking, or architecture. Older sources online still describe it as yellowHEAD's tech — that is outdated.
 
@@ -167,8 +169,8 @@ The page you open every morning. Fast, scannable, personal over time.
 
 **What lives here:**
 - Global filter bar: date range picker (7d / 14d / 30d / 90d / custom) + client selector. This filter state is global and travels to Campaigns, Ask, and Reports.
-- KPI tiles: Spend, Installs, CPI, ROAS (hero). Count-up animations, delta vs previous period.
-- Trend chart with metric switcher: one chart, four metrics (Spend / Installs / CPI / ROAS), toggle between them.
+- KPI tiles (client-appropriate metric set; **for the GlobalComix pilot: Spend, Installs, CPA D7, ROI D7** -- swap to CPI / ROAS for performance / e-commerce clients). Count-up animations, delta vs previous period.
+- Trend chart with metric switcher: one chart, four metrics matching the KPI tiles above, toggle between them.
 - Channel mix: spend share across Meta, TikTok, Google, AppsFlyer.
 - Pinned tiles section: visualizations the user built in Ask and chose to keep. Persistent, personal, reorderable.
 - AI Mode toggle (see below).
@@ -188,7 +190,7 @@ The page you open every morning. Fast, scannable, personal over time.
 The page you go to when a number on the dashboard moves and you need to find which campaign caused it. Investigation mode, not overview mode.
 
 **What lives here:**
-- Campaign breakdown table: one row per campaign, columns for Channel, Spend, Installs, CPI, ROAS, delta vs previous period, 7-day sparkline.
+- Campaign breakdown table: one row per campaign, columns for Channel, Spend, Installs, plus the client-appropriate unit-cost and return columns (**for the GlobalComix pilot: CPA D7 and ROI D7**; for performance / e-commerce clients: CPI and ROAS), delta vs previous period, 7-day sparkline.
 - Sortable by any column. Filterable by channel.
 - The global filter (date range + client) from the dashboard applies here automatically.
 
