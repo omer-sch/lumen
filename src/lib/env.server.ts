@@ -214,6 +214,28 @@ export const serverEnv = {
     }
     return raw;
   },
+  /**
+   * Maximum number of Anthropic prose-writer calls in flight at once
+   * for a single composeReport run. Each chapter has up to 4 channels;
+   * each channel fires a weekly + campaign pair; the platform-overall
+   * adds one more per chapter. A worst-case full-month run could
+   * fan out to ~28 concurrent calls without a cap, which trips
+   * Anthropic's per-key rate limit. 6 is the floor that keeps the
+   * 2-channel case fully parallel while smoothing out the long-tail
+   * multi-platform run.
+   * Default: 6. Validated as a positive integer.
+   */
+  get LUMEN_MAX_CONCURRENT_WRITERS() {
+    const raw = read("LUMEN_MAX_CONCURRENT_WRITERS", { optional: true });
+    if (!raw) return 6;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 1) {
+      throw new Error(
+        `LUMEN_MAX_CONCURRENT_WRITERS must be a positive integer, got ${raw}`,
+      );
+    }
+    return n;
+  },
 } as const;
 
 // True when LangSmith tracing is opt-in and credentials are present.

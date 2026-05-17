@@ -1,4 +1,5 @@
 import type { Intent, ReadyData } from "@/lib/analyst/types";
+import { serverEnv } from "@/lib/env.server";
 import type {
   ChannelCampaignSection,
   ChannelWeeklySection,
@@ -7,12 +8,14 @@ import type {
 } from "@/lib/reports/types";
 
 import { parseActionItems, type ActionItem } from "../action-items";
+import { createLimit, type Limit } from "../concurrency-limit";
 import { summarizeFreshness, type FreshnessSummary } from "../freshness";
 import {
   writeCampaignBreakdown,
   writePlatformOverall,
   writeWeeklyBreakdown,
   type CampaignCallout,
+  type WeeklyWriteResult,
 } from "../prose-writer";
 import type {
   ComposeOptions,
@@ -138,7 +141,14 @@ export async function buildChapter(args: {
    *  campaign-breakdown writer weaves them into matching family
    *  prose as `<> AI:` callouts. */
   actionItems?: ActionItem[];
+  /** Shared concurrency limit. The composition-level orchestrator
+   *  builds one Limit and threads it down so the cap covers the
+   *  entire run, not just a single chapter. When undefined the
+   *  chapter creates a local Limit (useful for tests that call
+   *  buildChapter directly). */
+  limit?: Limit;
 }): Promise<ChapterBuildResult | null> {
+  const limit = args.limit ?? createLimit(serverEnv.LUMEN_MAX_CONCURRENT_WRITERS);
   const platformLabel = PLATFORM_LABEL[args.platform];
 
   // Intersect the template's per-platform default channel list with
@@ -165,16 +175,97 @@ export async function buildChapter(args: {
   ).filter((n) => allowedNetworkNames.has(n.network));
   if (platformNetworks.length === 0) return null;
 
-  // 1) Platform overall prose (cross-channel synthesis). Phase 3
-  // optionally threads in the freshness summary so the writer can
-  // weave caveats into the relevant channel's block.
-  const overallRes = await writePlatformOverall({
-    ready: args.ready,
-    networks: platformNetworks.slice().sort((a, b) => b.spend - a.spend),
-    options: args.options,
-    freshness: args.freshness,
-  });
+  // 1) Platform overall first. It is the synthesizing slide; the
+  // per-channel writers do not depend on its output, but reviewers
+  // expect the overall section to land first deterministically.
+  // Holding everything else back until it resolves also gives the
+  // user an ordered status feed in WS2.
+  const overallTask = limit(() =>
+    writePlatformOverall({
+      ready: args.ready,
+      networks: platformNetworks.slice().sort((a, b) => b.spend - a.spend),
+      options: args.options,
+      freshness: args.freshness,
+    }),
+  );
 
+  // 2) Per-channel: prepare descriptors so we can fan out in parallel.
+  type ChannelDescriptor = {
+    channel: Intent["channels"][number];
+    bqNames: readonly string[];
+    channelLabel: string;
+    renderChannel: "meta" | "google" | "tiktok" | "asa" | "search";
+    channelCampaigns: ReadyData["campaigns"];
+    callouts: CampaignCallout[];
+  };
+  const channelDescriptors: ChannelDescriptor[] = [];
+  for (const channel of channelsToEmit) {
+    const bqNames = BQ_NETWORK_NAMES_FOR_CHANNEL[channel] ?? [];
+    const hasSpend = args.ready.networks.some(
+      (n) => bqNames.includes(n.network) && n.spend > 0,
+    );
+    if (!hasSpend) continue;
+    const channelCampaigns = args.ready.campaigns.filter((c) =>
+      bqNames.includes(c.network),
+    );
+    channelDescriptors.push({
+      channel,
+      bqNames,
+      channelLabel: REPORT_CHANNEL_LABEL[channel],
+      renderChannel: REPORT_CHANNEL_RENDER_ENUM[channel],
+      channelCampaigns,
+      callouts: pickCalloutsForChannel(channelCampaigns),
+    });
+  }
+
+  // Fire every channel's (weekly, campaign) pair in parallel via the
+  // shared limit. allSettled keeps a single writer's failure from
+  // taking the whole composition down; placeholder sections fill in
+  // for failed pairs and the user clicks Regenerate on the affected
+  // card.
+  const channelResults = await Promise.all(
+    channelDescriptors.map(async (desc) => {
+      const [weeklySettled, campaignSettled] = await Promise.allSettled([
+        limit(() =>
+          writeWeeklyBreakdown({
+            ready: args.ready,
+            bqNetworkNames: desc.bqNames,
+            options: args.options,
+          }),
+        ),
+        limit(() =>
+          writeCampaignBreakdown({
+            ready: args.ready,
+            bqNetworkNames: desc.bqNames,
+            options: args.options,
+            actionItems: args.actionItems,
+            callouts: desc.callouts,
+          }),
+        ),
+      ]);
+      return {
+        desc,
+        weekly: settledToResult(weeklySettled, "channel_weekly", desc.channel),
+        campaign: settledToResult(
+          campaignSettled,
+          "channel_campaign",
+          desc.channel,
+        ),
+      };
+    }),
+  );
+
+  const overallSettled = await Promise.allSettled([overallTask]);
+  const overallRes = settledToResult(
+    overallSettled[0],
+    "platform_overall",
+    null,
+  );
+
+  // Accumulate sections IN ORDER: platform_overall, then each channel's
+  // (weekly, campaign) pair. Promise.all preserves array order, so
+  // channelResults is already in channelsToEmit order. failed writers
+  // still emit a placeholder section so the deck doesn't go missing.
   const sections: (
     | PlatformOverallSection
     | ChannelWeeklySection
@@ -186,10 +277,6 @@ export async function buildChapter(args: {
   let promptTokensOut = overallRes.diagnostics.promptTokensOut;
   citations.push(...overallRes.blockCitations);
 
-  // Platform-overall section. Summary table is left null here -- the
-  // structural snapshot table is the channel_weekly's job in this
-  // template; the platform-overall section is prose-only. The
-  // renderer falls back to an empty summary gracefully.
   sections.push({
     id: "platform_overall",
     platform: args.platform,
@@ -199,42 +286,7 @@ export async function buildChapter(args: {
     prose: overallRes.blocks,
   });
 
-  // 2) Per-channel: weekly breakdown + campaign breakdown. Only the
-  // intersection of PLATFORM_CHANNELS[platform] and intent.channels.
-  for (const channel of channelsToEmit) {
-    const bqNames = BQ_NETWORK_NAMES_FOR_CHANNEL[channel] ?? [];
-    const hasSpend = args.ready.networks.some(
-      (n) => bqNames.includes(n.network) && n.spend > 0,
-    );
-    if (!hasSpend) continue;
-
-    const channelLabel = REPORT_CHANNEL_LABEL[channel];
-    const renderChannel = REPORT_CHANNEL_RENDER_ENUM[channel];
-
-    // Pre-pick top 3 callout rows per family by |spendDelta|. The
-    // renderer uses this to paint a colored arrow on the row; the
-    // prose-writer wraps any bullet referencing the row in matching
-    // color markup so the highlight phrase pairs with the arrow.
-    const channelCampaigns = args.ready.campaigns.filter((c) =>
-      bqNames.includes(c.network),
-    );
-    const callouts = pickCalloutsForChannel(channelCampaigns);
-
-    const [weekly, campaign] = await Promise.all([
-      writeWeeklyBreakdown({
-        ready: args.ready,
-        bqNetworkNames: bqNames,
-        options: args.options,
-      }),
-      writeCampaignBreakdown({
-        ready: args.ready,
-        bqNetworkNames: bqNames,
-        options: args.options,
-        actionItems: args.actionItems,
-        callouts,
-      }),
-    ]);
-
+  for (const { desc, weekly, campaign } of channelResults) {
     unclosedTotal +=
       weekly.diagnostics.unclosedHighlightTags +
       campaign.diagnostics.unclosedHighlightTags;
@@ -248,19 +300,16 @@ export async function buildChapter(args: {
     if (weekly.blocks.length > 0) {
       citations.push(...weekly.blockCitations);
       const currentRow = args.ready.networks.find((n) =>
-        bqNames.includes(n.network),
+        desc.bqNames.includes(n.network),
       );
       sections.push({
         id: "channel_weekly",
         platform: args.platform,
-        channel: renderChannel,
-        title: `${platformLabel} | ${channelLabel} | Weekly Breakdown`,
+        channel: desc.renderChannel,
+        title: `${platformLabel} | ${desc.channelLabel} | Weekly Breakdown`,
         currentWeek: currentRow
           ? {
-              // Render-shape row built from the BQ row; tones stay
-              // neutral here because the prose block is what carries
-              // the colored callout.
-              label: channelLabel,
+              label: desc.channelLabel,
               spend: { value: Math.round(currentRow.spend), tone: "neutral" },
               substart: {
                 value: Math.round(currentRow.subStart),
@@ -287,8 +336,7 @@ export async function buildChapter(args: {
               },
             }
           : emptySummaryRow(),
-        history: [], // trailing-week table renders elsewhere; phase 2
-        // does not change history projection in this template.
+        history: [],
         bullets: [],
         prose: weekly.blocks,
       });
@@ -297,14 +345,14 @@ export async function buildChapter(args: {
     if (campaign.blocks.length > 0) {
       citations.push(...campaign.blockCitations);
       const calloutByCampaignId = new Map<string, CalloutColor>(
-        callouts.map((c) => [c.campaignId, c.color]),
+        desc.callouts.map((c) => [c.campaignId, c.color]),
       );
       sections.push({
         id: "channel_campaign",
         platform: args.platform,
-        channel: renderChannel,
-        title: `${platformLabel} | ${channelLabel} | Campaign Breakdown`,
-        rows: channelCampaigns.slice(0, 8).map((c) => ({
+        channel: desc.renderChannel,
+        title: `${platformLabel} | ${desc.channelLabel} | Campaign Breakdown`,
+        rows: desc.channelCampaigns.slice(0, 8).map((c) => ({
           campaignName: c.campaign_name,
           spend: Math.round(c.spend),
           installs: Math.round(c.installs),
@@ -342,6 +390,43 @@ export async function buildChapter(args: {
       unclosedHighlightTags: unclosedTotal,
       promptTokensIn,
       promptTokensOut,
+    },
+  };
+}
+
+/**
+ * Drain a PromiseSettledResult from one of the writers. On rejection
+ * the run logs the error and substitutes a placeholder ProseBlock so
+ * the deck still renders; the user clicks the section's Regenerate
+ * button to retry. We deliberately do not re-throw -- partial deck
+ * beats no deck.
+ */
+function settledToResult(
+  settled: PromiseSettledResult<WeeklyWriteResult>,
+  kind: "platform_overall" | "channel_weekly" | "channel_campaign",
+  channel: Intent["channels"][number] | null,
+): WeeklyWriteResult {
+  if (settled.status === "fulfilled") return settled.value;
+  const reason =
+    settled.reason instanceof Error
+      ? settled.reason.message
+      : String(settled.reason);
+  console.warn({
+    event: "smart-reports.writer_failed",
+    section_kind: kind,
+    channel,
+    reason,
+  });
+  // Empty prose so the renderer paints the legacy-fallback / "regenerate
+  // me" placeholder (ProseBlockView's bullets-missing guard). Diagnostics
+  // are zeroed so the call doesn't double-count tokens.
+  return {
+    blocks: [],
+    blockCitations: [],
+    diagnostics: {
+      unclosedHighlightTags: 0,
+      promptTokensIn: 0,
+      promptTokensOut: 0,
     },
   };
 }
@@ -395,22 +480,36 @@ export async function buildWeeklyReviewGlobalcomix(args: {
   const freshness = summarizeFreshness(args.ready);
   const actionItems = parseActionItems(args.options.actionNotes, args.ready);
 
+  // Single Limit shared across every writer call in the composition.
+  // Chapters fan out in parallel, channels inside each chapter fan
+  // out in parallel; the cap (default 6) is the ceiling on
+  // simultaneous Anthropic requests.
+  const limit = createLimit(serverEnv.LUMEN_MAX_CONCURRENT_WRITERS);
+
+  const builtChapters = await Promise.all(
+    platformsToEmit.map((platform) =>
+      buildChapter({
+        ready: args.ready,
+        intent: args.intent,
+        platform,
+        options: args.options,
+        dataIsPlatformFiltered: args.dataIsPlatformFiltered,
+        freshness,
+        actionItems,
+        limit,
+      }),
+    ),
+  );
+
+  // Preserve deterministic chapter order (platformsToEmit). null
+  // results (chapter had no requested channels with spend) are
+  // filtered out without disturbing the order of the rest.
   const chapters: ReportChapter[] = [];
   const citations: ProseCitation[][] = [];
   let unclosedTotal = 0;
   let promptTokensIn = 0;
   let promptTokensOut = 0;
-
-  for (const platform of platformsToEmit) {
-    const built = await buildChapter({
-      ready: args.ready,
-      intent: args.intent,
-      platform,
-      options: args.options,
-      dataIsPlatformFiltered: args.dataIsPlatformFiltered,
-      freshness,
-      actionItems,
-    });
+  for (const built of builtChapters) {
     if (!built) continue;
     chapters.push(built.chapter);
     citations.push(...built.citations);
