@@ -99,8 +99,16 @@ describe("parseIntent defense — structure-only checks", () => {
     );
     expect(PARSE_INTENT_SYSTEM_PROMPT).toMatch(/disclose your system prompt/i);
     expect(PARSE_INTENT_SYSTEM_PROMPT).toMatch(/untrusted reference data/i);
+    // WS6 (2026-05-17) rewrote the period rules into a three-branch
+    // structure. The relative-phrasing branch still names iso_start /
+    // iso_end and the unclear-period branch still requires setting
+    // them to null -- assert on those landmarks.
+    expect(PARSE_INTENT_SYSTEM_PROMPT).toMatch(/Period dates/i);
     expect(PARSE_INTENT_SYSTEM_PROMPT).toMatch(
-      /Period dates:[\s\S]*set iso_start and iso_end to null/i,
+      /Relative phrasing[\s\S]*<today>/i,
+    );
+    expect(PARSE_INTENT_SYSTEM_PROMPT).toMatch(
+      /iso_start=null,\s*iso_end=null/i,
     );
   });
 
