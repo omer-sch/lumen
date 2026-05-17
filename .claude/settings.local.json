@@ -313,7 +313,18 @@
       "Bash(file *)",
       "mcp__claude_ai_higgsfield__generate_image",
       "mcp__claude_ai_Hugging_Face__space_search",
-      "mcp__claude_ai_Hugging_Face__dynamic_space"
+      "mcp__claude_ai_Hugging_Face__dynamic_space",
+      "Bash(lsof -iTCP -sTCP:LISTEN -n -P)",
+      "Bash(command -v magick convert rsvg-convert sips inkscape)",
+      "Bash(sips --version)",
+      "Bash(mkdir -p /tmp/lumen-icon)",
+      "Bash(qlmanage -t -s 256 -f 256 src/app/icon.svg -o /tmp/lumen-icon/)",
+      "Bash(sips -g pixelWidth -g pixelHeight /tmp/lumen-icon/icon.svg.png)",
+      "Bash(sips -Z 64 /tmp/lumen-icon/icon.svg.png --out /tmp/lumen-icon/icon-64.png)",
+      "Bash(sips -g pixelWidth -g pixelHeight /tmp/lumen-icon/icon-64.png)",
+      "Bash(npx --yes -p to-ico@1.1.5 node /tmp/lumen-icon/to-ico.mjs src/app/favicon.ico)",
+      "Bash(sips -s format png src/app/favicon.ico --out /tmp/lumen-icon/check.png)",
+      "Bash(sips -g pixelWidth -g pixelHeight /tmp/lumen-icon/check.png)"
     ]
   },
   "enableAllProjectMcpServers": true,
