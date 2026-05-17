@@ -230,7 +230,10 @@ async function composeSingleChannelWeekly(args: {
     filterRange: snapshot.period.filterRange ?? undefined,
     createdAt: now,
     updatedAt: now,
-    authoredBy: "nova",
+    // Hermes-driven runs (paste-email modal) credit Hermes on the
+    // cover; manual builder runs credit Nova. The runId is the
+    // signal: present when invokeHermesGraph called composeReport.
+    authoredBy: args.runId ? "hermes" : "nova",
     source: args.runId ? "hermes" : "manual",
     agentRunId: args.runId ?? null,
     preparedFor: args.contactName ?? null,
@@ -370,7 +373,10 @@ async function composeWeeklyReviewGlobalcomix(args: {
     filterRange: built.scopeCaveat,
     createdAt: now,
     updatedAt: now,
-    authoredBy: "nova",
+    // Hermes-driven runs (paste-email modal) credit Hermes on the
+    // cover; manual builder runs credit Nova. The runId is the
+    // signal: present when invokeHermesGraph called composeReport.
+    authoredBy: args.runId ? "hermes" : "nova",
     source: args.runId ? "hermes" : "manual",
     agentRunId: args.runId ?? null,
     preparedFor: args.contactName ?? null,

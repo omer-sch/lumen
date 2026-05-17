@@ -230,6 +230,8 @@ describe("composeReport (single-channel-weekly)", () => {
 
     expect(composed.report.client).toBe("globalcomix");
     expect(composed.report.sections.length).toBeGreaterThan(0);
+    // No runId -> manual builder path -> Nova credits the cover.
+    expect(composed.report.authoredBy).toBe("nova");
 
     const weekly = composed.report.sections.find(
       (s) => s.id === "channel_weekly",
@@ -267,6 +269,44 @@ describe("composeReport (single-channel-weekly)", () => {
 
     expect(composed.diagnostics.proseBlocks).toBe(2);
     expect(composed.diagnostics.citationsValidated).toBeGreaterThan(0);
+  });
+
+  it("stamps authoredBy=hermes when invoked with a runId", async () => {
+    messagesCreateMock
+      .mockResolvedValueOnce({
+        content: [
+          {
+            type: "tool_use",
+            name: "write_weekly_breakdown",
+            input: {
+              bullets: [
+                { text: "Meta declined [cite:network-breakdown]" },
+                { text: "Top-Geos drove it [cite:network-breakdown]" },
+              ],
+              bottomLine: "Pause Top-Geos.",
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        content: [
+          {
+            type: "tool_use",
+            name: "write_campaign_breakdown",
+            input: { blocks: [] },
+          },
+        ],
+      });
+
+    const composed = await composeReport({
+      readyData: fakeReadyData(),
+      intent,
+      ownerUserId: "test-user",
+      options: { template: "single-channel-weekly" },
+      runId: "run-xyz",
+    });
+    expect(composed.report.authoredBy).toBe("hermes");
+    expect(composed.report.source).toBe("hermes");
   });
 
   it("throws when the writer cites a queryId the analyst did not fetch", async () => {

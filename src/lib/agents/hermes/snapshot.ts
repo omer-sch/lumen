@@ -238,7 +238,7 @@ function totalsFromNetworks(rows: BQNetworkRow[]): WeeklySummaryRow {
 // the cohort fields as `null` (subD7 / cpaD7) so a CSM reads "—" rather
 // than an artifact value.
 
-function historyRowToHistorical(row: WeeklyHistoryRow): HistoricalWeekRow {
+export function historyRowToHistorical(row: WeeklyHistoryRow): HistoricalWeekRow {
   const m = row.metrics;
   const d7Mature = m.subD7 >= COHORT_D7_MATURITY_THRESHOLD;
   // `label` and `range` map to the deck's "Week 17" / "20 Apr 2026 to

@@ -229,10 +229,19 @@ function sliceWeekly(
 function groupCampaignsByFamily(
   ready: ReadyData,
   bqNetworkNames: readonly string[],
+  platform?: "android" | "ios" | "web",
 ): { family: string; totalSpend: number; rows: ReadyData["campaigns"] }[] {
-  const filtered = ready.campaigns.filter((c) =>
-    bqNetworkNames.includes(c.network),
-  );
+  const filtered = ready.campaigns.filter((c) => {
+    if (!bqNetworkNames.includes(c.network)) return false;
+    if (platform) {
+      // Classifier sets platform from the campaign name (iOS /
+      // Android / Web). Empty / non-matching campaigns are dropped
+      // so a per-platform chapter does not surface foreign rows.
+      if (!c.platform) return false;
+      if (c.platform.toLowerCase() !== platform) return false;
+    }
+    return true;
+  });
   const byFamily = new Map<string, ReadyData["campaigns"]>();
   for (const c of filtered) {
     const arr = byFamily.get(c.family) ?? [];
@@ -421,8 +430,18 @@ export async function writeCampaignBreakdown(args: {
    *  referencing those rows in matching color markup so the renderer
    *  can paint the bullet to match the row arrow. */
   callouts?: CampaignCallout[];
+  /** Platform scope. When set, campaigns whose classifier-derived
+   *  platform does not match are dropped from the writer's view, and
+   *  the user message gets a "Platform scope: X" header so the
+   *  writer never refers to "the iOS campaign" inside an Android
+   *  chapter. */
+  platformScope?: { platform: "android" | "ios" | "web"; label: string };
 }): Promise<CampaignWriteResult> {
-  const groups = groupCampaignsByFamily(args.ready, args.bqNetworkNames);
+  const groups = groupCampaignsByFamily(
+    args.ready,
+    args.bqNetworkNames,
+    args.platformScope?.platform,
+  );
   if (groups.length === 0) {
     return emptyWriteResult();
   }
@@ -437,6 +456,7 @@ export async function writeCampaignBreakdown(args: {
     groups,
     actionItems: args.actionItems ?? [],
     callouts: args.callouts ?? [],
+    platformScope: args.platformScope,
     findings: findingsForCampaigns(
       args.ready,
       args.bqNetworkNames,
@@ -771,11 +791,19 @@ function buildCampaignUserMessage(args: {
   groups: { family: string; totalSpend: number; rows: ReadyData["campaigns"] }[];
   actionItems: ActionItem[];
   callouts: CampaignCallout[];
+  platformScope?: { platform: "android" | "ios" | "web"; label: string };
   findings: AnalystFinding[];
 }): string {
   const parts: string[] = [
     `Client: ${args.ready.clientLabel}`,
     `Period: ${args.ready.period.isoStart} to ${args.ready.period.isoEnd}`,
+  ];
+  if (args.platformScope) {
+    parts.push(
+      `Platform scope: ${args.platformScope.label}. All campaigns below ran on this platform; do not refer to campaigns on other platforms.`,
+    );
+  }
+  parts.push(
     "",
     "Campaign families (sorted by spend descending):",
     JSON.stringify(
@@ -801,7 +829,7 @@ function buildCampaignUserMessage(args: {
     ),
     "",
     `Provenance queryIds available for citation: ${args.ready.provenance.queryIds.join(", ")}`,
-  ];
+  );
   if (args.callouts.length > 0) {
     parts.push(
       "",

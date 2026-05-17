@@ -87,10 +87,50 @@ The visual half. A new component that renders the deck's expected outline as soo
 
 4. Layout: stacked cards in a single column, scrolling inside the container if the list overflows. Card height approximates real section heights (use the layout constants from `src/lib/reports/layout.ts` as the source of truth so the swap does not jank).
 
-5. Animations (apply uniformly):
-   - Skeleton shimmer: 1.6s linear loop, reuse the existing dashboard shimmer keyframe if one exists in the repo, otherwise define one in `globals.css` named `--animation-shimmer`.
-   - Skeleton-to-populated swap: 300ms ease-out crossfade on opacity plus a tiny `translateY` from 4px to 0.
-   - "Ready" pill: drop in on the same swap timeline.
+5. Animations -- full spec, applied uniformly across the loading region. Implement with CSS keyframes; do NOT pull in Framer Motion or any other animation lib. Keeps the bundle flat and matches the existing dashboard's approach. Define the keyframes once in `globals.css` and reference them via class names so the modal, the dashboard, and any future loading state share the same pulse / shimmer / fade timings.
+
+   **a. Status tape pulse (mint dot to the left of the active label).**
+   - 1.6s ease-in-out infinite loop
+   - opacity: 60% -> 100% -> 60%
+   - transform scale: 1 -> 1.4 -> 1
+   - colour: `var(--color-mint)` (the UA team accent, already in the brand tokens)
+   - Animation runs whenever the SSE stream is open. Stops on `deck_ready` and the dot turns solid mint (no opacity / scale animation) for 400ms before the modal closes.
+
+   **b. Status tape label swap (when the active step changes).**
+   - 250ms duration on both the outgoing and incoming label
+   - Outgoing: opacity 100 -> 0 plus translateY 0 -> -4px, ease-out
+   - Incoming: opacity 0 -> 100 plus translateY +4 -> 0, ease-out
+   - The two run simultaneously (crossfade with a tiny vertical motion). Don't stack them sequentially -- the label area would jump.
+   - The +N more chip (when multiple writers are in-flight) fades in / out on the same 250ms curve when its count changes.
+
+   **c. Findings card enter (when a new card lands in the feed).**
+   - 400ms ease-out
+   - opacity 0 -> 1 plus translateY +8 -> 0
+   - 80ms stagger between cards when more than one card arrives in the same tick (i.e. multiple `writer_finished` events fire within the same React render cycle because of WS1 parallelism). Implement as `animation-delay: ${index * 80}ms` keyed to the new-card ordinal within the batch, not the total feed length.
+   - Cards do NOT animate when the list scrolls. Animation is on enter only.
+
+   **d. Skeleton shimmer (on every grey placeholder card).**
+   - 1.6s linear infinite loop
+   - Background: a horizontal gradient sweep moving left-to-right across the card
+   - Base fill: `rgba(255,255,255,0.04)`; sweep band: `rgba(255,255,255,0.09)`
+   - Grep `animate-pulse|shimmer|skeleton` under `src/components/` first -- if the dashboard already has a shimmer keyframe, REUSE it (matching cycle length and gradient). Define a new one only if nothing matches.
+
+   **e. Skeleton-to-populated swap (when a `section_ready` event lands).**
+   - 300ms ease-out
+   - Outgoing skeleton: opacity 1 -> 0
+   - Incoming populated card: opacity 0 -> 1 plus translateY +4 -> 0
+   - Run simultaneously. The two cards must share the same height during the swap so the layout doesn't jank; see point 4 above on approximating real section heights from `layout.ts`.
+
+   **f. "Ready" pill on populated cards.**
+   - The pill itself drops in on the same 300ms ease-out as the skeleton-to-populated swap (opacity 0 -> 1 plus translateY +4 -> 0).
+   - No looping pulse on the pill once it lands -- it's an end state, not an active animation.
+
+   **g. Final hold + modal close (when `deck_ready` fires).**
+   - All skeletons should be populated by this point; the modal stays open for ~400ms so the user sees the fully-painted grid land.
+   - The status tape dot turns solid mint (as per (a)). The label switches to "Saved draft. Opening it now..." via the standard 250ms label swap.
+   - Then the modal fades out (200ms ease-out, opacity 1 -> 0) and the redirect to `/reports/<reportId>` fires.
+
+   **Constraint**: keep all of the above as CSS keyframes inside `globals.css` plus utility class names on the components. No JavaScript animation libraries. If a future polish pass wants the richer easing curves of Framer Motion, that's a separate workstream after the loading state lands and stabilises.
 
 6. Status tape labels become richer. Friendly label mapping for writer events:
 

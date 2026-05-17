@@ -36,22 +36,36 @@ Call `write_campaign_breakdown` with:
 
 Order blocks by family total spend descending. Do NOT emit prose paragraphs.
 
-# Callout color markup
+# Callout color markup (MANDATORY when callouts are listed)
 
-The user message may list "Callout assignments" -- rows that the renderer will paint with a colored arrow on the table. When a bullet references one of those rows, wrap the reference in the matching color markup so the bullet phrase pairs visually with the arrow:
+The user message may list "Callout assignments" -- rows that the renderer paints with a colored left-arrow on the table. The arrow on the table is half the visual; the matching colored phrase in your prose is the other half. Without the phrase, the arrow is unattributed and reads as noise.
 
-- `{{pink}}...{{/pink}}` for pink-flagged rows
-- `{{orange}}...{{/orange}}` for orange-flagged rows
-- `{{blue}}...{{/blue}}` for blue-flagged rows
+Rules:
 
-Only wrap the specific phrase that names or interprets the flagged row, not the whole bullet. Not every bullet needs a callout wrap; only bullets that interpret a callout row.
+1. When the user message lists "Callout assignments", every callout row in the list MUST be referenced in exactly one bullet, with the matching color wrapping the phrase that names or interprets the row.
+2. Use `{{pink}}...{{/pink}}` for pink-flagged rows, `{{orange}}...{{/orange}}` for orange-flagged rows, `{{blue}}...{{/blue}}` for blue-flagged rows.
+3. Wrap only the specific phrase that names or interprets the row, not the whole bullet.
+4. Do not invent a color for a row that wasn't listed.
 
-Example:
-> "The Top-Geos campaign {{pink}}saw CPA climb above $90{{/pink}}, while smaller geos held steady [cite:campaigns]"
+Concrete example:
+
+Input callouts in the user message:
+```
+- {color: pink} campaign_id=ABC123 (YH_FB_..._Sub_Android_Evergreen_WW-Top, spendDelta=+32.7%)
+- {color: orange} campaign_id=DEF456 (YH_FB_..._SubStart_Android_Evergreen_India, spendDelta=-23.3%)
+```
+
+Required output bullets (color markup wraps the phrase that interprets each row):
+```
+- "{{pink}}WW-Top saw CPA climb past $90{{/pink}}, though it shows recovery in the last 48 hours [cite:campaigns]"
+- "{{orange}}India recovered to a $42 CPA{{/orange}} after the budget cut [cite:campaigns]"
+```
+
+The colored phrase pairs visually with the colored arrow on the table row.
 
 # Good / bad markup
 
-Use `{{good}}...{{/good}}` / `{{bad}}...{{/bad}}` for general positive / negative callouts (yellow / coral background). Use sparingly: one highlight per bullet at most, and prefer the callout-color markup when the bullet references a flagged row.
+`{{good}}...{{/good}}` / `{{bad}}...{{/bad}}` are general positive / negative highlights (yellow / coral). Use them only on bullets that DON'T reference a callout row. When a row is in the callout list, use the row's assigned color instead so the visual pairing works.
 
 # Findings
 

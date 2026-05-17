@@ -7,6 +7,8 @@ import type {
   ReportChapter,
 } from "@/lib/reports/types";
 
+import { historyRowToHistorical } from "@/lib/agents/hermes/snapshot";
+
 import { parseActionItems, type ActionItem } from "../action-items";
 import { createLimit, type Limit } from "../concurrency-limit";
 import { summarizeFreshness, type FreshnessSummary } from "../freshness";
@@ -205,8 +207,15 @@ export async function buildChapter(args: {
       (n) => bqNames.includes(n.network) && n.spend > 0,
     );
     if (!hasSpend) continue;
-    const channelCampaigns = args.ready.campaigns.filter((c) =>
-      bqNames.includes(c.network),
+    // Filter campaigns by BOTH channel AND platform. The campaign
+    // classifier sets `platform` from the campaign_name (iOS /
+    // Android / Web); non-classifiable campaigns leave the field
+    // empty and are dropped here. This is the client-side bridge
+    // until BQ workstream-D2 ships a real OS predicate.
+    const channelCampaigns = args.ready.campaigns.filter(
+      (c) =>
+        bqNames.includes(c.network) &&
+        campaignMatchesPlatform(c.platform, args.platform),
     );
     channelDescriptors.push({
       channel,
@@ -240,6 +249,13 @@ export async function buildChapter(args: {
             options: args.options,
             actionItems: args.actionItems,
             callouts: desc.callouts,
+            // WS4: keep the writer's view of campaigns scoped to the
+            // chapter's platform so it never refers to "the iOS
+            // campaign" inside an Android chapter.
+            platformScope: {
+              platform: args.platform,
+              label: platformLabel,
+            },
           }),
         ),
       ]);
@@ -302,6 +318,16 @@ export async function buildChapter(args: {
       const currentRow = args.ready.networks.find((n) =>
         desc.bqNames.includes(n.network),
       );
+      // Trailing-week history projected from ReadyData.history.networks
+      // through the same BQ network labels the channel uses, sorted
+      // oldest-first so the renderer stacks the rows in chronological
+      // order. Maturity gate matches snapshot.ts: a week below the
+      // D7 cohort threshold renders subD7/cpaD7 as null (-> em-dash).
+      const channelHistory = args.ready.history.networks
+        .filter((h) => desc.bqNames.includes(h.network))
+        .slice()
+        .sort((a, b) => a.weekIsoStart.localeCompare(b.weekIsoStart))
+        .map(historyRowToHistorical);
       sections.push({
         id: "channel_weekly",
         platform: args.platform,
@@ -336,7 +362,7 @@ export async function buildChapter(args: {
               },
             }
           : emptySummaryRow(),
-        history: [],
+        history: channelHistory,
         bullets: [],
         prose: weekly.blocks,
       });
@@ -573,6 +599,17 @@ function pickCalloutsForChannel(
       spendDelta: r.spendDelta ?? 0,
       color: CALLOUT_COLORS[i],
     }));
+}
+
+/** Compare the classifier's case-loose platform string against the
+ *  chapter's lowercased platform enum. Empty (unclassifiable) names
+ *  return false so they don't leak into a per-platform chapter. */
+function campaignMatchesPlatform(
+  campaignPlatform: string,
+  chapter: Platform,
+): boolean {
+  if (!campaignPlatform) return false;
+  return campaignPlatform.toLowerCase() === chapter;
 }
 
 function pickSinglePlatform(intent: Intent): Platform {

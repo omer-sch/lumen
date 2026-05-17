@@ -1528,11 +1528,15 @@ function metricCell(
   m: MetricValue,
   opts: { polarity: "up-good" | "down-good"; bold?: boolean; format: (v: number | string | null) => string },
 ) {
-  // Null + maturing renders as an em-dash with no delta arrow and no
-  // tone (the cohort-maturity gate in snapshot.ts suppresses cells
-  // that would otherwise show $21k-per-acquisition). Numeric values
-  // render normally with their delta if present.
-  const isSuppressed = m.value === null;
+  // Suppress to em-dash when the cohort hasn't matured AND we have
+  // no real number. `value === null` is the explicit "no data"
+  // signal; `value === 0` under `maturing` reads as "cohort hasn't
+  // settled, the zero is noise" -- treat it the same. A non-zero
+  // numeric value under `maturing` still renders the number (the
+  // signal is real, the maturing flag is just a qualifier).
+  const isSuppressed =
+    m.value === null ||
+    (typeof m.value === "number" && m.value === 0 && m.maturing === true);
   const valueText = isSuppressed ? "—" : opts.format(m.value);
   const chunks: TextChunk[] = [
     {

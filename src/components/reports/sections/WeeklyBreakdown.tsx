@@ -271,12 +271,26 @@ function MetricCell({
   compact?: boolean;
 }) {
   const { value, delta, maturing } = metric;
+  // Suppress to em-dash on null OR on (value === 0 && maturing). A
+  // zero under a maturing flag reads as "cohort hasn't settled,
+  // ignore" rather than a real zero. Non-zero values still render
+  // even when maturing -- the number is information; maturing is
+  // just a qualifier we show via reduced opacity.
+  const isSuppressed =
+    value === null ||
+    value === undefined ||
+    (typeof value === "number" && value === 0 && maturing === true);
   const display =
     typeof value === "number" ? formatNumber(value) : value;
 
   let toneColor: string | null = null;
   let Arrow: typeof ArrowUp | null = null;
-  if (typeof delta === "number" && Number.isFinite(delta) && delta !== 0) {
+  if (
+    !isSuppressed &&
+    typeof delta === "number" &&
+    Number.isFinite(delta) &&
+    delta !== 0
+  ) {
     const up = delta > 0;
     Arrow = up ? ArrowUp : ArrowDown;
     const good = polarity === "up-good" ? up : !up;
@@ -289,7 +303,7 @@ function MetricCell({
         className="font-semibold text-[color:var(--text-light-primary)]"
         style={maturing ? { opacity: 0.55 } : undefined}
       >
-        {maturing && (value === null || value === undefined) ? "—" : display}
+        {isSuppressed ? "—" : display}
       </span>
       {Arrow && (
         <span

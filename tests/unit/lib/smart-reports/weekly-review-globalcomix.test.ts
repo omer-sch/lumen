@@ -329,12 +329,13 @@ describe("composeReport (weekly-review-globalcomix template)", () => {
     const chapter = composed.report.chapters![0];
     // Degraded mode: emit the first requested platform (iOS).
     expect(chapter.platform).toBe("ios");
+    // WS4 platform filter: the fixture's only campaign has
+    // platform=Android, so the iOS chapter's channel_campaign section
+    // short-circuits (no campaigns match). platform_overall +
+    // channel_weekly still emit because they read network-grain
+    // data, not campaign-grain.
     const ids = chapter.sections.map((s) => s.id);
-    expect(ids).toEqual([
-      "platform_overall",
-      "channel_weekly",
-      "channel_campaign",
-    ]);
+    expect(ids).toEqual(["platform_overall", "channel_weekly"]);
     // No Google / TikTok / ASA sections leaked.
     const channelSections = chapter.sections.filter(
       (s) => s.id === "channel_weekly" || s.id === "channel_campaign",
@@ -344,8 +345,116 @@ describe("composeReport (weekly-review-globalcomix template)", () => {
         expect(s.channel).toBe("meta");
       }
     }
-    // Sonnet fired exactly 3 times -- not 5, not 9.
-    expect(messagesCreateMock).toHaveBeenCalledTimes(3);
+    // Sonnet fires 2 times (overall + weekly). The campaign writer
+    // short-circuits before Sonnet because no campaigns match the
+    // chapter's platform.
+    expect(messagesCreateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("WS4: filters campaigns by platform via the classifier", async () => {
+    // Two campaigns on Meta -- one Android, one iOS. Compose with
+    // intent.platforms=["android"], intent.channels=["meta"]. The
+    // iOS campaign must be dropped from the Android chapter.
+    const ready = fakeReadyData();
+    ready.campaigns = [
+      {
+        campaign_id: "c-android",
+        campaign_name: "YH_FB_APP_FULL_IAP_Sub_Android_Evergreen_WW",
+        network: "Meta",
+        spend: 800,
+        installs: 80,
+        cpi: 10,
+        roas: 0.3,
+        spendDelta: 0.1,
+        family: "Sub Evergreen",
+        geo: "WW",
+        campaignType: "Evergreen",
+        platform: "Android",
+      },
+      {
+        campaign_id: "c-ios",
+        campaign_name: "YH_FB_APP_FULL_IAP_Sub_iOS_Evergreen_WW",
+        network: "Meta",
+        spend: 500,
+        installs: 40,
+        cpi: 12.5,
+        roas: 0.25,
+        spendDelta: 0.2,
+        family: "Sub Evergreen",
+        geo: "WW",
+        campaignType: "Evergreen",
+        platform: "iOS",
+      },
+    ];
+
+    messagesCreateMock
+      .mockResolvedValueOnce(toolResp("write_platform_overall", {
+        blocks: [
+          {
+            heading: "Facebook",
+            bullets: [
+              { text: "Meta steady [cite:network-breakdown]" },
+              { text: "ROAS holding [cite:network-breakdown]" },
+            ],
+            bottomLine: "Hold.",
+          },
+        ],
+      }))
+      .mockResolvedValueOnce(toolResp("write_weekly_breakdown", {
+        bullets: [
+          { text: "Steady week [cite:network-breakdown]" },
+          { text: "Solid pacing [cite:network-breakdown]" },
+        ],
+        bottomLine: "Maintain.",
+      }))
+      .mockResolvedValueOnce(toolResp("write_campaign_breakdown", {
+        blocks: [
+          {
+            heading: "Sub Evergreen",
+            bullets: [
+              { text: "WW steady [cite:campaigns]" },
+              { text: "Other geos held [cite:campaigns]" },
+            ],
+            bottomLine: "No changes needed.",
+          },
+        ],
+      }));
+
+    const androidIntent: Intent = {
+      ...intent,
+      platforms: ["android"],
+      channels: ["meta"],
+    };
+    const composed = await composeReport({
+      readyData: ready,
+      intent: androidIntent,
+      ownerUserId: "test-user",
+      options: { template: "weekly-review-globalcomix" },
+    });
+
+    const chapter = composed.report.chapters![0];
+    const campaign = chapter.sections.find(
+      (s) => s.id === "channel_campaign",
+    );
+    expect(campaign).toBeDefined();
+    if (campaign && campaign.id === "channel_campaign") {
+      // Only the Android campaign survives the WS4 filter.
+      expect(campaign.rows).toHaveLength(1);
+      expect(campaign.rows[0].campaignName).toMatch(/_Android_/);
+      expect(campaign.rows[0].campaignName).not.toMatch(/_iOS_/);
+    }
+
+    // The campaign-breakdown user message carries the "Platform
+    // scope: Android..." header so the writer doesn't refer to iOS
+    // campaigns.
+    const campaignCall = messagesCreateMock.mock.calls.find((args) => {
+      const tools = (args[0] as { tools?: { name: string }[] }).tools ?? [];
+      return tools.some((t) => t.name === "write_campaign_breakdown");
+    });
+    const userMsg = (campaignCall![0] as {
+      messages: { role: string; content: string }[];
+    }).messages[0].content;
+    expect(userMsg).toMatch(/Platform scope: Android/);
   });
 
   it("returns null chapters when no requested channel runs on the platform (e.g. ASA on Android)", async () => {
