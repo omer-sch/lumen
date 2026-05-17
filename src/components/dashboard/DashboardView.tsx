@@ -86,7 +86,7 @@ function DashboardInner() {
   // min-h-[40rem] floor stops the layout collapsing into illegibility
   // on very short viewports -- body scroll engages below that.
   return (
-    <div className="flex h-[calc(100dvh-6.5rem)] min-h-[40rem] flex-col gap-3 md:h-[calc(100dvh-7rem)] md:gap-4">
+    <div className="flex min-h-[calc(100dvh-6.5rem)] flex-col gap-3 md:min-h-[calc(100dvh-7rem)] md:gap-4">
       <DashboardHeader />
       {mode === "ai" ? (
         <AIModeView />
