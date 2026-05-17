@@ -309,7 +309,11 @@
       "Bash(awk NR==45,NR==65 *)",
       "Bash(awk NR==244,NR==270 *)",
       "Bash(kill 37986)",
-      "Bash(awk '{print \"PID=\"$2\" cpu=\"$3\"% mem=\"$4\"% etime=\"$10}')"
+      "Bash(awk '{print \"PID=\"$2\" cpu=\"$3\"% mem=\"$4\"% etime=\"$10}')",
+      "Bash(file *)",
+      "mcp__claude_ai_higgsfield__generate_image",
+      "mcp__claude_ai_Hugging_Face__space_search",
+      "mcp__claude_ai_Hugging_Face__dynamic_space"
     ]
   },
   "enableAllProjectMcpServers": true,

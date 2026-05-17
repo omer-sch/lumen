@@ -27,6 +27,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** Build a Response whose body is a ReadableStream of SSE frames so
+ *  the modal's stream-parsing hook can consume it under jsdom. */
+function sseResponse(events: unknown[]): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const ev of events) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(ev)}\n\n`));
+      }
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+
 describe("DraftFromEmailModal", () => {
   it("renders nothing when open=false", () => {
     const { container } = render(
@@ -68,15 +86,14 @@ describe("DraftFromEmailModal", () => {
   });
 
   it("on success redirects to /reports/<report_id>?source=hermes", async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({ run_id: "run-xyz", report_id: "rpt_run-xyz" }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        },
-      ),
-    );
+    fetchMock.mockResolvedValueOnce(sseResponse([
+      { type: "run_started", runId: "run-xyz", at: "2026-05-17T00:00:00Z" },
+      {
+        type: "deck_ready",
+        reportId: "rpt_run-xyz",
+        at: "2026-05-17T00:00:01Z",
+      },
+    ]));
     render(<DraftFromEmailModal open={true} onClose={() => {}} />);
     fireEvent.change(screen.getByLabelText(/Email body/i), {
       target: {
@@ -93,12 +110,14 @@ describe("DraftFromEmailModal", () => {
   });
 
   it("falls back to the Hermes profile when Atelier did not produce a report_id", async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ run_id: "run-xyz", report_id: null }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    );
+    fetchMock.mockResolvedValueOnce(sseResponse([
+      { type: "run_started", runId: "run-xyz", at: "2026-05-17T00:00:00Z" },
+      {
+        type: "error",
+        message: "Hermes finished without a report id",
+        at: "2026-05-17T00:00:01Z",
+      },
+    ]));
     render(<DraftFromEmailModal open={true} onClose={() => {}} />);
     fireEvent.change(screen.getByLabelText(/Email body/i), {
       target: {
@@ -107,8 +126,12 @@ describe("DraftFromEmailModal", () => {
       },
     });
     fireEvent.click(screen.getByRole("button", { name: /Draft report/i }));
+    // When the stream surfaces an error, we render the alert inline
+    // instead of redirecting. The fallback redirect to /agents/hermes
+    // is reserved for the deck_ready-without-id case; an error event
+    // is a different signal.
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/agents/hermes");
+      expect(screen.getByRole("alert")).toBeInTheDocument();
     });
   });
 

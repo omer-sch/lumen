@@ -10,6 +10,8 @@ import {
 import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
+import { HermesProgress } from "./hermes-progress/HermesProgress";
+import { useHermesStream } from "./hermes-progress/useHermesStream";
 
 // Paste-to-draft entry point for Hermes. Modal with a single textarea +
 // submit. On success, Atelier inserts the draft into the reports table
@@ -18,22 +20,14 @@ import { cn } from "@/lib/utils";
 // Falls back to the playground (/agents/hermes?run=<id>) when Atelier
 // could not produce a report_id (skipped intent / snapshot / user_id).
 //
-// Documented deviation: the master plan calls for SSE-streamed run
-// trace inside the modal. v0 ships a synchronous request with an
-// indeterminate progress indicator that names the current pipeline
-// step ("parse_intent, analyze, quill, atelier"). The streaming
-// variant lands in a polish phase after the demo.
+// SSE-streamed run trace. The modal POSTs to
+// /api/agents/hermes/stream and reads back HermesEvent frames as
+// the graph executes. The HermesProgress component renders the
+// status tape + findings feed; on deck_ready we redirect to the
+// canonical /reports/<id> page.
 
 const MIN_LEN = 30;
 const MAX_LEN = 20_000;
-
-const PIPELINE_STEPS = [
-  "parse_intent",
-  "analyze",
-  "quill",
-  "atelier",
-  "review_gate",
-] as const;
 
 const CANONICAL_FIXTURE = `Hi team,
 
@@ -58,16 +52,17 @@ export function DraftFromEmailModal({ open, onClose }: Props): React.ReactElemen
 
   const [emailText, setEmailText] = useState("");
   // Phase 3: optional analyst notes ("What did you do this week?").
-  // Posted to /api/agents/hermes/generate as `action_notes`; the
-  // server pipes them into HermesState.action_notes and atelier
-  // hands them to composeReport.options.actionNotes where the
-  // action-items parser classifies each line against the campaigns
-  // in ReadyData and the campaign-breakdown prose-writer weaves
-  // matching items into the family prose as `<> AI:` callouts.
+  // Posted alongside the email body; the server pipes them into
+  // HermesState.action_notes and atelier hands them to
+  // composeReport so the campaign-breakdown writer can surface
+  // matching items as `<> AI:` callouts.
   const [actionNotes, setActionNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [stepIdx, setStepIdx] = useState(0);
+  const [streamRequest, setStreamRequest] = useState<
+    { emailText: string; actionNotes?: string } | null
+  >(null);
+  const stream = useHermesStream({ request: streamRequest });
+  const submitting = stream.status === "streaming";
+  const error = stream.error;
 
   // Focus management: when the modal opens, move focus to the textarea.
   // When it closes, restore focus to the trigger (the caller manages
@@ -80,25 +75,24 @@ export function DraftFromEmailModal({ open, onClose }: Props): React.ReactElemen
     }
   }, [open]);
 
-  // Cycle the pipeline-step indicator while submitting so the modal
-  // doesn't read as frozen. Real SSE streaming lands in a polish phase.
+  // Redirect to the deck page once Atelier persists the report.
   useEffect(() => {
-    if (!submitting) {
-      setStepIdx(0);
-      return;
+    if (stream.status !== "done") return;
+    if (stream.reportId) {
+      router.push(`/reports/${stream.reportId}?source=hermes`);
+    } else {
+      // Defensive fallback: Atelier completed but no report id.
+      router.push(`/agents/hermes`);
     }
-    const handle = window.setInterval(() => {
-      setStepIdx((i) => Math.min(i + 1, PIPELINE_STEPS.length - 1));
-    }, 1800);
-    return () => window.clearInterval(handle);
-  }, [submitting]);
+  }, [stream.status, stream.reportId, router]);
 
   const close = useCallback(() => {
     if (submitting) return;
     setEmailText("");
-    setError(null);
+    setStreamRequest(null);
+    stream.reset();
     onClose();
-  }, [submitting, onClose]);
+  }, [submitting, onClose, stream]);
 
   // Keyboard handling while open: Escape closes, Tab wraps focus
   // inside the dialog so a screen-reader user can't tab past the
@@ -140,48 +134,17 @@ export function DraftFromEmailModal({ open, onClose }: Props): React.ReactElemen
     emailText.trim().length <= MAX_LEN;
 
   const handleSubmit = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
+    (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       if (!canSubmit) return;
-      setSubmitting(true);
-      setError(null);
-      setStepIdx(0);
-      try {
-        const res = await fetch("/api/agents/hermes/generate", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            email_text: emailText.trim(),
-            action_notes: actionNotes.trim() || undefined,
-          }),
-        });
-        if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as {
-            error?: string;
-          };
-          throw new Error(body.error ?? `HTTP ${res.status}`);
-        }
-        const data = (await res.json()) as {
-          run_id: string;
-          report_id: string | null;
-        };
-        if (data.report_id) {
-          // v0.5-A: Hermes drafts land in the canonical Reports surface.
-          // The byline + per-section regenerate affordance live there.
-          router.push(`/reports/${data.report_id}?source=hermes`);
-        } else {
-          // Defensive fallback (Atelier skipped or report id missing):
-          // land on the Hermes profile so the failed run shows up in
-          // Recent Runs and the user can paste again.
-          router.push(`/agents/hermes`);
-        }
-        // Don't reset state here; the route change will unmount us.
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-        setSubmitting(false);
-      }
+      // Kicks off the SSE stream. useHermesStream watches the
+      // request and opens the connection.
+      setStreamRequest({
+        emailText: emailText.trim(),
+        actionNotes: actionNotes.trim() || undefined,
+      });
     },
-    [canSubmit, emailText, actionNotes, router],
+    [canSubmit, emailText, actionNotes],
   );
 
   if (!open) return null;
@@ -304,17 +267,8 @@ export function DraftFromEmailModal({ open, onClose }: Props): React.ReactElemen
             />
           </div>
 
-          {submitting && (
-            <div
-              role="status"
-              aria-live="polite"
-              className="rounded-xl border border-[color:var(--border-glass)] bg-[color:var(--surface-base)] p-3 font-body text-xs text-[color:var(--text-secondary)]"
-            >
-              Drafting · {PIPELINE_STEPS[stepIdx]}
-              <span className="ml-2 text-[color:var(--color-ua)]">
-                {PIPELINE_STEPS.slice(0, stepIdx + 1).join(" → ")}
-              </span>
-            </div>
+          {(stream.status === "streaming" || stream.status === "done") && (
+            <HermesProgress events={stream.events} status={stream.status} />
           )}
 
           {error && (
