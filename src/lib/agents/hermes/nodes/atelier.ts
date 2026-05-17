@@ -5,6 +5,7 @@ import { serverEnv } from "@/lib/env.server";
 import { upsertReport } from "@/lib/reports/server-store";
 import { composeReport } from "@/lib/smart-reports";
 
+import type { HermesEmitter } from "../events";
 import { assembleHermesReport } from "../assemble";
 import type {
   Deck,
@@ -30,6 +31,7 @@ import type {
 
 export async function atelier(
   state: HermesState,
+  emit?: HermesEmitter,
 ): Promise<HermesStateUpdate> {
   const startedAt = new Date().toISOString();
 
@@ -87,6 +89,7 @@ export async function atelier(
       },
       runId: state.run_id,
       contactName: state.contact?.name ?? null,
+      emit,
     });
     // Stamp the regeneration context so the per-section regenerate
     // route can rebuild the same Intent without re-parsing the email.

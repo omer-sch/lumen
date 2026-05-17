@@ -223,6 +223,23 @@ body {
 .animate-bulb-float  { animation: bulb-float 5s ease-in-out infinite; }
 .animate-card-enter  { animation: card-enter var(--transition-enter) both; }
 
+/* Skeleton placeholder: faint base fill + a left-to-right specular
+ *  sweep using the @keyframes shimmer keyframe above. Used by the
+ *  Hermes deck-skeleton card and reusable for other loading states. */
+.skeleton-shimmer {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0.09) 50%,
+      rgba(255, 255, 255, 0.04) 100%
+    );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+}
+
 /* Stagger helpers — apply alongside .animate-card-enter */
 .stagger-1  { animation-delay:  60ms; }
 .stagger-2  { animation-delay: 120ms; }

@@ -3,6 +3,7 @@ import "server-only";
 import { END, START, StateGraph } from "@langchain/langgraph";
 
 import { serverEnv } from "@/lib/env.server";
+import type { HermesEmitter } from "./events";
 import { analyze } from "./nodes/analyze";
 import { atelier } from "./nodes/atelier";
 import { parseIntent } from "./nodes/parse-intent";
@@ -28,12 +29,20 @@ export function routeAfterAnalyze(_state: HermesState): "atelier" | "quill" {
   return serverEnv.USE_SMART_REPORTS === "live" ? "atelier" : "quill";
 }
 
-export function buildHermesGraph() {
+export function buildHermesGraph(opts: { emit?: HermesEmitter } = {}) {
+  // When the SSE route hands us an emitter, wrap atelier in a closure
+  // that forwards it through to composeReport so per-writer events
+  // fire. The sync /generate path leaves emit undefined and atelier
+  // runs byte-identical to today.
+  const atelierNode: (state: HermesState) => Promise<HermesStateUpdate> = opts
+    .emit
+    ? (state) => atelier(state, opts.emit)
+    : atelier;
   return new StateGraph(HermesStateAnnotation)
     .addNode("parse_intent", parseIntent)
     .addNode("analyze", analyze)
     .addNode("quill", quill)
-    .addNode("atelier", atelier)
+    .addNode("atelier", atelierNode)
     .addNode("review_gate", reviewGate)
     .addEdge(START, "parse_intent")
     .addEdge("parse_intent", "analyze")

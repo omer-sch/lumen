@@ -1,4 +1,5 @@
 import type { Intent, ReadyData } from "@/lib/analyst/types";
+import type { ReportSection } from "@/lib/reports/types";
 
 // Server-Sent Events vocabulary for the Hermes run lifecycle. The
 // stream route writes one frame per HermesEvent; the modal UI reads
@@ -15,6 +16,15 @@ export type HermesNodeName =
   | "atelier"
   | "review_gate";
 
+export type HermesSectionType =
+  | "platform_overall"
+  | "channel_weekly"
+  | "channel_campaign"
+  | "closer";
+
+export type HermesPlatform = "android" | "ios" | "web";
+export type HermesChannel = "meta" | "google" | "tiktok" | "asa";
+
 export type HermesEvent =
   | { type: "run_started"; runId: string; at: string }
   | { type: "node_started"; node: HermesNodeName; at: string }
@@ -28,8 +38,37 @@ export type HermesEvent =
        *  the raw notes string. Optional and node-shaped. */
       data?: NodeFinishedData;
     }
+  | {
+      type: "writer_started";
+      sectionId: string;
+      sectionType: HermesSectionType;
+      platform: HermesPlatform | null;
+      channel: HermesChannel | null;
+      at: string;
+    }
+  | {
+      type: "writer_finished";
+      sectionId: string;
+      sectionType: HermesSectionType;
+      platform: HermesPlatform | null;
+      channel: HermesChannel | null;
+      proseBlocks: number;
+      highlights: number;
+      at: string;
+    }
+  | {
+      type: "section_ready";
+      sectionId: string;
+      section: ReportSection;
+      at: string;
+    }
   | { type: "deck_ready"; reportId: string; at: string }
   | { type: "error"; message: string; at: string };
+
+/** Best-effort emit callback the SSE route hands down to the
+ *  template + writers. When undefined, every fire site is a no-op
+ *  and the sync API surface stays byte-identical. */
+export type HermesEmitter = (event: HermesEvent) => void;
 
 export type NodeFinishedData =
   | { kind: "parse_intent"; intent: Intent }
@@ -63,10 +102,42 @@ export function labelForEvent(event: HermesEvent): string | null {
     case "node_started":
     case "node_finished":
       return NODE_LABELS[event.node];
+    case "writer_started":
+    case "writer_finished":
+      return writerLabel(event.sectionType, event.platform, event.channel);
+    case "section_ready":
+      return null;
     case "deck_ready":
       return "Done";
     case "error":
       return "Run failed";
+  }
+}
+
+function writerLabel(
+  sectionType: HermesSectionType,
+  platform: HermesPlatform | null,
+  channel: HermesChannel | null,
+): string {
+  const p = platform
+    ? platform === "ios"
+      ? "iOS"
+      : platform[0].toUpperCase() + platform.slice(1)
+    : "";
+  const c = channel
+    ? channel === "asa"
+      ? "ASA"
+      : channel[0].toUpperCase() + channel.slice(1)
+    : "";
+  switch (sectionType) {
+    case "platform_overall":
+      return p ? `Drafting the ${p} overview` : "Drafting the overview";
+    case "channel_weekly":
+      return `Drafting ${p} ${c} weekly breakdown`.replace(/\s+/g, " ").trim();
+    case "channel_campaign":
+      return `Drafting ${p} ${c} campaign breakdown`.replace(/\s+/g, " ").trim();
+    case "closer":
+      return "Wrapping up";
   }
 }
 

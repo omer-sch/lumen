@@ -7,6 +7,12 @@ import type {
   ReportChapter,
 } from "@/lib/reports/types";
 
+import type {
+  HermesChannel,
+  HermesEmitter,
+  HermesPlatform,
+  HermesSectionType,
+} from "@/lib/agents/hermes/events";
 import { historyRowToHistorical } from "@/lib/agents/hermes/snapshot";
 
 import { parseActionItems, type ActionItem } from "../action-items";
@@ -149,8 +155,16 @@ export async function buildChapter(args: {
    *  chapter creates a local Limit (useful for tests that call
    *  buildChapter directly). */
   limit?: Limit;
+  /** Optional event emitter the SSE route hands down so the modal's
+   *  HermesProgress + skeleton can paint as each writer / section
+   *  lands. Undefined for the sync /generate route -- writers
+   *  remain byte-identical. */
+  emit?: HermesEmitter;
 }): Promise<ChapterBuildResult | null> {
   const limit = args.limit ?? createLimit(serverEnv.LUMEN_MAX_CONCURRENT_WRITERS);
+  const emit = args.emit;
+  const now = () => new Date().toISOString();
+  const renderPlatform = args.platform as HermesPlatform;
   const platformLabel = PLATFORM_LABEL[args.platform];
 
   // Intersect the template's per-platform default channel list with
@@ -182,14 +196,42 @@ export async function buildChapter(args: {
   // expect the overall section to land first deterministically.
   // Holding everything else back until it resolves also gives the
   // user an ordered status feed in WS2.
-  const overallTask = limit(() =>
-    writePlatformOverall({
+  const overallSectionId = sectionIdFor(
+    "platform_overall",
+    renderPlatform,
+    null,
+  );
+  const overallTask = limit(async () => {
+    emit?.({
+      type: "writer_started",
+      sectionId: overallSectionId,
+      sectionType: "platform_overall",
+      platform: renderPlatform,
+      channel: null,
+      at: now(),
+    });
+    const result = await writePlatformOverall({
       ready: args.ready,
       networks: platformNetworks.slice().sort((a, b) => b.spend - a.spend),
       options: args.options,
       freshness: args.freshness,
-    }),
-  );
+    });
+    emit?.({
+      type: "writer_finished",
+      sectionId: overallSectionId,
+      sectionType: "platform_overall",
+      platform: renderPlatform,
+      channel: null,
+      proseBlocks: result.blocks.length,
+      highlights: result.blocks.reduce(
+        (a, b) =>
+          a + b.bullets.reduce((c, bl) => c + bl.highlights.length, 0),
+        0,
+      ),
+      at: now(),
+    });
+    return result;
+  });
 
   // 2) Per-channel: prepare descriptors so we can fan out in parallel.
   type ChannelDescriptor = {
@@ -234,16 +276,57 @@ export async function buildChapter(args: {
   // card.
   const channelResults = await Promise.all(
     channelDescriptors.map(async (desc) => {
+      const weeklySectionId = sectionIdFor(
+        "channel_weekly",
+        renderPlatform,
+        desc.renderChannel as HermesChannel,
+      );
+      const campaignSectionId = sectionIdFor(
+        "channel_campaign",
+        renderPlatform,
+        desc.renderChannel as HermesChannel,
+      );
       const [weeklySettled, campaignSettled] = await Promise.allSettled([
-        limit(() =>
-          writeWeeklyBreakdown({
+        limit(async () => {
+          emit?.({
+            type: "writer_started",
+            sectionId: weeklySectionId,
+            sectionType: "channel_weekly",
+            platform: renderPlatform,
+            channel: desc.renderChannel as HermesChannel,
+            at: now(),
+          });
+          const result = await writeWeeklyBreakdown({
             ready: args.ready,
             bqNetworkNames: desc.bqNames,
             options: args.options,
-          }),
-        ),
-        limit(() =>
-          writeCampaignBreakdown({
+          });
+          emit?.({
+            type: "writer_finished",
+            sectionId: weeklySectionId,
+            sectionType: "channel_weekly",
+            platform: renderPlatform,
+            channel: desc.renderChannel as HermesChannel,
+            proseBlocks: result.blocks.length,
+            highlights: result.blocks.reduce(
+              (a, b) =>
+                a + b.bullets.reduce((c, bl) => c + bl.highlights.length, 0),
+              0,
+            ),
+            at: now(),
+          });
+          return result;
+        }),
+        limit(async () => {
+          emit?.({
+            type: "writer_started",
+            sectionId: campaignSectionId,
+            sectionType: "channel_campaign",
+            platform: renderPlatform,
+            channel: desc.renderChannel as HermesChannel,
+            at: now(),
+          });
+          const result = await writeCampaignBreakdown({
             ready: args.ready,
             bqNetworkNames: desc.bqNames,
             options: args.options,
@@ -256,8 +339,23 @@ export async function buildChapter(args: {
               platform: args.platform,
               label: platformLabel,
             },
-          }),
-        ),
+          });
+          emit?.({
+            type: "writer_finished",
+            sectionId: campaignSectionId,
+            sectionType: "channel_campaign",
+            platform: renderPlatform,
+            channel: desc.renderChannel as HermesChannel,
+            proseBlocks: result.blocks.length,
+            highlights: result.blocks.reduce(
+              (a, b) =>
+                a + b.bullets.reduce((c, bl) => c + bl.highlights.length, 0),
+              0,
+            ),
+            at: now(),
+          });
+          return result;
+        }),
       ]);
       return {
         desc,
@@ -293,13 +391,20 @@ export async function buildChapter(args: {
   let promptTokensOut = overallRes.diagnostics.promptTokensOut;
   citations.push(...overallRes.blockCitations);
 
-  sections.push({
+  const platformOverallSection: PlatformOverallSection = {
     id: "platform_overall",
     platform: args.platform,
     title: `${platformLabel} | Overall | Weekly Breakdown`,
     summary: { rows: [], total: emptySummaryRow() },
     bullets: [],
     prose: overallRes.blocks,
+  };
+  sections.push(platformOverallSection);
+  emit?.({
+    type: "section_ready",
+    sectionId: overallSectionId,
+    section: platformOverallSection,
+    at: now(),
   });
 
   for (const { desc, weekly, campaign } of channelResults) {
@@ -328,7 +433,12 @@ export async function buildChapter(args: {
         .slice()
         .sort((a, b) => a.weekIsoStart.localeCompare(b.weekIsoStart))
         .map(historyRowToHistorical);
-      sections.push({
+      const weeklySectionId = sectionIdFor(
+        "channel_weekly",
+        renderPlatform,
+        desc.renderChannel as HermesChannel,
+      );
+      const weeklySection: ChannelWeeklySection = {
         id: "channel_weekly",
         platform: args.platform,
         channel: desc.renderChannel,
@@ -365,6 +475,13 @@ export async function buildChapter(args: {
         history: channelHistory,
         bullets: [],
         prose: weekly.blocks,
+      };
+      sections.push(weeklySection);
+      emit?.({
+        type: "section_ready",
+        sectionId: weeklySectionId,
+        section: weeklySection,
+        at: now(),
       });
     }
 
@@ -373,7 +490,12 @@ export async function buildChapter(args: {
       const calloutByCampaignId = new Map<string, CalloutColor>(
         desc.callouts.map((c) => [c.campaignId, c.color]),
       );
-      sections.push({
+      const campaignSectionId = sectionIdFor(
+        "channel_campaign",
+        renderPlatform,
+        desc.renderChannel as HermesChannel,
+      );
+      const campaignSection: ChannelCampaignSection = {
         id: "channel_campaign",
         platform: args.platform,
         channel: desc.renderChannel,
@@ -396,6 +518,13 @@ export async function buildChapter(args: {
         })),
         commentary: [],
         prose: campaign.blocks,
+      };
+      sections.push(campaignSection);
+      emit?.({
+        type: "section_ready",
+        sectionId: campaignSectionId,
+        section: campaignSection,
+        at: now(),
       });
     }
   }
@@ -482,6 +611,10 @@ export async function buildWeeklyReviewGlobalcomix(args: {
    *  workstream-D2 has landed). False today; the template degrades
    *  to a single chapter. */
   dataIsPlatformFiltered: boolean;
+  /** Optional event emitter the SSE route hands down. Threaded into
+   *  each chapter so per-writer events fire across parallel chapters
+   *  too. Undefined for the sync /generate route. */
+  emit?: HermesEmitter;
 }): Promise<WeeklyReviewBuildResult> {
   // Intersect intent.platforms with the template's deterministic
   // platform order. When platform-filtered, emit every requested
@@ -523,6 +656,7 @@ export async function buildWeeklyReviewGlobalcomix(args: {
         freshness,
         actionItems,
         limit,
+        emit: args.emit,
       }),
     ),
   );
@@ -599,6 +733,20 @@ function pickCalloutsForChannel(
       spendDelta: r.spendDelta ?? 0,
       color: CALLOUT_COLORS[i],
     }));
+}
+
+/** Stable section id used by the SSE event payloads. Mirrors the
+ *  identity scheme the renderer + regenerate-section route already
+ *  use so the modal can key its skeleton by the same id. */
+function sectionIdFor(
+  type: HermesSectionType,
+  platform: HermesPlatform,
+  channel: HermesChannel | null,
+): string {
+  if (type === "platform_overall") return `${platform}--platform_overall`;
+  if (type === "channel_weekly") return `${platform}-${channel}--channel_weekly`;
+  if (type === "channel_campaign") return `${platform}-${channel}--channel_campaign`;
+  return `${type}`;
 }
 
 /** Compare the classifier's case-loose platform string against the

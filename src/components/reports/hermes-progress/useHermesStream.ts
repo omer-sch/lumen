@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { HermesEvent } from "@/lib/agents/hermes/events";
+import type { Intent } from "@/lib/analyst/types";
+import type { ReportSection } from "@/lib/reports/types";
 
 // Hook that POSTs to /api/agents/hermes/stream and surfaces each
 // HermesEvent frame as React state.
@@ -26,6 +28,14 @@ export type UseHermesStreamResult = {
   /** "idle" before request, "streaming" while events flow, "done"
    *  after deck_ready, "error" on failure. */
   status: "idle" | "streaming" | "done" | "error";
+  /** First-pass intent surfaced from node_finished(parse_intent).
+   *  The HermesDeckSkeleton uses this to derive the expected
+   *  section list as soon as parse_intent finishes. */
+  intent: Intent | null;
+  /** Map of section_id -> rendered section as writer events land.
+   *  Each entry is one completed section the skeleton can swap from
+   *  shimmer to populated. */
+  sectionsReady: Record<string, ReportSection>;
   reset: () => void;
 };
 
@@ -107,12 +117,39 @@ export function useHermesStream(args: UseHermesStreamArgs): UseHermesStreamResul
     };
   }, [request]);
 
+  // Derive intent + sectionsReady from the event stream.
+  const intent = useMemo<Intent | null>(() => {
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const ev = events[i];
+      if (
+        ev.type === "node_finished" &&
+        ev.node === "parse_intent" &&
+        ev.data?.kind === "parse_intent"
+      ) {
+        return ev.data.intent;
+      }
+    }
+    return null;
+  }, [events]);
+
+  const sectionsReady = useMemo<Record<string, ReportSection>>(() => {
+    const out: Record<string, ReportSection> = {};
+    for (const ev of events) {
+      if (ev.type === "section_ready") {
+        out[ev.sectionId] = ev.section;
+      }
+    }
+    return out;
+  }, [events]);
+
   return {
     events,
     latest: events[events.length - 1] ?? null,
     reportId,
     error,
     status,
+    intent,
+    sectionsReady,
     reset,
   };
 }

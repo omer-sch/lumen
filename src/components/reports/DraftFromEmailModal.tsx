@@ -10,6 +10,7 @@ import {
 import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
+import { HermesDeckSkeleton } from "./hermes-progress/HermesDeckSkeleton";
 import { HermesProgress } from "./hermes-progress/HermesProgress";
 import { useHermesStream } from "./hermes-progress/useHermesStream";
 
@@ -268,7 +269,13 @@ export function DraftFromEmailModal({ open, onClose }: Props): React.ReactElemen
           </div>
 
           {(stream.status === "streaming" || stream.status === "done") && (
-            <HermesProgress events={stream.events} status={stream.status} />
+            <div className="flex flex-col gap-3">
+              <HermesProgress events={stream.events} status={stream.status} />
+              <HermesDeckSkeleton
+                intent={stream.intent}
+                sectionsReady={stream.sectionsReady}
+              />
+            </div>
           )}
 
           {error && (

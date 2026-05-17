@@ -28,6 +28,8 @@ import {
   writeCloser,
   writeWeeklyBreakdown,
 } from "./prose-writer";
+import type { HermesEmitter } from "@/lib/agents/hermes/events";
+
 import { buildWeeklyReviewGlobalcomix } from "./templates/weekly-review-globalcomix";
 import type {
   ComposeOptions,
@@ -96,6 +98,9 @@ export async function composeReport(args: {
   contactName?: string | null;
   /** Optional contact email for the closer slide (Phase 2). */
   contactEmail?: string | null;
+  /** Optional event emitter the SSE route hands down to drive the
+   *  per-writer progress UI. Undefined for the sync /generate route. */
+  emit?: HermesEmitter;
 }): Promise<ComposedReport> {
   if (args.options.template === "weekly-review-globalcomix") {
     return composeWeeklyReviewGlobalcomix(args);
@@ -275,6 +280,7 @@ async function composeWeeklyReviewGlobalcomix(args: {
   runId?: string | null;
   contactName?: string | null;
   contactEmail?: string | null;
+  emit?: HermesEmitter;
 }): Promise<ComposedReport> {
   const { readyData, intent, options, ownerUserId } = args;
 
@@ -301,6 +307,7 @@ async function composeWeeklyReviewGlobalcomix(args: {
     intent,
     options,
     dataIsPlatformFiltered,
+    emit: args.emit,
   });
 
   // Closer slide. Doesn't fail the run if the writer throws (fallback

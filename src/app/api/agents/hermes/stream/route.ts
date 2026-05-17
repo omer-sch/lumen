@@ -97,7 +97,11 @@ export async function POST(req: NextRequest) {
         send({ type: "run_started", runId: run.id, at: now() });
         send({ type: "node_started", node: orderedNodes[0], at: now() });
 
-        const graph = buildHermesGraph();
+        // Build the graph with an emitter so atelier -> composeReport
+        // -> template fire writer_started / writer_finished /
+        // section_ready events through the same SSE controller as
+        // the node-level events.
+        const graph = buildHermesGraph({ emit: send });
         const langgraphStream = await graph.stream(
           {
             email_text: parsed.data.email_text,
