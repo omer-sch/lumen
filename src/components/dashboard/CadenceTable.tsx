@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 
+import { EmptyState } from "@/components/ui/EmptyState";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { CadenceTableSkeleton } from "@/components/ui/Skeleton";
 import { aggregateTrend, type Cadence } from "@/lib/dashboard/aggregate-trend";
@@ -124,7 +125,22 @@ export function CadenceTable() {
   }, [rows]);
 
   if (loading) return <CadenceTableSkeleton />;
-  if (rows.length === 0) return null;
+  if (rows.length === 0) {
+    return (
+      <GlassCard className="flex flex-col gap-3 p-4">
+        <header className="flex items-center justify-between gap-3">
+          <h3 className="font-display text-lg font-bold text-cloud-white">
+            Performance by cadence
+          </h3>
+        </header>
+        <EmptyState
+          title="No trend data for this window."
+          description="Try a wider date range, or remove the platform filter to see more."
+          bulbSize={88}
+        />
+      </GlassCard>
+    );
+  }
 
   return (
     <GlassCard className="flex flex-col gap-3 p-4">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/ui/EmptyState";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { WeekendsVsWeekdaysSkeleton } from "@/components/ui/Skeleton";
 import { cellTone, type CellTone } from "@/lib/dashboard/cell-tone";
@@ -86,7 +87,22 @@ export function WeekendsVsWeekdays() {
   }, [client, fromIso, toIso, os, platforms]);
 
   if (loading) return <WeekendsVsWeekdaysSkeleton />;
-  if (rows.length === 0) return null;
+  if (rows.length === 0) {
+    return (
+      <GlassCard className="flex flex-col gap-3 p-4">
+        <header className="flex items-baseline justify-between gap-2">
+          <h3 className="font-display text-lg font-bold text-cloud-white">
+            Weekends vs Weekdays
+          </h3>
+        </header>
+        <EmptyState
+          title="No spend in this window."
+          description="Try widening the date range or removing the platform filter."
+          bulbSize={88}
+        />
+      </GlassCard>
+    );
+  }
 
   const totalSpend = rows.reduce((acc, r) => acc + r.spend, 0);
 

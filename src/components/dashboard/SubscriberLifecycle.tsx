@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/ui/EmptyState";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { SubscriberLifecycleSkeleton } from "@/components/ui/Skeleton";
@@ -86,12 +87,29 @@ export function SubscriberLifecycle() {
     { subs: 0, churn: 0, netSub: 0 },
   );
 
-  // Cold-load: show a section-shaped skeleton so the dashboard layout
-  // doesn't jump as the three fetches resolve. Empty-state branch is
-  // handled in WS5 with an EmptyState card; here we still return null
-  // (the loaded layout below) to keep WS2 self-contained.
+  // Cold-load: section-shaped skeleton. Empty data: card stays in
+  // place with an EmptyState so the dashboard layout doesn't lose the
+  // slot. Brand-correct bulb instead of a generic "no data" icon.
   if (loading) return <SubscriberLifecycleSkeleton />;
-  if (daily.length === 0 && osMix.length === 0) return null;
+  if (daily.length === 0 && osMix.length === 0) {
+    return (
+      <GlassCard className="flex flex-col gap-3 p-4">
+        <header className="flex items-baseline justify-between gap-2">
+          <h3 className="font-display text-lg font-bold text-cloud-white">
+            Subscriber lifecycle
+          </h3>
+          <p className="font-body text-xs text-[color:var(--text-muted)]">
+            Lifecycle is all OS regardless of the dashboard filter.
+          </p>
+        </header>
+        <EmptyState
+          title="No lifecycle activity in this window."
+          description="Try a wider date range. Lifecycle data covers all OS regardless of the dashboard's OS filter."
+          bulbSize={88}
+        />
+      </GlassCard>
+    );
+  }
 
   return (
     <GlassCard className="flex flex-col gap-4 p-4">

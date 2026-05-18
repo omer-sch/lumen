@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/ui/EmptyState";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { PaidVsOrganicSkeleton } from "@/components/ui/Skeleton";
@@ -66,7 +67,25 @@ export function PaidVsOrganic() {
   }, [client, fromIso, toIso]);
 
   if (loading) return <PaidVsOrganicSkeleton />;
-  if (rows.length === 0 && paidSpend == null) return null;
+  if (rows.length === 0 && paidSpend == null) {
+    return (
+      <GlassCard className="flex flex-col gap-3 p-4">
+        <header className="flex items-baseline justify-between gap-2">
+          <h3 className="font-display text-lg font-bold text-cloud-white">
+            Paid vs Organic
+          </h3>
+          <p className="font-body text-xs text-[color:var(--text-muted)]">
+            Cohort-attributed subs in the active window.
+          </p>
+        </header>
+        <EmptyState
+          title="No paid or organic subs in this window."
+          description="Try widening the date range or removing the platform filter."
+          bulbSize={88}
+        />
+      </GlassCard>
+    );
+  }
 
   const totals = rows.reduce(
     (acc, r) => {
