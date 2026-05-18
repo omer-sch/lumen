@@ -98,25 +98,25 @@ export function WeekendsVsWeekdays() {
                 className="border-t"
                 style={{ borderColor: "var(--border-subtle)" }}
               >
-                <td className="py-2 pr-3 font-medium text-[color:var(--text-light-primary)]">
+                <td className="py-2 pr-3 font-medium text-[color:var(--text-primary)]">
                   {r.bucket === "weekend" ? "Weekend" : "Weekday"}
                 </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
                   {fmtMoney(r.spend)}
                 </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
                   {fmtCount(r.installs)}
                 </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
                   {fmtCount(r.sub_d7)}
                 </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
                   {fmtMoney(r.cpa_d7)}
                 </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
                   {fmtRoi(r.roi_d7)}
                 </td>
-                <td className="py-2 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+                <td className="py-2 text-right tabular-nums text-[color:var(--text-secondary)]">
                   {fmtRatio(r.install_cvr)}
                 </td>
               </tr>
@@ -146,7 +146,7 @@ function SpendBars({
         const share = totalSpend > 0 ? r.spend / totalSpend : 0;
         return (
           <div key={r.bucket} className="flex items-center gap-3 font-body text-sm">
-            <span className="min-w-[64px] text-[color:var(--text-light-primary)]">
+            <span className="min-w-[64px] text-[color:var(--text-primary)]">
               {r.bucket === "weekend" ? "Weekend" : "Weekday"}
             </span>
             <div
@@ -161,7 +161,7 @@ function SpendBars({
                 }}
               />
             </div>
-            <span className="w-12 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+            <span className="w-12 text-right tabular-nums text-[color:var(--text-secondary)]">
               {(share * 100).toFixed(0)}%
             </span>
           </div>

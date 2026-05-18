@@ -122,11 +122,11 @@ function DashboardInner() {
 
       {showAdditionalSections && (
         <>
-          <CadenceTable
-            trend={data?.trendByNetwork.flatMap((r) =>
-              r.points.map((p) => ({ ...p, network: r.network })),
-            )}
-          />
+          {/* CadenceTable owns its own /api/bq/trend fetch so it gets
+              full YYYY-MM-DD dates - the dashboard hook's transform
+              chops the year off for the chart axis, which left
+              aggregateTrend producing "Invalid Date" labels. */}
+          <CadenceTable />
           <WeekendsVsWeekdays />
           {/* SubscriberLifecycle intentionally ignores the global OS
               chip - lifecycle is its own scope (see component comment). */}

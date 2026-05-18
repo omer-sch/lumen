@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { GlassCard } from "@/components/ui/GlassCard";
 import { aggregateTrend, type Cadence } from "@/lib/dashboard/aggregate-trend";
+import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import type { BQTrendPointByNetwork } from "@/types/dashboard";
 
 const CADENCES: { value: Cadence; label: string }[] = [
@@ -21,23 +22,62 @@ const fmtRoi = (n: number) => `${n.toFixed(2)}x`;
 
 /**
  * Cadence table (WS7.A). Daily / Weekly / Monthly toggle above an
- * aggregated view of the trend data the dashboard already fetched.
- * Rate metrics (CPI, CPA D7, ROI D7) are recomputed from the bucket
- * sums in aggregate-trend.ts so we never average daily rates.
+ * aggregated view of the trend data.
+ *
+ * Fetches /api/bq/trend directly with full YYYY-MM-DD dates rather than
+ * relying on the post-transformed trend the dashboard hook exposes —
+ * that transform chops the year off the date string (line 239 of
+ * use-dashboard-data.ts) to keep the chart x-axis label compact, which
+ * left aggregateTrend's bucket-date parser staring at "04-15" and
+ * emitting "Invalid Date" in every row. Owning the fetch keeps the
+ * date intact and matches what the other WS7 sections do.
+ *
+ * Rate metrics (CPI, CPA D7, ROI D7, CTR) are recomputed from bucket
+ * sums in aggregate-trend.ts — never average daily rates.
  */
-export function CadenceTable({
-  trend,
-}: {
-  trend: BQTrendPointByNetwork[] | undefined;
-}) {
+export function CadenceTable() {
+  const { from, to, client, os, platforms } = useGlobalFilters();
+  const fromIso = from.toISOString().slice(0, 10);
+  const toIso = to.toISOString().slice(0, 10);
+
   const [cadence, setCadence] = useState<Cadence>("weekly");
+  const [trend, setTrend] = useState<BQTrendPointByNetwork[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    const qs = new URLSearchParams({
+      client,
+      from: fromIso,
+      to: toIso,
+    });
+    if (os !== "total") qs.set("os", os);
+    if (platforms.length > 0) qs.set("platforms", platforms.join(","));
+
+    fetch(`/api/bq/trend?${qs.toString()}`)
+      .then((r) => r.json())
+      .then((data: BQTrendPointByNetwork[]) => {
+        if (cancelled) return;
+        setTrend(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, fromIso, toIso, os, platforms]);
 
   const rows = useMemo(() => {
-    if (!trend || trend.length === 0) return [];
+    if (trend.length === 0) return [];
     return aggregateTrend(trend, cadence);
   }, [trend, cadence]);
 
-  if (rows.length === 0) return null;
+  if (!loading && rows.length === 0) return null;
 
   return (
     <GlassCard className="flex flex-col gap-3 p-4">
@@ -67,7 +107,7 @@ export function CadenceTable({
                   background: active ? "var(--color-ua)" : "transparent",
                   color: active
                     ? "var(--surface-base)"
-                    : "var(--text-light-secondary)",
+                    : "var(--text-secondary)",
                 }}
               >
                 {c.label}
@@ -97,25 +137,25 @@ export function CadenceTable({
                 className="border-t"
                 style={{ borderColor: "var(--border-subtle)" }}
               >
-                <td className="py-2 pr-3 font-medium text-[color:var(--text-light-primary)]">
+                <td className="py-2 pr-3 font-medium text-[color:var(--text-primary)]">
                   {r.label}
                 </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
                   {fmtMoney(r.spend)}
                 </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
                   {fmtCount(r.installs)}
                 </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
                   {fmtCount(r.subStartD7)}
                 </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
                   {fmtCount(r.subD7)}
                 </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
                   {r.cpaD7 > 0 ? fmtMoney(r.cpaD7) : "—"}
                 </td>
-                <td className="py-2 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+                <td className="py-2 text-right tabular-nums text-[color:var(--text-secondary)]">
                   {r.roiD7 > 0 ? fmtRoi(r.roiD7) : "—"}
                 </td>
               </tr>
