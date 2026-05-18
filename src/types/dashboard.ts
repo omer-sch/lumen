@@ -184,15 +184,33 @@ export type KPIData = {
   /** Distinct paying users in the cohort by D7. */
   payersD7?: number;
   // ── Subscription funnel (multi-source) ──
-  /** First-payment events from the spend tables (`num_ftd7`). Aliased
-   *  `subStart` so the UI vocabulary matches the subscription deck. */
+  /** Sub Start headline (D7). Sources from the cohort's
+   *  `_7D_subscription_start_Events` post-WS3 (was spend `num_ftd7`).
+   *  `subStart`, `subStartD7` are the same value — `subStart` is kept
+   *  as the short-name alias the existing dashboard tile reads. */
   subStart?: number;
+  /** Sub Start at D0 (`_0D_subscription_start_Events`). */
+  subStartD0?: number;
+  /** Sub Start at D7 — same value as `subStart`, surfaced explicitly. */
+  subStartD7?: number;
+  /** Sub Start at D14 (`_14D_subscription_start_Events`). */
+  subStartD14?: number;
+  /** Trial Start events (`_*_trial_start_Events`). Free-trial cohort
+   *  signal distinct from Sub Start; useful for trial-to-sub conversion
+   *  analysis once WS5's funnel views land. */
+  trialStartD0?: number;
+  trialStartD7?: number;
+  trialStartD14?: number;
   /** Distinct paying users in the cohort by D0 (`_0D_Paying_Users`). */
   subD0?: number;
   /** Distinct paying users in the cohort by D7 (`_7D_Paying_Users`).
    *  Same value as `payersD7` — surfaced under the subscription label
    *  for the new vocabulary; the gaming-vocab alias stays available. */
   subD7?: number;
+  /** Distinct paying users at D14 / D30 / D90. */
+  subD14?: number;
+  subD30?: number;
+  subD90?: number;
   /** Cost per sub-start event = spend / sub_start. */
   cpSubStart?: number;
   /** Cost per acquired subscriber at D0 = spend / sub_d0. */
@@ -245,8 +263,17 @@ export type BQTrendPoint = {
   payersD7?: number;
   // ── Subscription funnel (multi-source) ──
   subStart?: number;
+  /** Sub Start events by window (`_*_subscription_start_Events`). */
+  subStartD0?: number;
+  subStartD7?: number;
+  subStartD14?: number;
+  /** Trial Start events by window (`_*_trial_start_Events`). */
+  trialStartD0?: number;
+  trialStartD7?: number;
+  trialStartD14?: number;
   subD0?: number;
   subD7?: number;
+  subD14?: number;
   cpSubStart?: number;
   cpaD0?: number;
   cpaD7?: number;
@@ -291,13 +318,24 @@ export type NetworkRow = {
   payersD7: number;
   retD7: number;
   // ── Subscription funnel (multi-source) ──
-  /** Sub starts (aliased from `num_ftd7` on the spend tables). */
+  /** Sub starts. Sourced from the cohort's `_7D_subscription_start_Events`
+   *  post-WS3 (was spend `num_ftd7`). Same value as `subStartD7`. */
   subStart: number;
+  /** Sub Start at D0 / D14 windows. Optional because pre-WS3 rows wouldn't
+   *  carry them; new dashboards / Smart Reports consumers can read either. */
+  subStartD0?: number;
+  subStartD7?: number;
+  subStartD14?: number;
+  /** Trial Start at D7 (free trials that converted to a payment by D7).
+   *  Distinct from Sub Start; useful for trial-to-sub conversion analysis. */
+  trialStartD7?: number;
   /** Sub D0 — `_0D_Paying_Users` from the cohort. */
   subD0: number;
   /** Sub D7 — `_7D_Paying_Users` from the cohort (same value as
    *  `payersD7`; surfaced under the subscription vocabulary). */
   subD7: number;
+  /** Sub D14 (`_14D_Paying_Users`). Optional. */
+  subD14?: number;
   /** Unit costs against the subscription funnel. Computed at the period
    *  level from the network's spend and the matching count. */
   cpSubStart: number;

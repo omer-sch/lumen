@@ -423,23 +423,9 @@ describe("globalcomix-queries cache-wrapping contract", () => {
   });
 });
 
-// ── WS1.B — Organic + AppLovin cohort branches; Pubmint TODO marker ────────
+// ── WS1.B / WS3 — Cohort attribution buckets + parameterized API ───────────
 describe("buildCohortSubquery: attribution-bucket CASE", () => {
-  it("maps the three Organic strings into the 'Organic' bucket", async () => {
-    queryFn.mockResolvedValue([[{}]]);
-    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
-    await queryGlobalComixKPIs("globalcomix", FROM, TO);
-    const { query } = queryFn.mock.calls[0][0] as { query: string };
-    // All three Organic flavors should resolve to the same display label.
-    expect(query).toContain("'Organic'");
-    expect(query).toContain("'Google Organic Search'");
-    expect(query).toContain("'Untrusted Devices'");
-    // The branch returns the literal 'Organic' (one occurrence in the
-    // THEN clause is enough to prove the case wiring landed).
-    expect(query).toMatch(/THEN 'Organic'/);
-  });
-
-  it("maps both Axon AppLovin strings into the 'AppLovin' bucket", async () => {
+  it("maps the Axon AppLovin strings into the 'AppLovin' bucket (always-on)", async () => {
     queryFn.mockResolvedValue([[{}]]);
     const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
     await queryGlobalComixKPIs("globalcomix", FROM, TO);
@@ -449,23 +435,125 @@ describe("buildCohortSubquery: attribution-bucket CASE", () => {
     expect(query).toMatch(/THEN 'AppLovin'/);
   });
 
-  it("leaves a TODO marker for Pubmint (open Q2 awaiting Gabby's call)", async () => {
+  it("paid-only path (default): Organic strings fall through to NULL", async () => {
+    // WS3 design: KPI / Trend / NetworkBreakdown call buildCohortSubquery
+    // with the default includeOrganic=false to avoid contaminating their
+    // paid-only totals. The three Organic strings should not appear as
+    // a `THEN 'Organic'` branch in the emitted SQL.
     queryFn.mockResolvedValue([[{}]]);
     const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
     await queryGlobalComixKPIs("globalcomix", FROM, TO);
     const { query } = queryFn.mock.calls[0][0] as { query: string };
-    // Pubmint stays out of the bucketed CASE branches.
-    expect(query).not.toMatch(/THEN 'Pubmint'/);
-    // The TODO comment ships inside the SQL so a future reader sees the gap.
-    expect(query).toContain("TODO(open-q-2)");
+    expect(query).not.toMatch(/THEN 'Organic'/);
+    expect(query).not.toContain("'Google Organic Search'");
   });
 
-  it("keeps the Google iOS attribution filter exactly as before", async () => {
+  it("opted-in path: includeOrganic=true emits the 'Organic' branch", async () => {
+    const { buildCohortSubquery } = await import("@/lib/globalcomix-queries");
+    const sql = buildCohortSubquery("globalcomix", { includeOrganic: true });
+    expect(sql).toContain("'Organic'");
+    expect(sql).toContain("'Google Organic Search'");
+    expect(sql).toContain("'Untrusted Devices'");
+    expect(sql).toMatch(/THEN 'Organic'/);
+  });
+
+  it("leaves a TODO marker for Pubmint regardless of includeOrganic", async () => {
+    const { buildCohortSubquery } = await import("@/lib/globalcomix-queries");
+    const paidOnly = buildCohortSubquery("globalcomix");
+    const withOrganic = buildCohortSubquery("globalcomix", { includeOrganic: true });
+    for (const sql of [paidOnly, withOrganic]) {
+      expect(sql).not.toMatch(/THEN 'Pubmint'/);
+      expect(sql).toContain("TODO(open-q-2)");
+    }
+  });
+
+  it("keeps the Google iOS attribution filter regardless of includeOrganic", async () => {
+    const { buildCohortSubquery } = await import("@/lib/globalcomix-queries");
+    const paidOnly = buildCohortSubquery("globalcomix");
+    const withOrganic = buildCohortSubquery("globalcomix", { includeOrganic: true });
+    for (const sql of [paidOnly, withOrganic]) {
+      expect(sql).toMatch(/NOT \(_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios'\)/);
+    }
+  });
+});
+
+// ── WS3 — Parameterized groupBy + new metric projections ───────────────────
+describe("buildCohortSubquery: groupBy parameterization", () => {
+  it("defaults to GROUP BY (date, network) for back-compat", async () => {
+    const { buildCohortSubquery } = await import("@/lib/globalcomix-queries");
+    const sql = buildCohortSubquery("globalcomix");
+    expect(sql).toMatch(/_Day_Date AS date/);
+    expect(sql).toMatch(/END AS network/);
+    expect(sql).toMatch(/GROUP BY 1, 2/);
+  });
+
+  it("projects only the requested dimensions when groupBy is custom", async () => {
+    const { buildCohortSubquery } = await import("@/lib/globalcomix-queries");
+    const sql = buildCohortSubquery("globalcomix", { groupBy: ["country"] });
+    expect(sql).toMatch(/_Country AS country/);
+    // Network CASE should not appear in a country-only query.
+    expect(sql).not.toMatch(/END AS network/);
+    expect(sql).toMatch(/GROUP BY 1/);
+  });
+
+  it("emits CAST(_Campaign_ID AS STRING) for the campaign_id dimension", async () => {
+    const { buildCohortSubquery } = await import("@/lib/globalcomix-queries");
+    const sql = buildCohortSubquery("globalcomix", {
+      groupBy: ["campaign_id"],
+    });
+    expect(sql).toMatch(/CAST\(_Campaign_ID AS STRING\) AS campaign_id/);
+  });
+
+  it("emits _OS_name AS os when groupBy includes os", async () => {
+    const { buildCohortSubquery } = await import("@/lib/globalcomix-queries");
+    const sql = buildCohortSubquery("globalcomix", { groupBy: ["os"] });
+    expect(sql).toMatch(/_OS_name AS os/);
+  });
+
+  it("emits _Ad_ID and _Creative_Attribution for the creatives dimensions", async () => {
+    const { buildCohortSubquery } = await import("@/lib/globalcomix-queries");
+    const sql = buildCohortSubquery("globalcomix", {
+      groupBy: ["ad_id", "creative"],
+    });
+    expect(sql).toMatch(/CAST\(_Ad_ID AS STRING\) AS ad_id/);
+    expect(sql).toMatch(/_Creative_Attribution AS creative_name/);
+    expect(sql).toMatch(/GROUP BY 1, 2/);
+  });
+
+  it("always projects the expanded metric set (sub_start D0/D7/D14, trial_start, sub D14/D30/D90)", async () => {
+    const { buildCohortSubquery } = await import("@/lib/globalcomix-queries");
+    const sql = buildCohortSubquery("globalcomix");
+    expect(sql).toMatch(/AS sub_start_d0/);
+    expect(sql).toMatch(/AS sub_start_d7/);
+    expect(sql).toMatch(/AS sub_start_d14/);
+    expect(sql).toMatch(/AS trial_start_d0/);
+    expect(sql).toMatch(/AS trial_start_d7/);
+    expect(sql).toMatch(/AS trial_start_d14/);
+    expect(sql).toMatch(/AS sub_d14/);
+    expect(sql).toMatch(/AS sub_d30/);
+    expect(sql).toMatch(/AS sub_d90/);
+  });
+});
+
+// ── WS3 — sub_start source switch (spend ftd_d7 -> cohort _7D_subscription_start_Events) ──
+describe("queryGlobalComixKPIs: sub_start sources from cohort", () => {
+  it("does NOT alias spend ftd_d7 as sub_start in the spend CTEs", async () => {
     queryFn.mockResolvedValue([[{}]]);
     const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
     await queryGlobalComixKPIs("globalcomix", FROM, TO);
     const { query } = queryFn.mock.calls[0][0] as { query: string };
-    expect(query).toMatch(/NOT \(_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios'\)/);
+    // Pre-WS3 the spend CTEs emitted `SUM(ftd_d7) AS sub_start`. Post-WS3
+    // sub_start comes from cohort sub_start_d7; the spend CTEs only keep
+    // ftd_d7 for back-compat consumers and shouldn't double-alias it.
+    expect(query).not.toMatch(/SUM\(ftd_d7\)\s+AS sub_start\b/);
+  });
+
+  it("reads sub_start from the cohort CTE (rc.sub_start_d7) in the SELECT", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixKPIs("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toMatch(/rc\.sub_start_d7\s+AS sub_start\b/);
   });
 });
 

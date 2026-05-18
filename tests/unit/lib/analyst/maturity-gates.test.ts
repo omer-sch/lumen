@@ -11,6 +11,7 @@ import { cpaD7VsTrailing30d } from "@/lib/analyst/comparisons";
 import {
   COHORT_D7_MATURITY_THRESHOLD,
   MIN_POPULATION,
+  isMatureCohort,
 } from "@/lib/analyst/maturity-gates";
 import { topCampaignsBySpend } from "@/lib/analyst/rankings";
 import type { CampaignRow, NetworkRow } from "@/types/dashboard";
@@ -158,5 +159,24 @@ describe("Comparisons cohort maturity (cpaD7VsTrailing30d)", () => {
     const pop = cpaD7VsTrailing30d(networks);
     expect(pop[0].mature).toBe(true);
     expect(pop[0].tone).toBe("good");
+  });
+});
+
+describe("isMatureCohort helper (WS3)", () => {
+  it("returns true when sub_d7 >= COHORT_D7_MATURITY_THRESHOLD", () => {
+    expect(isMatureCohort(COHORT_D7_MATURITY_THRESHOLD)).toBe(true);
+    expect(isMatureCohort(COHORT_D7_MATURITY_THRESHOLD + 1)).toBe(true);
+    expect(isMatureCohort(100)).toBe(true);
+  });
+
+  it("returns false when sub_d7 < threshold (the noisy-CPA case)", () => {
+    expect(isMatureCohort(COHORT_D7_MATURITY_THRESHOLD - 1)).toBe(false);
+    expect(isMatureCohort(0)).toBe(false);
+    expect(isMatureCohort(1)).toBe(false);
+  });
+
+  it("treats null / undefined as immature (missing cohort isn't mature)", () => {
+    expect(isMatureCohort(null)).toBe(false);
+    expect(isMatureCohort(undefined)).toBe(false);
   });
 });

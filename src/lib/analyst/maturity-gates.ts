@@ -68,3 +68,21 @@ export const MIN_BASELINE_DAYS = 7;
 // future detector that pulls from a wider table (e.g. per-day rows)
 // can tighten the sample without affecting the network-row gate.
 export const MIN_SAMPLE_SIZE = 3;
+
+/**
+ * Predicate: is this cohort sample mature enough to compute a per-unit
+ * cost without noise dominating?
+ *
+ * Tiny D7 cohorts (sub_d7 = 1, 2) produce CPAs that span four orders of
+ * magnitude as one extra paying user lands or doesn't. Any per-unit cost
+ * (CPA D7, ROI D7, retention rate) that divides by a `sub_d7`-shaped
+ * denominator should gate on this before rendering or emitting a
+ * finding — see `snapshot.ts`, `anomstack.ts`, and the WS3 dashboard
+ * tables.
+ *
+ * Accepts null / undefined / 0 honestly: a missing cohort isn't mature.
+ */
+export function isMatureCohort(sub_d7: number | null | undefined): boolean {
+  if (sub_d7 == null) return false;
+  return sub_d7 >= COHORT_D7_MATURITY_THRESHOLD;
+}

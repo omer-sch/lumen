@@ -123,82 +123,173 @@ function buildSpendSubquery(client: string): string {
 }
 
 /**
- * Cohort-derived D7 revenue per (install_date, normalized_network).
+ * Cohort dimensions the subquery can group by. Every consumer passes the
+ * dimensions it actually needs in `groupBy`; the subquery projects them
+ * through and emits `GROUP BY` over the same set. Default is
+ * `["date", "network"]` to match the pre-WS3 behavior.
  *
- * `_Network_Attribution` is a long-tail string column from Adjust — we
- * normalize each value into one of the four paid display networks so
- * the cohort can join cleanly to the spend UNION. Anything that isn't
- * a paid source (Organic, test-*, unknown) is left as NULL and dropped
- * by the JOIN.
+ *   - "date"        _Day_Date (install date)
+ *   - "network"     Normalized to the spend-side display label via CASE
+ *   - "os"          _OS_name (used by the WS6 OS filter and the
+ *                    Subscriber Lifecycle / OS-mix views)
+ *   - "country"     _Country (Geo view)
+ *   - "campaign_id" CAST(_Campaign_ID AS STRING) — joins to spend
+ *   - "ad_id"       _Ad_ID (Creatives view)
+ *   - "creative"    _Creative_Attribution (Creatives view)
+ */
+export type CohortGroupBy =
+  | "date"
+  | "network"
+  | "os"
+  | "country"
+  | "campaign_id"
+  | "ad_id"
+  | "creative";
+
+export type CohortSubqueryOptions = {
+  /** Dimensions projected and grouped by. Default ["date", "network"]
+   *  to match the pre-WS3 callers. */
+  groupBy?: CohortGroupBy[];
+  /** When true, include 'Organic' + 'Google Organic Search' +
+   *  'Untrusted Devices' as a single `network='Organic'` row. Default
+   *  false — paid-only, matching the historical KPI / Trend behavior.
+   *  Set true for the Paid-vs-Organic strip and any BCAC-style total. */
+  includeOrganic?: boolean;
+};
+
+/**
+ * Cohort-derived metrics aggregated to the caller's chosen grain.
+ *
+ * `_Network_Attribution` is a long-tail string column from Adjust; the
+ * CASE normalizes it into the canonical display labels emitted by
+ * `buildSpendSubquery` so the daily / period JOIN lines up. The
+ * `includeOrganic` toggle controls whether the three Organic strings
+ * resolve to `network='Organic'` (true) or NULL (false) — paid-only
+ * callers (the dashboard's KPI / Trend / NetworkBreakdown) set false so
+ * Organic rows don't contaminate their totals.
  *
  * Google iOS exclusion: rows where attribution looks like Google AND
  * `_OS_name='ios'` are filtered out here because Adjust attribution for
  * Google iOS is known broken (CPIs of $4k-$29k are artifacts). Surfacing
  * the warning in the UI is the user-facing half of this same call.
+ *
+ * Always-on metric aggregates: multi-window revenue (D0/D7/D14/D30/D90),
+ * Paying Users at every window, Sub Start Events (D0/D7/D14), Trial Start
+ * Events (D0/D7/D14), and the D7 retention numerator+denominator.
+ * Retention is intentionally returned as the two raw sums (retained +
+ * cohort size) rather than the rate — averaging an already-divided rate
+ * would weight every day equally regardless of cohort size.
  */
-function buildCohortSubquery(client: string): string {
+export function buildCohortSubquery(
+  client: string,
+  opts: CohortSubqueryOptions = {},
+): string {
   const cfg = getMultiSourceConfig(client);
   const fq = qualifyTable(cfg.cohortTable);
 
-  // Cohort `network` keys must match the canonical display labels emitted
-  // by `buildSpendSubquery` so the daily / period JOIN lines up. Anything
-  // else is set to NULL and dropped by the JOIN.
-  //
-  // Multi-window revenue (D0/D7/D14/D30/D90), payer counts, and the D7
-  // retention numerator+denominator are all aggregated to the
-  // (date, network) grain so consumers can sum freely. Retention is
-  // intentionally returned as the two raw sums (retained + cohort size)
-  // rather than the rate — averaging an already-divided rate would weight
-  // every day equally regardless of cohort size and silently distort the
-  // headline number.
-  //
-  // Subscription-funnel columns: `_0D_Paying_Users` / `_7D_Paying_Users`
-  // become `sub_d0` / `sub_d7` so the dashboard's subscription vocabulary
-  // (Sub D0, Sub D7, CPA D0, CPA D7) reads cleanly. We also surface
-  // `payers_d7` as the existing alias because gaming-vocab consumers
-  // downstream still reference it. NOTE: the cohort table also exposes
-  // `_0D_subscription_start_Events` and `_7D_subscription_start_Events`,
-  // which look like a more authoritative "sub start" source than the
-  // spend tables' `num_ftd7`. Phase 1 keeps `num_ftd7 → sub_start` per
-  // the spec; a follow-up should validate which column the deck actually
-  // refers to and switch the join if needed.
-  return `(
-    SELECT
-      _Day_Date AS date,
-      CASE
+  const groupBy = opts.groupBy ?? ["date", "network"];
+  const includeOrganic = opts.includeOrganic ?? false;
+
+  // Each dimension renders as a `<projection> AS <output_name>` pair.
+  // Order matters: the outer `GROUP BY` echoes positional indices.
+  const dimensionProjections: Array<{ name: string; sql: string }> = [];
+  for (const d of groupBy) {
+    switch (d) {
+      case "date":
+        dimensionProjections.push({ name: "date", sql: "_Day_Date AS date" });
+        break;
+      case "network":
+        // Network is a CASE; the includeOrganic flag flips whether the
+        // three Organic strings resolve to 'Organic' or NULL.
+        dimensionProjections.push({
+          name: "network",
+          sql: `CASE
         WHEN _Network_Attribution LIKE 'Google Ads%' THEN 'Google'
         WHEN _Network_Attribution IN ('Facebook Installs', 'Instagram Installs', 'Off-Facebook Installs') THEN 'Meta'
         WHEN _Network_Attribution = 'TikTok SAN' THEN 'TikTok'
         WHEN _Network_Attribution = 'Apple Search Ads' THEN 'Apple Search Ads'
         -- AppLovin attribution arrives split across the two Axon strings.
-        -- Spend table is wired in WS2; the cohort branch lands here so
-        -- the moment AppLovin spend joins, revenue/sub funnel attributes.
         WHEN _Network_Attribution IN ('Axon by AppLovin Android', 'Axon by AppLovin iOS') THEN 'AppLovin'
-        -- Organic bucket: investigation 2026-05-17 confirmed three real
-        -- attribution strings driving 49k+ rows / 90d that were dropped
-        -- by the prior NULL fallback. "Untrusted Devices" folds in per
-        -- the same investigation (Adjust's bucket for device-fingerprint
-        -- mismatches that should not count as paid).
-        WHEN _Network_Attribution IN ('Organic', 'Google Organic Search', 'Untrusted Devices') THEN 'Organic'
+        ${includeOrganic
+          ? `-- Organic bucket opted in by the caller (Paid-vs-Organic strip / BCAC totals).\n        WHEN _Network_Attribution IN ('Organic', 'Google Organic Search', 'Untrusted Devices') THEN 'Organic'`
+          : `-- Organic NOT included for this caller (paid-only path); the\n        -- three Organic strings fall through to NULL below and the outer\n        -- network IS NOT NULL filter drops them.`}
         -- TODO(open-q-2): Pubmint iOS / Pubmint Android (~7.7k rows / 90d)
         -- fall through to NULL. No matching spend table exists today;
         -- awaiting Gabby's call on whether to bucket as paid or organic.
         ELSE NULL
-      END AS network,
-      SUM(COALESCE(_0D_Revenue_Total, 0))  AS rev_d0,
-      SUM(COALESCE(_7D_Revenue_Total, 0))  AS rev_d7,
-      SUM(COALESCE(_14D_Revenue_Total, 0)) AS rev_d14,
-      SUM(COALESCE(_30D_Revenue_Total, 0)) AS rev_d30,
-      SUM(COALESCE(_90D_Revenue_Total, 0)) AS rev_d90,
-      SUM(COALESCE(_0D_Paying_Users, 0))   AS sub_d0,
-      SUM(COALESCE(_7D_Paying_Users, 0))   AS sub_d7,
-      SUM(COALESCE(_7D_Paying_Users, 0))   AS payers_d7,
-      SUM(COALESCE(_7D_Retained_Users, 0)) AS retained_d7,
-      SUM(COALESCE(_7D_Cohort_Size, 0))    AS cohort_d7
+      END AS network`,
+        });
+        break;
+      case "os":
+        dimensionProjections.push({ name: "os", sql: "_OS_name AS os" });
+        break;
+      case "country":
+        dimensionProjections.push({
+          name: "country",
+          sql: "_Country AS country",
+        });
+        break;
+      case "campaign_id":
+        // STRING cast aligns with the spend-side campaign_id type.
+        dimensionProjections.push({
+          name: "campaign_id",
+          sql: "CAST(_Campaign_ID AS STRING) AS campaign_id",
+        });
+        break;
+      case "ad_id":
+        dimensionProjections.push({
+          name: "ad_id",
+          sql: "CAST(_Ad_ID AS STRING) AS ad_id",
+        });
+        break;
+      case "creative":
+        dimensionProjections.push({
+          name: "creative_name",
+          sql: "_Creative_Attribution AS creative_name",
+        });
+        break;
+    }
+  }
+
+  const dimensionsBlock = dimensionProjections
+    .map((d) => `      ${d.sql}`)
+    .join(",\n");
+  const groupByBlock =
+    dimensionProjections.length > 0
+      ? `    GROUP BY ${dimensionProjections
+          .map((_, i) => i + 1)
+          .join(", ")}`
+      : "";
+
+  // Always-on metric aggregates. Adding a new metric here is intentionally
+  // global: every cohort caller sees it. Costs are paid in BQ bytes
+  // scanned, not query latency on this scale.
+  return `(
+    SELECT
+${dimensionsBlock}${dimensionsBlock ? "," : ""}
+      SUM(COALESCE(_0D_Revenue_Total, 0))               AS rev_d0,
+      SUM(COALESCE(_7D_Revenue_Total, 0))               AS rev_d7,
+      SUM(COALESCE(_14D_Revenue_Total, 0))              AS rev_d14,
+      SUM(COALESCE(_30D_Revenue_Total, 0))              AS rev_d30,
+      SUM(COALESCE(_90D_Revenue_Total, 0))              AS rev_d90,
+      SUM(COALESCE(_0D_Paying_Users, 0))                AS sub_d0,
+      SUM(COALESCE(_7D_Paying_Users, 0))                AS sub_d7,
+      SUM(COALESCE(_14D_Paying_Users, 0))               AS sub_d14,
+      SUM(COALESCE(_30D_Paying_Users, 0))               AS sub_d30,
+      SUM(COALESCE(_90D_Paying_Users, 0))               AS sub_d90,
+      SUM(COALESCE(_7D_Paying_Users, 0))                AS payers_d7,
+      SUM(COALESCE(_0D_subscription_start_Events, 0))   AS sub_start_d0,
+      SUM(COALESCE(_7D_subscription_start_Events, 0))   AS sub_start_d7,
+      SUM(COALESCE(_14D_subscription_start_Events, 0))  AS sub_start_d14,
+      SUM(COALESCE(_0D_trial_start_Events, 0))          AS trial_start_d0,
+      SUM(COALESCE(_7D_trial_start_Events, 0))          AS trial_start_d7,
+      SUM(COALESCE(_14D_trial_start_Events, 0))         AS trial_start_d14,
+      SUM(COALESCE(_7D_Retained_Users, 0))              AS retained_d7,
+      SUM(COALESCE(_7D_Cohort_Size, 0))                 AS cohort_d7
     FROM ${fq}
     WHERE _Day_Date IS NOT NULL
       AND NOT (_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios')
-    GROUP BY 1, 2
+${groupByBlock}
   )`;
 }
 
@@ -222,6 +313,11 @@ async function _queryGlobalComixKPIs(
   // Period-over-period deltas use the same shape for every derived
   // metric: (curr - prev) / prev, with SAFE_DIVIDE so a zero prior period
   // returns NULL instead of crashing or rendering as Infinity.
+  // WS3: sub_start now sources from the cohort's
+  // _7D_subscription_start_Events (surfaced as `sub_start_d7` by
+  // buildCohortSubquery). The spend tables' `num_ftd7` is kept inside
+  // ftd_d7 for back-compat consumers; the canonical sub_start the rest
+  // of the dashboard reads is cohort-derived.
   const query = `
     WITH spend_curr AS (
       SELECT
@@ -229,23 +325,31 @@ async function _queryGlobalComixKPIs(
         SUM(installs)     AS installs,
         SUM(clicks)       AS clicks,
         SUM(impressions)  AS impressions,
-        SUM(ftd_d7)       AS ftd_d7,
-        SUM(ftd_d7)       AS sub_start
+        SUM(ftd_d7)       AS ftd_d7
       FROM ${spendSub} s
       WHERE date BETWEEN ${FROM} AND ${TO}
     ),
     rev_curr AS (
       SELECT
-        SUM(rev_d0)       AS rev_d0,
-        SUM(rev_d7)       AS rev_d7,
-        SUM(rev_d14)      AS rev_d14,
-        SUM(rev_d30)      AS rev_d30,
-        SUM(rev_d90)      AS rev_d90,
-        SUM(sub_d0)       AS sub_d0,
-        SUM(sub_d7)       AS sub_d7,
-        SUM(payers_d7)    AS payers_d7,
-        SUM(retained_d7)  AS retained_d7,
-        SUM(cohort_d7)    AS cohort_d7
+        SUM(rev_d0)         AS rev_d0,
+        SUM(rev_d7)         AS rev_d7,
+        SUM(rev_d14)        AS rev_d14,
+        SUM(rev_d30)        AS rev_d30,
+        SUM(rev_d90)        AS rev_d90,
+        SUM(sub_d0)         AS sub_d0,
+        SUM(sub_d7)         AS sub_d7,
+        SUM(sub_d14)        AS sub_d14,
+        SUM(sub_d30)        AS sub_d30,
+        SUM(sub_d90)        AS sub_d90,
+        SUM(sub_start_d0)   AS sub_start_d0,
+        SUM(sub_start_d7)   AS sub_start_d7,
+        SUM(sub_start_d14)  AS sub_start_d14,
+        SUM(trial_start_d0) AS trial_start_d0,
+        SUM(trial_start_d7) AS trial_start_d7,
+        SUM(trial_start_d14) AS trial_start_d14,
+        SUM(payers_d7)      AS payers_d7,
+        SUM(retained_d7)    AS retained_d7,
+        SUM(cohort_d7)      AS cohort_d7
       FROM ${cohortSub} c
       WHERE date BETWEEN ${FROM} AND ${TO}
         AND network IS NOT NULL
@@ -256,8 +360,7 @@ async function _queryGlobalComixKPIs(
         SUM(installs)     AS installs,
         SUM(clicks)       AS clicks,
         SUM(impressions)  AS impressions,
-        SUM(ftd_d7)       AS ftd_d7,
-        SUM(ftd_d7)       AS sub_start
+        SUM(ftd_d7)       AS ftd_d7
       FROM ${spendSub} s
       WHERE date BETWEEN
         DATE_SUB(DATE(${FROM}), INTERVAL DATE_DIFF(DATE(${TO}), DATE(${FROM}), DAY) + 1 DAY)
@@ -265,15 +368,16 @@ async function _queryGlobalComixKPIs(
     ),
     rev_prev AS (
       SELECT
-        SUM(rev_d7)       AS rev_d7,
-        SUM(rev_d14)      AS rev_d14,
-        SUM(rev_d30)      AS rev_d30,
-        SUM(rev_d90)      AS rev_d90,
-        SUM(sub_d0)       AS sub_d0,
-        SUM(sub_d7)       AS sub_d7,
-        SUM(payers_d7)    AS payers_d7,
-        SUM(retained_d7)  AS retained_d7,
-        SUM(cohort_d7)    AS cohort_d7
+        SUM(rev_d7)         AS rev_d7,
+        SUM(rev_d14)        AS rev_d14,
+        SUM(rev_d30)        AS rev_d30,
+        SUM(rev_d90)        AS rev_d90,
+        SUM(sub_d0)         AS sub_d0,
+        SUM(sub_d7)         AS sub_d7,
+        SUM(sub_start_d7)   AS sub_start_d7,
+        SUM(payers_d7)      AS payers_d7,
+        SUM(retained_d7)    AS retained_d7,
+        SUM(cohort_d7)      AS cohort_d7
       FROM ${cohortSub} c
       WHERE date BETWEEN
         DATE_SUB(DATE(${FROM}), INTERVAL DATE_DIFF(DATE(${TO}), DATE(${FROM}), DAY) + 1 DAY)
@@ -286,11 +390,23 @@ async function _queryGlobalComixKPIs(
       sc.clicks                                                         AS clicks,
       sc.impressions                                                    AS impressions,
       sc.ftd_d7                                                         AS ftd_d7,
-      sc.sub_start                                                      AS sub_start,
+      -- sub_start sources from the cohort table now (WS3). The spend-side
+      -- ftd_d7 stays on ftd_d7 for back-compat consumers, but the
+      -- canonical Sub Start headline reads cohort _7D_subscription_start_Events.
+      rc.sub_start_d7                                                   AS sub_start,
+      rc.sub_start_d0                                                   AS sub_start_d0,
+      rc.sub_start_d7                                                   AS sub_start_d7,
+      rc.sub_start_d14                                                  AS sub_start_d14,
+      rc.trial_start_d0                                                 AS trial_start_d0,
+      rc.trial_start_d7                                                 AS trial_start_d7,
+      rc.trial_start_d14                                                AS trial_start_d14,
       rc.sub_d0                                                         AS sub_d0,
       rc.sub_d7                                                         AS sub_d7,
+      rc.sub_d14                                                        AS sub_d14,
+      rc.sub_d30                                                        AS sub_d30,
+      rc.sub_d90                                                        AS sub_d90,
       SAFE_DIVIDE(sc.spend, NULLIF(sc.installs, 0))                     AS cpi,
-      SAFE_DIVIDE(sc.spend, NULLIF(sc.sub_start, 0))                    AS cp_sub_start,
+      SAFE_DIVIDE(sc.spend, NULLIF(rc.sub_start_d7, 0))                 AS cp_sub_start,
       SAFE_DIVIDE(sc.spend, NULLIF(rc.sub_d0, 0))                       AS cpa_d0,
       SAFE_DIVIDE(sc.spend, NULLIF(rc.sub_d7, 0))                       AS cpa_d7,
       SAFE_DIVIDE(rc.rev_d7,  NULLIF(sc.spend, 0))                      AS roas,
@@ -365,13 +481,15 @@ async function _queryGlobalComixKPIs(
       -- deltas; CP* / CPA* deltas use the same rate-of-rate shape as
       -- CPI / CTR / CPM above so a zero prior period collapses to NULL
       -- instead of crashing.
-      SAFE_DIVIDE(sc.sub_start - sp.sub_start, NULLIF(sp.sub_start, 0)) AS sub_start_delta,
+      -- WS3: sub_start_delta and cp_sub_start_delta source from
+      -- cohort sub_start_d7 on both sides (was spend ftd_d7).
+      SAFE_DIVIDE(rc.sub_start_d7 - rp.sub_start_d7, NULLIF(rp.sub_start_d7, 0)) AS sub_start_delta,
       SAFE_DIVIDE(rc.sub_d0 - rp.sub_d0, NULLIF(rp.sub_d0, 0))          AS sub_d0_delta,
       SAFE_DIVIDE(rc.sub_d7 - rp.sub_d7, NULLIF(rp.sub_d7, 0))          AS sub_d7_delta,
       SAFE_DIVIDE(
-        SAFE_DIVIDE(sc.spend, NULLIF(sc.sub_start, 0))
-          - SAFE_DIVIDE(sp.spend, NULLIF(sp.sub_start, 0)),
-        NULLIF(SAFE_DIVIDE(sp.spend, NULLIF(sp.sub_start, 0)), 0)
+        SAFE_DIVIDE(sc.spend, NULLIF(rc.sub_start_d7, 0))
+          - SAFE_DIVIDE(sp.spend, NULLIF(rp.sub_start_d7, 0)),
+        NULLIF(SAFE_DIVIDE(sp.spend, NULLIF(rp.sub_start_d7, 0)), 0)
       )                                                                 AS cp_sub_start_delta,
       SAFE_DIVIDE(
         SAFE_DIVIDE(sc.spend, NULLIF(rc.sub_d0, 0))
@@ -412,8 +530,17 @@ async function _queryGlobalComixKPIs(
     retD7: numberish(r.ret_d7),
     payersD7: numberish(r.payers_d7),
     subStart: numberish(r.sub_start),
+    subStartD0: numberish(r.sub_start_d0),
+    subStartD7: numberish(r.sub_start_d7),
+    subStartD14: numberish(r.sub_start_d14),
+    trialStartD0: numberish(r.trial_start_d0),
+    trialStartD7: numberish(r.trial_start_d7),
+    trialStartD14: numberish(r.trial_start_d14),
     subD0: numberish(r.sub_d0),
     subD7: numberish(r.sub_d7),
+    subD14: numberish(r.sub_d14),
+    subD30: numberish(r.sub_d30),
+    subD90: numberish(r.sub_d90),
     cpSubStart: numberish(r.cp_sub_start),
     cpaD0: numberish(r.cpa_d0),
     cpaD7: numberish(r.cpa_d7),
@@ -460,6 +587,10 @@ async function _queryGlobalComixTrend(
   // network) keeps days with spend but no matured cohort revenue (the
   // trailing 7 days where D7 is still maturing), which read as 0 ROAS /
   // 0 sub_d7 — surfaced visually by the chart's maturity-tail overlay.
+  // WS3: sub_start now sources from cohort _7D_subscription_start_Events
+  // (surfaced as `sub_start_d7` by buildCohortSubquery). ftd_d7 stays on
+  // the spend side for back-compat consumers but the headline / unit-cost
+  // computation reads from the cohort.
   const query = `
     WITH spend AS (
       SELECT
@@ -469,8 +600,7 @@ async function _queryGlobalComixTrend(
         SUM(installs)    AS installs,
         SUM(clicks)      AS clicks,
         SUM(impressions) AS impressions,
-        SUM(ftd_d7)      AS ftd_d7,
-        SUM(ftd_d7)      AS sub_start
+        SUM(ftd_d7)      AS ftd_d7
       FROM ${spendSub}
       WHERE date BETWEEN ${FROM} AND ${TO}
       GROUP BY date, network
@@ -479,15 +609,22 @@ async function _queryGlobalComixTrend(
       SELECT
         date,
         network,
-        SUM(rev_d7)       AS rev_d7,
-        SUM(rev_d14)      AS rev_d14,
-        SUM(rev_d30)      AS rev_d30,
-        SUM(rev_d90)      AS rev_d90,
-        SUM(sub_d0)       AS sub_d0,
-        SUM(sub_d7)       AS sub_d7,
-        SUM(payers_d7)    AS payers_d7,
-        SUM(retained_d7)  AS retained_d7,
-        SUM(cohort_d7)    AS cohort_d7
+        SUM(rev_d7)         AS rev_d7,
+        SUM(rev_d14)        AS rev_d14,
+        SUM(rev_d30)        AS rev_d30,
+        SUM(rev_d90)        AS rev_d90,
+        SUM(sub_d0)         AS sub_d0,
+        SUM(sub_d7)         AS sub_d7,
+        SUM(sub_d14)        AS sub_d14,
+        SUM(sub_start_d0)   AS sub_start_d0,
+        SUM(sub_start_d7)   AS sub_start_d7,
+        SUM(sub_start_d14)  AS sub_start_d14,
+        SUM(trial_start_d0) AS trial_start_d0,
+        SUM(trial_start_d7) AS trial_start_d7,
+        SUM(trial_start_d14) AS trial_start_d14,
+        SUM(payers_d7)      AS payers_d7,
+        SUM(retained_d7)    AS retained_d7,
+        SUM(cohort_d7)      AS cohort_d7
       FROM ${cohortSub}
       WHERE date BETWEEN ${FROM} AND ${TO}
         AND network IS NOT NULL
@@ -501,11 +638,18 @@ async function _queryGlobalComixTrend(
       s.clicks                                                 AS clicks,
       s.impressions                                            AS impressions,
       s.ftd_d7                                                 AS ftd_d7,
-      s.sub_start                                              AS sub_start,
+      r.sub_start_d7                                           AS sub_start,
+      r.sub_start_d0                                           AS sub_start_d0,
+      r.sub_start_d7                                           AS sub_start_d7,
+      r.sub_start_d14                                          AS sub_start_d14,
+      r.trial_start_d0                                         AS trial_start_d0,
+      r.trial_start_d7                                         AS trial_start_d7,
+      r.trial_start_d14                                        AS trial_start_d14,
       r.sub_d0                                                 AS sub_d0,
       r.sub_d7                                                 AS sub_d7,
+      r.sub_d14                                                AS sub_d14,
       SAFE_DIVIDE(s.spend, NULLIF(s.installs, 0))              AS cpi,
-      SAFE_DIVIDE(s.spend, NULLIF(s.sub_start, 0))             AS cp_sub_start,
+      SAFE_DIVIDE(s.spend, NULLIF(r.sub_start_d7, 0))          AS cp_sub_start,
       SAFE_DIVIDE(s.spend, NULLIF(r.sub_d0, 0))                AS cpa_d0,
       SAFE_DIVIDE(s.spend, NULLIF(r.sub_d7, 0))                AS cpa_d7,
       SAFE_DIVIDE(r.rev_d7, NULLIF(s.spend, 0))                AS roas,
@@ -539,8 +683,15 @@ async function _queryGlobalComixTrend(
     impressions: numberish(r.impressions),
     ftdD7: numberish(r.ftd_d7),
     subStart: numberish(r.sub_start),
+    subStartD0: numberish(r.sub_start_d0),
+    subStartD7: numberish(r.sub_start_d7),
+    subStartD14: numberish(r.sub_start_d14),
+    trialStartD0: numberish(r.trial_start_d0),
+    trialStartD7: numberish(r.trial_start_d7),
+    trialStartD14: numberish(r.trial_start_d14),
     subD0: numberish(r.sub_d0),
     subD7: numberish(r.sub_d7),
+    subD14: numberish(r.sub_d14),
     cpi: numberish(r.cpi),
     cpSubStart: numberish(r.cp_sub_start),
     cpaD0: numberish(r.cpa_d0),
@@ -627,6 +778,7 @@ async function _queryGlobalComixNetworkBreakdown(
   // the period CTEs and emits `trailing_cpa_d7_avg` per network — the
   // status pill's baseline, computed in the same query so the dashboard
   // doesn't need a separate fetch.
+  // WS3: sub_start sources from cohort _7D_subscription_start_Events.
   const query = `
     WITH spend_by_net AS (
       SELECT
@@ -635,8 +787,7 @@ async function _queryGlobalComixNetworkBreakdown(
         SUM(installs)    AS installs,
         SUM(clicks)      AS clicks,
         SUM(impressions) AS impressions,
-        SUM(ftd_d7)      AS ftd_d7,
-        SUM(ftd_d7)      AS sub_start
+        SUM(ftd_d7)      AS ftd_d7
       FROM ${spendSub}
       WHERE date BETWEEN ${FROM} AND ${TO}
       GROUP BY network
@@ -644,15 +795,20 @@ async function _queryGlobalComixNetworkBreakdown(
     rev_by_net AS (
       SELECT
         network,
-        SUM(rev_d7)       AS rev_d7,
-        SUM(rev_d14)      AS rev_d14,
-        SUM(rev_d30)      AS rev_d30,
-        SUM(rev_d90)      AS rev_d90,
-        SUM(sub_d0)       AS sub_d0,
-        SUM(sub_d7)       AS sub_d7,
-        SUM(payers_d7)    AS payers_d7,
-        SUM(retained_d7)  AS retained_d7,
-        SUM(cohort_d7)    AS cohort_d7
+        SUM(rev_d7)        AS rev_d7,
+        SUM(rev_d14)       AS rev_d14,
+        SUM(rev_d30)       AS rev_d30,
+        SUM(rev_d90)       AS rev_d90,
+        SUM(sub_d0)        AS sub_d0,
+        SUM(sub_d7)        AS sub_d7,
+        SUM(sub_d14)       AS sub_d14,
+        SUM(sub_start_d0)  AS sub_start_d0,
+        SUM(sub_start_d7)  AS sub_start_d7,
+        SUM(sub_start_d14) AS sub_start_d14,
+        SUM(trial_start_d7) AS trial_start_d7,
+        SUM(payers_d7)     AS payers_d7,
+        SUM(retained_d7)   AS retained_d7,
+        SUM(cohort_d7)     AS cohort_d7
       FROM ${cohortSub}
       WHERE date BETWEEN ${FROM} AND ${TO}
         AND network IS NOT NULL
@@ -690,11 +846,16 @@ async function _queryGlobalComixNetworkBreakdown(
       s.clicks                                                     AS clicks,
       s.impressions                                                AS impressions,
       s.ftd_d7                                                     AS ftd_d7,
-      s.sub_start                                                  AS sub_start,
+      r.sub_start_d7                                               AS sub_start,
+      r.sub_start_d0                                               AS sub_start_d0,
+      r.sub_start_d7                                               AS sub_start_d7,
+      r.sub_start_d14                                              AS sub_start_d14,
+      r.trial_start_d7                                             AS trial_start_d7,
       r.sub_d0                                                     AS sub_d0,
       r.sub_d7                                                     AS sub_d7,
+      r.sub_d14                                                    AS sub_d14,
       SAFE_DIVIDE(s.spend, NULLIF(s.installs, 0))                  AS cpi,
-      SAFE_DIVIDE(s.spend, NULLIF(s.sub_start, 0))                 AS cp_sub_start,
+      SAFE_DIVIDE(s.spend, NULLIF(r.sub_start_d7, 0))              AS cp_sub_start,
       SAFE_DIVIDE(s.spend, NULLIF(r.sub_d0, 0))                    AS cpa_d0,
       SAFE_DIVIDE(s.spend, NULLIF(r.sub_d7, 0))                    AS cpa_d7,
       SAFE_DIVIDE(s.clicks, NULLIF(s.impressions, 0))              AS ctr,
@@ -731,8 +892,13 @@ async function _queryGlobalComixNetworkBreakdown(
     impressions: numberish(r.impressions),
     ftdD7: numberish(r.ftd_d7),
     subStart: numberish(r.sub_start),
+    subStartD0: numberish(r.sub_start_d0),
+    subStartD7: numberish(r.sub_start_d7),
+    subStartD14: numberish(r.sub_start_d14),
+    trialStartD7: numberish(r.trial_start_d7),
     subD0: numberish(r.sub_d0),
     subD7: numberish(r.sub_d7),
+    subD14: numberish(r.sub_d14),
     cpi: numberish(r.cpi),
     cpSubStart: numberish(r.cp_sub_start),
     cpaD0: numberish(r.cpa_d0),
