@@ -388,18 +388,26 @@ ${dimensionsBlock}${dimensionsBlock ? "," : ""}
       SUM(COALESCE(_14D_Revenue_Total, 0))              AS rev_d14,
       SUM(COALESCE(_30D_Revenue_Total, 0))              AS rev_d30,
       SUM(COALESCE(_90D_Revenue_Total, 0))              AS rev_d90,
+      -- Paying Users only exists at D0 and D7 on uni_adjust_cohort_report_globalcomix
+      -- (BQ schema verified 2026-05-17 via tmp/bq-discovery/.../C-cohort-table-deep.json).
+      -- Pre-fix we tried _14D / _30D / _90D versions and BQ 500'd; surface
+      -- zero so the cohort sub still parses for callers that ask for those
+      -- windows but the metric reads honestly as 0.
       SUM(COALESCE(_0D_Paying_Users, 0))                AS sub_d0,
       SUM(COALESCE(_7D_Paying_Users, 0))                AS sub_d7,
-      SUM(COALESCE(_14D_Paying_Users, 0))               AS sub_d14,
-      SUM(COALESCE(_30D_Paying_Users, 0))               AS sub_d30,
-      SUM(COALESCE(_90D_Paying_Users, 0))               AS sub_d90,
+      0                                                  AS sub_d14,
+      0                                                  AS sub_d30,
+      0                                                  AS sub_d90,
       SUM(COALESCE(_7D_Paying_Users, 0))                AS payers_d7,
       SUM(COALESCE(_0D_subscription_start_Events, 0))   AS sub_start_d0,
       SUM(COALESCE(_7D_subscription_start_Events, 0))   AS sub_start_d7,
       SUM(COALESCE(_14D_subscription_start_Events, 0))  AS sub_start_d14,
-      SUM(COALESCE(_0D_trial_start_Events, 0))          AS trial_start_d0,
-      SUM(COALESCE(_7D_trial_start_Events, 0))          AS trial_start_d7,
-      SUM(COALESCE(_14D_trial_start_Events, 0))         AS trial_start_d14,
+      -- Trial-start columns carry a "subscription_" prefix the original WS3
+      -- cut missed: actual name is _0D_subscription_trial_start_Events,
+      -- not _0D_trial_start_Events. Same source verified above.
+      SUM(COALESCE(_0D_subscription_trial_start_Events, 0))  AS trial_start_d0,
+      SUM(COALESCE(_7D_subscription_trial_start_Events, 0))  AS trial_start_d7,
+      SUM(COALESCE(_14D_subscription_trial_start_Events, 0)) AS trial_start_d14,
       SUM(COALESCE(_7D_Retained_Users, 0))              AS retained_d7,
       SUM(COALESCE(_7D_Cohort_Size, 0))                 AS cohort_d7
     FROM ${fq}
@@ -1436,8 +1444,12 @@ async function _queryGlobalComixGeo(
   to: string,
   filter: GlobalComixFilter = {},
 ): Promise<GeoRow[]> {
+  // Include "date" in the cohort groupBy so the inner subquery projects
+  // a `date` column we can WHERE on below. Without it, the outer query
+  // has no way to apply the period filter (and BQ 500s on the missing
+  // column).
   const cohortSub = buildCohortSubquery(client, {
-    groupBy: ["country", "network"],
+    groupBy: ["date", "country", "network"],
     includeOrganic: true,
     os: filter.os,
     platforms: filter.platforms,
@@ -1458,7 +1470,7 @@ async function _queryGlobalComixGeo(
       SUM(sub_d7)  AS sub_d7,
       SUM(rev_d7)  AS rev_d7
     FROM ${cohortSub}
-    WHERE _Day_Date BETWEEN ${FROM} AND ${TO}
+    WHERE date BETWEEN ${FROM} AND ${TO}
       AND country IS NOT NULL
     GROUP BY country
     ORDER BY sub_d7 DESC
@@ -1514,8 +1526,12 @@ async function _queryGlobalComixCreatives(
   to: string,
   filter: GlobalComixFilter = {},
 ): Promise<CreativeRow[]> {
+  // Include "date" in the cohort groupBy so the inner subquery projects
+  // a `date` column we can WHERE on (same bug as queryGlobalComixGeo
+  // had: filtering on _Day_Date in the outer query when the inner
+  // already aggregated it away).
   const cohortSub = buildCohortSubquery(client, {
-    groupBy: ["ad_id", "creative", "network"],
+    groupBy: ["date", "ad_id", "creative", "network"],
     os: filter.os,
     platforms: filter.platforms,
   });
@@ -1540,7 +1556,7 @@ async function _queryGlobalComixCreatives(
     FROM ${cohortSub} c
     LEFT JOIN ${qualifyTable("ods_fb2_creatives_globalcomix")} f
       ON c.ad_id = CAST(f._creative_id AS STRING)
-    WHERE c._Day_Date BETWEEN ${FROM} AND ${TO}
+    WHERE c.date BETWEEN ${FROM} AND ${TO}
       AND c.ad_id IS NOT NULL
       AND c.network IS NOT NULL
     GROUP BY c.ad_id, c.creative_name, c.network, f.thumbnail_url

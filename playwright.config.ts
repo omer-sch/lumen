@@ -1,5 +1,14 @@
 import { defineConfig, devices } from "@playwright/test";
 import path from "node:path";
+import dotenv from "dotenv";
+
+// Load .env.local + .env so the auth-setup project can reach
+// CLERK_SECRET_KEY / NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY / E2E_CLERK_USER_*
+// without the user having to export them by hand. `.env.local` wins
+// over `.env` because that's how Next.js layers them and we want the
+// Playwright env to match the dev server's view of the world.
+dotenv.config({ path: path.join(__dirname, ".env") });
+dotenv.config({ path: path.join(__dirname, ".env.local"), override: true });
 
 const PORT = process.env.PORT ?? "3001";
 const BASE_URL = process.env.BASE_URL ?? `http://localhost:${PORT}`;
@@ -116,6 +125,9 @@ export default defineConfig({
         "**/sign-out.spec.ts",
         // Cache-subsystem admin UX.
         "**/sync-now.spec.ts",
+        // Diagnostic dashboard scans (real Clerk session + real BQ).
+        "**/dashboard-scan.spec.ts",
+        "**/topbar-scan.spec.ts",
       ],
     },
 
