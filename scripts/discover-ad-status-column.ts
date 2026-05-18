@@ -102,10 +102,16 @@ type FanoutSample = {
   row_count: number;
 };
 
+type FanoutResult = {
+  sample: FanoutSample[];
+  max_count: number;
+  error?: string;
+};
+
 async function probeFanout(
   bq: BigQuery,
   table: string,
-): Promise<{ sample: FanoutSample[]; max_count: number } | null> {
+): Promise<FanoutResult | null> {
   try {
     const [rows] = await bq.query({
       query: `
@@ -135,7 +141,11 @@ async function probeFanout(
     );
     return { sample, max_count };
   } catch (err) {
-    return { sample: [], max_count: 0, /* @ts-expect-error error stash */ error: err instanceof Error ? err.message : String(err) };
+    return {
+      sample: [],
+      max_count: 0,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
@@ -143,7 +153,7 @@ type Result = {
   table: string;
   status_columns: StatusColumn[];
   ad_id_column: { column_name: string; data_type: string } | null;
-  fanout: { sample: FanoutSample[]; max_count: number } | null;
+  fanout: FanoutResult | null;
 };
 
 async function main() {

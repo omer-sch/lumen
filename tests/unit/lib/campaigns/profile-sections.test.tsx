@@ -91,6 +91,7 @@ const creativeRow = (
   ad_id: "ad-1",
   ad_name: "Creative A · 9x16",
   creative_name: "Creative A",
+  adset_name: "",
   network: "Meta",
   thumbnail_url: null,
   spend: 0,

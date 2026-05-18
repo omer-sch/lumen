@@ -736,15 +736,166 @@ describe("queryGlobalComixCreatives", () => {
     expect(query).toMatch(/c\.ad_id = CAST\(f\._creative_id AS STRING\)/);
   });
 
-  it("orders by sub_d7 desc and limits to 100", async () => {
+  it("orders by spend desc nulls last and limits to 100", async () => {
     queryFn.mockResolvedValue([[]]);
     const { queryGlobalComixCreatives } = await import(
       "@/lib/globalcomix-queries"
     );
     await queryGlobalComixCreatives("globalcomix", FROM, TO);
     const { query } = queryFn.mock.calls[0][0] as { query: string };
-    expect(query).toMatch(/ORDER BY SUM\(c\.sub_d7\) DESC/);
+    expect(query).toMatch(/ORDER BY SUM\(s\.cost_usd\) DESC NULLS LAST/);
     expect(query).toMatch(/LIMIT 100/);
+  });
+
+  it("joins per-ad spend on the Creatives slice from Meta, TikTok, AppLovin", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixCreatives } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixCreatives("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // Each per-network leg projects ad_id and reads from the Creatives slice.
+    expect(query).toMatch(/breakdown_type = 'Creatives'/);
+    expect(query).toContain("dwh_fb2_globalcomix_adjust");
+    expect(query).toContain("dwh_tik_tok_globalcomix_adjust");
+    expect(query).toContain("dwh_applovin_globalcomix_adjust");
+    // Google + Apple do NOT contribute legs to the spend Creatives sub —
+    // the per-ad spend column doesn't exist on those tables. Their rows
+    // surface from cohort with NULL spend.
+    expect(query).not.toMatch(
+      /SELECT\s+date,\s+'Google'\s+AS network,\s+CAST\(ad_id/,
+    );
+    expect(query).not.toMatch(
+      /SELECT\s+date,\s+'Apple Search Ads'\s+AS network,\s+CAST\(ad_id/,
+    );
+  });
+
+  it("computes CPI / CPA D7 / ROI D7 via SAFE_DIVIDE with a maturity gate on CPA", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixCreatives } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixCreatives("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // CPI = spend / installs.
+    expect(query).toMatch(
+      /SAFE_DIVIDE\(SUM\(s\.cost_usd\), NULLIF\(SUM\(s\.installs\), 0\)\)\s+AS cpi/,
+    );
+    // CPA D7 = spend / sub_d7, gated by maturity threshold.
+    expect(query).toMatch(/WHEN SUM\(c\.sub_d7\) >= 10/);
+    expect(query).toMatch(
+      /SAFE_DIVIDE\(SUM\(s\.cost_usd\), NULLIF\(SUM\(c\.sub_d7\), 0\)\)/,
+    );
+    // ROI D7 = rev_d7 / spend.
+    expect(query).toMatch(
+      /SAFE_DIVIDE\(SUM\(c\.rev_d7\), NULLIF\(SUM\(s\.cost_usd\), 0\)\)\s+AS roi_d7/,
+    );
+  });
+
+  it("returns Meta row with real spend / installs / CPI / CPA D7 / ROI D7", async () => {
+    queryFn.mockResolvedValue([
+      [
+        {
+          ad_id: "fb-1",
+          ad_name: "YH_FB_APP_Sub_Romance_v1",
+          creative_name: "Romance_v1",
+          adset_name: "Adset_Romance",
+          campaign_id: "12345",
+          campaign_name: "YH_FB_APP_FULL_Sub_iOS_Romance",
+          network: "Meta",
+          thumbnail_url: "https://example.com/thumb.jpg",
+          spend: 1000,
+          installs: 100,
+          clicks: 500,
+          impressions: 50000,
+          sub_start_d7: 25,
+          sub_d7: 20,
+          rev_d7: 80,
+          cpi: 10,
+          cpa_d7: 50,
+          roi_d7: 0.08,
+        },
+      ],
+    ]);
+    const { queryGlobalComixCreatives } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    const rows = await queryGlobalComixCreatives("globalcomix", FROM, TO);
+    expect(rows).toHaveLength(1);
+    const r = rows[0];
+    expect(r.network).toBe("Meta");
+    expect(r.spend).toBe(1000);
+    expect(r.installs).toBe(100);
+    expect(r.cpi).toBe(10);
+    expect(r.cpa_d7).toBe(50);
+    expect(r.roi_d7).toBeCloseTo(0.08);
+    expect(r.adset_name).toBe("Adset_Romance");
+    expect(r.campaign_name).toBe("YH_FB_APP_FULL_Sub_iOS_Romance");
+  });
+
+  it("returns Google/Apple rows with null spend + null efficiency metrics", async () => {
+    queryFn.mockResolvedValue([
+      [
+        {
+          ad_id: "g-1",
+          ad_name: "google-ad",
+          creative_name: "",
+          adset_name: "",
+          campaign_id: null,
+          campaign_name: null,
+          network: "Google",
+          thumbnail_url: null,
+          spend: null,
+          installs: null,
+          clicks: null,
+          impressions: null,
+          sub_start_d7: 5,
+          sub_d7: 3,
+          rev_d7: 10,
+          cpi: null,
+          cpa_d7: null,
+          roi_d7: null,
+        },
+      ],
+    ]);
+    const { queryGlobalComixCreatives } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    const rows = await queryGlobalComixCreatives("globalcomix", FROM, TO);
+    expect(rows[0].spend).toBeNull();
+    expect(rows[0].installs).toBeNull();
+    expect(rows[0].cpi).toBeNull();
+    expect(rows[0].cpa_d7).toBeNull();
+    expect(rows[0].roi_d7).toBeNull();
+    // Cohort side still present.
+    expect(rows[0].sub_start_d7).toBe(5);
+    expect(rows[0].sub_d7).toBe(3);
+    expect(rows[0].rev_d7).toBe(10);
+  });
+
+  it("groups by adset_name and projects it into the per-ad row", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixCreatives } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixCreatives("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toMatch(/_Adgroup_Attribution AS adset_name/);
+    expect(query).toMatch(/COALESCE\(c\.adset_name, ''\)\s+AS adset_name/);
+    expect(query).toMatch(/GROUP BY c\.ad_id, c\.creative_name, c\.adset_name/);
+  });
+
+  it("threads the OS filter through both the cohort and the spend-Creatives subqueries", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixCreatives } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixCreatives("globalcomix", FROM, TO, { os: "ios" });
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // Cohort side filters _OS_name.
+    expect(query).toMatch(/LOWER\(_OS_name\) = 'ios'/);
+    // Spend-Creatives side: Meta uses column strategy.
+    expect(query).toMatch(/LOWER\(os\) = 'ios'/);
   });
 });
 

@@ -42,6 +42,11 @@ export function CreativeBreakdown({
       if (typeof va === "number" && typeof vb === "number") {
         return sort.dir === "asc" ? va - vb : vb - va;
       }
+      // Treat null as -Infinity for descending (rows without data sink),
+      // +Infinity for ascending (same idea, other end).
+      if (va == null && vb == null) return 0;
+      if (va == null) return sort.dir === "asc" ? -1 : 1;
+      if (vb == null) return sort.dir === "asc" ? 1 : -1;
       return sort.dir === "asc"
         ? String(va).localeCompare(String(vb))
         : String(vb).localeCompare(String(va));
@@ -145,10 +150,14 @@ export function CreativeBreakdown({
                     {row.network || "—"}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums text-cloud-white">
-                    {row.sub_d7 > 0 ? row.sub_d7.toLocaleString() : "—"}
+                    {row.sub_d7 != null && row.sub_d7 > 0
+                      ? row.sub_d7.toLocaleString()
+                      : "—"}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums text-cloud-white">
-                    {row.roi_d7 > 0 ? `${row.roi_d7.toFixed(2)}x` : "—"}
+                    {row.roi_d7 != null && row.roi_d7 > 0
+                      ? `${row.roi_d7.toFixed(2)}x`
+                      : "—"}
                   </td>
                 </tr>
               ))}
@@ -160,7 +169,10 @@ export function CreativeBreakdown({
   );
 }
 
-function sortValue(row: ProfileCreativeRow, key: SortKey): string | number {
+function sortValue(
+  row: ProfileCreativeRow,
+  key: SortKey,
+): string | number | null {
   switch (key) {
     case "ad_name": return row.ad_name || row.ad_id;
     case "network": return row.network;

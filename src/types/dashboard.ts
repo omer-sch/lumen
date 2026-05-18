@@ -496,22 +496,26 @@ export type CampaignProfileData = {
   geo: ProfileGeoRow[];
 };
 
-/** Profile-scoped echo of `CreativeRow` from the query layer. Re-typed
- *  here so the dashboard types module owns the wire contract used by
- *  the profile UI; the query layer can change its internal shape
- *  without churning the renderer. */
+/** Profile-scoped echo of `CreativeRow` from the query layer.
+ *
+ *  Spend-side fields are `null` for ads on networks without per-ad spend
+ *  in BigQuery (Google, Apple). Cohort-side `sub_d7` is `null` when below
+ *  the maturity threshold so the renderer can print "—" instead of a
+ *  noise-dominated number. Re-typed here so the dashboard types module
+ *  owns the wire contract used by the profile UI. */
 export type ProfileCreativeRow = {
   ad_id: string;
   ad_name: string;
   creative_name: string;
+  adset_name: string;
   network: string;
   thumbnail_url: string | null;
-  spend: number;
-  installs: number;
+  spend: number | null;
+  installs: number | null;
   sub_start_d7: number;
-  sub_d7: number;
-  cpa_d7: number;
-  roi_d7: number;
+  sub_d7: number | null;
+  cpa_d7: number | null;
+  roi_d7: number | null;
 };
 
 /** Profile-scoped echo of `GeoRow` from the query layer. */

@@ -262,6 +262,126 @@ function buildSpendSubquery(
 }
 
 /**
+ * Networks that expose per-ad spend on the `breakdown_type='Creatives'`
+ * slice of their Adjust spend table. Google Ads + Apple Search Ads do
+ * not — they have no creative-level metadata in BQ, so per-ad CPA / ROI
+ * cells for those networks render as "—" honestly.
+ */
+const PER_AD_SPEND_NETWORKS: ReadonlySet<string> = new Set([
+  "Meta",
+  "TikTok",
+  "AppLovin",
+]);
+
+/**
+ * UNION ALL across the per-network spend tables on the `Creatives`
+ * breakdown slice. Each leg projects a uniform
+ * `(date, network, ad_id, campaign_id, campaign_name, cost_usd, installs, clicks, impressions)`
+ * tuple. Only Meta / TikTok / AppLovin contribute legs — Google + Apple
+ * have no per-ad spend in BQ. Same OS / platforms / campaignId filter
+ * threading as `buildSpendSubquery`; the only structural difference is
+ * the dedupe predicate (`breakdown_type = 'Creatives'` instead of
+ * `No Breakdown`).
+ *
+ * Fan-out note: per the 2026-05-18 probe in
+ * tmp/bq-discovery/2026-05-18-ad-status-probe.json, the Creatives slice
+ * appears to be unique on `(date, ad_id)` for the three supporting
+ * networks. If a future onboarded source double-counts the Creatives
+ * slice (placement-or-geo cross-cut), tighten the leg's WHERE with the
+ * extra dimension. The outer GROUP BY (network, ad_id, date) tolerates
+ * any single-row-per-tuple state.
+ */
+function buildSpendCreativesSubquery(
+  client: string,
+  opts: SpendSubqueryOptions = {},
+): string {
+  const cfg = getMultiSourceConfig(client);
+  const os: OsFilter = opts.os ?? "total";
+  const platformSet =
+    opts.platforms && opts.platforms.length > 0
+      ? new Set(opts.platforms)
+      : null;
+  const campaignIdPredicate = opts.campaignId
+    ? ` AND campaign_id = '${sanitizeCampaignId(opts.campaignId)}'`
+    : "";
+
+  const legs = cfg.spendSources
+    .filter((src) => {
+      // Only the three networks that expose per-ad spend in BQ.
+      if (!PER_AD_SPEND_NETWORKS.has(src.network)) return false;
+      if (platformSet) {
+        const slug = NETWORK_TO_CHANNEL[src.network];
+        if (!slug || !platformSet.has(slug)) return false;
+      }
+      return true;
+    })
+    .map((src) => {
+      const fq = qualifyTable(src.table);
+      const campaignNameExpr =
+        CAMPAIGN_NAME_COLUMN_BY_TABLE[src.table] ??
+        "CAST(NULL AS STRING) AS campaign_name";
+
+      // OS predicate per the source's osStrategy. The Creatives slice
+      // exposes the same `os` and `campaign_name` columns the No-Breakdown
+      // slice does, so the same strategies apply 1:1.
+      let osPredicate = "";
+      if (os !== "total") {
+        switch (src.osStrategy) {
+          case "column":
+            osPredicate = ` AND LOWER(os) = '${os}'`;
+            break;
+          case "campaign_name":
+            osPredicate = ` AND ${osSqlPredicate(
+              os,
+              CAMPAIGN_NAME_COLUMN_BY_TABLE[src.table]?.includes("AS")
+                ? "campagin_name"
+                : "campaign_name",
+            )}`;
+            break;
+          case "implicit_ios":
+            if (os !== "ios") osPredicate = " AND FALSE";
+            break;
+          case "none":
+            osPredicate = " AND FALSE";
+            break;
+        }
+      }
+
+      return `SELECT
+        date,
+        '${src.network}' AS network,
+        CAST(ad_id AS STRING) AS ad_id,
+        CAST(campaign_id AS STRING) AS campaign_id,
+        ${campaignNameExpr},
+        cost_usd,
+        installs,
+        clicks,
+        impressions
+      FROM ${fq}
+      WHERE breakdown_type = 'Creatives'
+        AND ad_id IS NOT NULL${osPredicate}${campaignIdPredicate}`;
+    });
+
+  if (legs.length === 0) {
+    // Filtered to networks that don't carry per-ad spend — emit an empty
+    // shape so the outer query still parses + returns no rows.
+    return `(SELECT
+      DATE '1970-01-01' AS date,
+      CAST(NULL AS STRING) AS network,
+      CAST(NULL AS STRING) AS ad_id,
+      CAST(NULL AS STRING) AS campaign_id,
+      CAST(NULL AS STRING) AS campaign_name,
+      CAST(0 AS NUMERIC) AS cost_usd,
+      CAST(0 AS INT64) AS installs,
+      CAST(0 AS INT64) AS clicks,
+      CAST(0 AS INT64) AS impressions
+    WHERE FALSE)`;
+  }
+
+  return `(${legs.join("\n      UNION ALL\n      ")})`;
+}
+
+/**
  * Cohort dimensions the subquery can group by. Every consumer passes the
  * dimensions it actually needs in `groupBy`; the subquery projects them
  * through and emits `GROUP BY` over the same set. Default is
@@ -1621,18 +1741,45 @@ async function _queryGlobalComixGeo(
 
 // ── WS5 — Creatives (per-ad slice, Meta thumbnails) ────────────────────────
 
+/**
+ * Per-ad row returned by `queryGlobalComixCreatives`.
+ *
+ * Spend-side fields (`spend`, `installs`, `clicks`, `impressions`,
+ * `cpi`, `cpa_d7`, `roi_d7`) are `null` for networks that don't expose
+ * per-ad spend in BigQuery today — that's Google Ads and Apple Search
+ * Ads. The cohort-side fields (`sub_start_d7`, `sub_d7`, `rev_d7`) are
+ * always present.
+ *
+ * `cpa_d7` is also `null` for ads with a sub_d7 below the cohort
+ * maturity threshold (see `COHORT_D7_MATURITY_THRESHOLD`). Renderers
+ * print "—" for null rather than synthesizing a zero or "n/a" string.
+ *
+ * `adset_name` is the per-adset attribution string from the cohort
+ * table's `_Adgroup_Attribution`. Populated when present; empty string
+ * when Adjust didn't attribute one (some AppLovin / Apple rows).
+ */
 export type CreativeRow = {
   ad_id: string;
   ad_name: string;
   creative_name: string;
+  adset_name: string;
+  campaign_id: string | null;
+  campaign_name: string | null;
   network: string;
   thumbnail_url: string | null;
-  spend: number;
-  installs: number;
+  // Spend side — null for networks without per-ad spend (Google, Apple).
+  spend: number | null;
+  installs: number | null;
+  clicks: number | null;
+  impressions: number | null;
+  // Cohort side — always present.
   sub_start_d7: number;
-  sub_d7: number;
-  cpa_d7: number;
-  roi_d7: number;
+  sub_d7: number | null;
+  rev_d7: number;
+  // Derived rate metrics — null when denominator is zero or unavailable.
+  cpi: number | null;
+  cpa_d7: number | null;
+  roi_d7: number | null;
 };
 
 async function _queryGlobalComixCreatives(
@@ -1641,42 +1788,73 @@ async function _queryGlobalComixCreatives(
   to: string,
   filter: GlobalComixFilter = {},
 ): Promise<CreativeRow[]> {
-  // Include "date" in the cohort groupBy so the inner subquery projects
-  // a `date` column we can WHERE on (same bug as queryGlobalComixGeo
-  // had: filtering on _Day_Date in the outer query when the inner
-  // already aggregated it away).
+  // Cohort spine: one row per (date, ad_id, adset, creative, network)
+  // — adset added in WS1 so the per-ad table can carry an adset name
+  // for the filter chip. campaign_id projected for the campaign filter
+  // chip; cohort attribution is the truth-source for which campaign an
+  // ad ran under post-Adjust dedupe.
   const cohortSub = buildCohortSubquery(client, {
-    groupBy: ["date", "ad_id", "creative", "network"],
+    groupBy: ["date", "ad_id", "creative", "adset", "network", "campaign_id"],
     os: filter.os,
     platforms: filter.platforms,
     campaignId: filter.campaignId,
   });
+  // Per-ad spend on the Creatives slice. Only Meta / TikTok / AppLovin
+  // contribute rows here — Google + Apple per-ad spend doesn't exist in
+  // BQ today, so cohort-side rows for those networks LEFT JOIN to NULL
+  // and the rate columns render as `—`.
+  const spendCreativesSub = buildSpendCreativesSubquery(client, filter);
   const bq = getBigQueryClient();
 
-  // Per-ad cohort + optional Meta-thumbnail LEFT JOIN. Spend per-ad
-  // would require joining the breakdown_value Creatives slice on the
-  // spend side (Meta only — TikTok creative spend flows via
-  // No Breakdown). Phase 1: cohort-only metrics so the table renders
-  // ranked-by-sub_d7 even before spend joins. Phase 2: per-network
-  // creative spend.
+  // Maturity gate threshold inlined as a literal so the SQL is
+  // self-contained; pulled from src/lib/analyst/maturity-gates.ts.
+  // Keep these two in sync — if the threshold moves there, mirror it
+  // here. A small constant doesn't justify a runtime import dance.
+  const CPA_MATURITY_THRESHOLD_LITERAL = 10;
+
   const query = `
     SELECT
       c.ad_id                                                AS ad_id,
       COALESCE(c.creative_name, c.ad_id)                     AS ad_name,
       COALESCE(c.creative_name, '')                          AS creative_name,
+      COALESCE(c.adset_name, '')                             AS adset_name,
       c.network                                              AS network,
+      ANY_VALUE(c.campaign_id)                               AS campaign_id,
+      ANY_VALUE(s.campaign_name)                             AS campaign_name,
       f._thumbnail_url                                       AS thumbnail_url,
+      -- Spend-side aggregates. Sum-over-NULL is NULL in BQ, so a row
+      -- with no matching spend rows surfaces as NULL spend / installs
+      -- and the renderer prints "—".
+      SUM(s.cost_usd)                                        AS spend,
+      SUM(s.installs)                                        AS installs,
+      SUM(s.clicks)                                          AS clicks,
+      SUM(s.impressions)                                     AS impressions,
+      -- Cohort-side aggregates. Always populated (cohort is the spine).
       SUM(c.sub_start_d7)                                    AS sub_start_d7,
       SUM(c.sub_d7)                                          AS sub_d7,
-      SUM(c.rev_d7)                                          AS rev_d7
+      SUM(c.rev_d7)                                          AS rev_d7,
+      -- Derived rate metrics. SAFE_DIVIDE returns NULL when the
+      -- denominator is zero; the maturity CASE on cpa_d7 suppresses
+      -- noise-dominated values for tiny D7 cohorts.
+      SAFE_DIVIDE(SUM(s.cost_usd), NULLIF(SUM(s.installs), 0))  AS cpi,
+      CASE
+        WHEN SUM(c.sub_d7) >= ${CPA_MATURITY_THRESHOLD_LITERAL}
+          THEN SAFE_DIVIDE(SUM(s.cost_usd), NULLIF(SUM(c.sub_d7), 0))
+        ELSE NULL
+      END                                                    AS cpa_d7,
+      SAFE_DIVIDE(SUM(c.rev_d7), NULLIF(SUM(s.cost_usd), 0)) AS roi_d7
     FROM ${cohortSub} c
+    LEFT JOIN ${spendCreativesSub} s
+      ON s.ad_id  = c.ad_id
+      AND s.network = c.network
+      AND s.date  = c.date
     LEFT JOIN ${qualifyTable("ods_fb2_creatives_globalcomix")} f
       ON c.ad_id = CAST(f._creative_id AS STRING)
     WHERE c.date BETWEEN ${FROM} AND ${TO}
       AND c.ad_id IS NOT NULL
       AND c.network IS NOT NULL
-    GROUP BY c.ad_id, c.creative_name, c.network, f._thumbnail_url
-    ORDER BY SUM(c.sub_d7) DESC
+    GROUP BY c.ad_id, c.creative_name, c.adset_name, c.network, f._thumbnail_url
+    ORDER BY SUM(s.cost_usd) DESC NULLS LAST
     LIMIT 100
   `;
 
@@ -1687,22 +1865,26 @@ async function _queryGlobalComixCreatives(
   });
 
   return rows.map((r: Record<string, unknown>) => {
-    const sub_d7 = numberish(r.sub_d7);
-    const rev_d7 = numberish(r.rev_d7);
+    const sub_d7 = numberOrNull(r.sub_d7);
     return {
       ad_id: String(r.ad_id ?? ""),
       ad_name: String(r.ad_name ?? ""),
       creative_name: String(r.creative_name ?? ""),
+      adset_name: String(r.adset_name ?? ""),
+      campaign_id: r.campaign_id == null ? null : String(r.campaign_id),
+      campaign_name: r.campaign_name == null ? null : String(r.campaign_name),
       network: String(r.network ?? ""),
       thumbnail_url: r.thumbnail_url == null ? null : String(r.thumbnail_url),
-      // Phase 1: spend not joined yet — populate 0 so consumers can render
-      // the table; CPA / ROI surfaces as 0 until Phase 2 wires per-ad spend.
-      spend: 0,
-      installs: 0,
+      spend: numberOrNull(r.spend),
+      installs: numberOrNull(r.installs),
+      clicks: numberOrNull(r.clicks),
+      impressions: numberOrNull(r.impressions),
       sub_start_d7: numberish(r.sub_start_d7),
       sub_d7,
-      cpa_d7: 0,
-      roi_d7: rev_d7,
+      rev_d7: numberish(r.rev_d7),
+      cpi: numberOrNull(r.cpi),
+      cpa_d7: numberOrNull(r.cpa_d7),
+      roi_d7: numberOrNull(r.roi_d7),
     };
   });
 }
