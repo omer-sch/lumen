@@ -209,12 +209,25 @@ Filters active: all four chips.
 
 ### Campaigns — drill-down layer
 
-The page you go to when a number on the dashboard moves and you need to find which campaign caused it. Investigation mode, not overview mode.
+The page you go to when a number on the dashboard moves and you need to find which campaign caused it. Investigation mode, not overview mode. Two routes: the index (`/campaigns`) and the per-campaign profile (`/campaigns/[campaign_id]`).
 
-**What lives here:**
-- Campaign breakdown table: one row per campaign, columns for Channel, Spend, Installs, plus the client-appropriate unit-cost and return columns (**for the GlobalComix pilot: CPA D7 and ROI D7**; for performance / e-commerce clients: CPI and ROAS), delta vs previous period, 7-day sparkline.
-- Sortable by any column. Filterable by channel.
-- The global filter (date range + client) from the dashboard applies here automatically.
+**Index (`/campaigns`) — what lives here:**
+- Campaign breakdown table: one row per campaign, columns for Network, Spend, Installs, CPI, plus the client-appropriate unit-cost and return columns (**for the GlobalComix pilot: CPA D7 and ROI D7**; for performance / e-commerce clients: CPI and ROAS), Δ Spend vs the prior equal-length window. Click any row to navigate into the per-campaign profile with the global filter preserved.
+- Sortable by any column. Network filter chip strip mirrors the dashboard's Platform language. Three additional client-side chip groups for scratch investigation: **Family** (classifier-derived, Sub Evergreen / SubStart RTG / Brand / etc.), **Geo** (US / WW-Top / WW-EU / TopGeos / ...), **Status** (Running / Paused). A "More" toggle reveals Sub Start D7 and Sub D7 columns.
+- The global filter (date range + OS + Platform + client) applies here automatically.
+- Per-row status dot (mint LivePulse for Adjust-running, muted dot for paused) before the campaign name.
+
+**Profile (`/campaigns/[campaign_id]`) — what lives here:**
+- Parsed-name chip row (Network / Platform / Family / Geo) plus the Adjust status pill and the raw campaign id underneath the display name.
+- KPI strip: CPA D7 (hero, mint highlight), Spend, Installs, ROI D7. Period-over-period deltas vs the equal-length prior window.
+- Daily trend chart (reuses dashboard's TrendChart). Metric switcher with maturity-gated D7 cells.
+- Adset breakdown (per-`_Adgroup_Attribution`, cohort-only metrics until per-adset spend is joined).
+- Creative breakdown (per-ad cohort metrics, Meta thumbnails where present; Google / Apple / AppLovin have no ad-level data today).
+- Geographic breakdown (Top 10 countries by Sub D7 plus a "Rest" rollup).
+- Peer comparison (up to 5 other campaigns in the same family + geo, side-by-side on CPA D7 / ROI D7; this-campaign row highlighted).
+- Inline coverage warning (currently: AppLovin pre-2026-05-05 windows).
+
+**TopBar on the profile route:** Date + Client only. OS + Platform chips UNMOUNT (not just CSS-hidden) — a campaign is one campaign, so OS / Platform either no-op or zero the result.
 
 **What does NOT live here:** aggregate KPIs (that's Dashboard), NL queries (that's Ask).
 
