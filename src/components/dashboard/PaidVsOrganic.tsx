@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { GlassCard } from "@/components/ui/GlassCard";
+import { PaidVsOrganicSkeleton } from "@/components/ui/Skeleton";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 
 type GeoRow = {
@@ -37,9 +38,11 @@ export function PaidVsOrganic() {
 
   const [rows, setRows] = useState<GeoRow[]>([]);
   const [paidSpend, setPaidSpend] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     const qs = `client=${encodeURIComponent(client)}&from=${fromIso}&to=${toIso}`;
 
     Promise.all([
@@ -50,9 +53,10 @@ export function PaidVsOrganic() {
         if (cancelled) return;
         setRows(Array.isArray(geo) ? geo : []);
         setPaidSpend(typeof kpis?.spend === "number" ? kpis.spend : null);
+        setLoading(false);
       })
       .catch(() => {
-        // Soft-fail: empty card disappears below.
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
@@ -60,6 +64,7 @@ export function PaidVsOrganic() {
     };
   }, [client, fromIso, toIso]);
 
+  if (loading) return <PaidVsOrganicSkeleton />;
   if (rows.length === 0 && paidSpend == null) return null;
 
   const totals = rows.reduce(

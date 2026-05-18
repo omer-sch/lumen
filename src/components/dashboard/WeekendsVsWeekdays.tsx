@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { GlassCard } from "@/components/ui/GlassCard";
+import { WeekendsVsWeekdaysSkeleton } from "@/components/ui/Skeleton";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 
 type WeekendsRow = {
@@ -67,7 +68,8 @@ export function WeekendsVsWeekdays() {
     };
   }, [client, fromIso, toIso, os, platforms]);
 
-  if (!loading && rows.length === 0) return null;
+  if (loading) return <WeekendsVsWeekdaysSkeleton />;
+  if (rows.length === 0) return null;
 
   const totalSpend = rows.reduce((acc, r) => acc + r.spend, 0);
 

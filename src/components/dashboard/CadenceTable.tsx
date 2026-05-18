@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { GlassCard } from "@/components/ui/GlassCard";
+import { CadenceTableSkeleton } from "@/components/ui/Skeleton";
 import { aggregateTrend, type Cadence } from "@/lib/dashboard/aggregate-trend";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import type { BQTrendPointByNetwork } from "@/types/dashboard";
@@ -77,7 +78,8 @@ export function CadenceTable() {
     return aggregateTrend(trend, cadence);
   }, [trend, cadence]);
 
-  if (!loading && rows.length === 0) return null;
+  if (loading) return <CadenceTableSkeleton />;
+  if (rows.length === 0) return null;
 
   return (
     <GlassCard className="flex flex-col gap-3 p-4">

@@ -62,6 +62,140 @@ export function TrendChartSkeleton() {
   );
 }
 
+/** Skeleton matching the CadenceTable shape (header + segmented toggle +
+ *  6-column table). Sized so the eventual content swaps in without a
+ *  vertical layout shift; row count picks "5" because that's the typical
+ *  Weekly cadence for a 30-day window. */
+export function CadenceTableSkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-3 rounded-lg p-4"
+      style={{
+        background: "var(--surface-glass)",
+        border: "1px solid var(--border-glass)",
+        WebkitBackdropFilter: "var(--blur-glass)",
+        backdropFilter: "var(--blur-glass)",
+        boxShadow: "var(--shadow-glass)",
+      }}
+      data-testid="cadence-table-skeleton"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <Skeleton className="h-5 w-48 rounded-md" />
+        <Skeleton className="h-8 w-44 rounded-md" />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-3 w-full rounded-full" />
+        {[0, 1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-4 w-full rounded-md" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Skeleton matching the WeekendsVsWeekdays shape (header + 2 table rows
+ *  on the left + share bars on the right at md+). */
+export function WeekendsVsWeekdaysSkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-3 rounded-lg p-4"
+      style={{
+        background: "var(--surface-glass)",
+        border: "1px solid var(--border-glass)",
+        WebkitBackdropFilter: "var(--blur-glass)",
+        backdropFilter: "var(--blur-glass)",
+        boxShadow: "var(--shadow-glass)",
+      }}
+      data-testid="weekends-skeleton"
+    >
+      <Skeleton className="h-5 w-44 rounded-md" />
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-[auto_1fr]">
+        <div className="flex flex-col gap-2 min-w-[360px]">
+          <Skeleton className="h-3 w-full rounded-full" />
+          <Skeleton className="h-4 w-full rounded-md" />
+          <Skeleton className="h-4 w-full rounded-md" />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-3 w-24 rounded-full" />
+          <Skeleton className="h-2 w-full rounded-full" />
+          <Skeleton className="h-2 w-3/5 rounded-full" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Skeleton matching the SubscriberLifecycle shape (header + 3 KPI tiles
+ *  + OS-mix bars + Net Sub chart). Reuses KpiCardSkeleton shape for the
+ *  3 tile slots so the bounding boxes match the eventual KpiCard render. */
+export function SubscriberLifecycleSkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-4 rounded-lg p-4"
+      style={{
+        background: "var(--surface-glass)",
+        border: "1px solid var(--border-glass)",
+        WebkitBackdropFilter: "var(--blur-glass)",
+        backdropFilter: "var(--blur-glass)",
+        boxShadow: "var(--shadow-glass)",
+      }}
+      data-testid="lifecycle-skeleton"
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <Skeleton className="h-5 w-44 rounded-md" />
+        <Skeleton className="h-3 w-64 rounded-full" />
+      </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <KpiCardSkeleton key={i} />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-3 w-16 rounded-full" />
+          <Skeleton className="h-3 w-full rounded-full" />
+          <Skeleton className="h-3 w-3/4 rounded-full" />
+          <Skeleton className="h-3 w-1/3 rounded-full" />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-3 w-40 rounded-full" />
+          <Skeleton className="h-24 w-full rounded-md" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Skeleton matching the PaidVsOrganic shape (header + 3 tiles + share
+ *  bar). Same KpiCardSkeleton reuse as SubscriberLifecycleSkeleton so
+ *  cold-cache placeholder mirrors the loaded layout exactly. */
+export function PaidVsOrganicSkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-3 rounded-lg p-4"
+      style={{
+        background: "var(--surface-glass)",
+        border: "1px solid var(--border-glass)",
+        WebkitBackdropFilter: "var(--blur-glass)",
+        backdropFilter: "var(--blur-glass)",
+        boxShadow: "var(--shadow-glass)",
+      }}
+      data-testid="paid-vs-organic-skeleton"
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <Skeleton className="h-5 w-36 rounded-md" />
+        <Skeleton className="h-3 w-56 rounded-full" />
+      </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <KpiCardSkeleton key={i} />
+        ))}
+      </div>
+      <Skeleton className="h-2 w-full rounded-full" />
+    </div>
+  );
+}
+
 /** Skeleton matching a feed row. */
 export function FeedRowSkeleton() {
   return (

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { GlassCard } from "@/components/ui/GlassCard";
+import { SubscriberLifecycleSkeleton } from "@/components/ui/Skeleton";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 
 type DailyRow = {
@@ -82,10 +83,12 @@ export function SubscriberLifecycle() {
     { subs: 0, churn: 0, netSub: 0 },
   );
 
-  // No data path: render nothing rather than an empty card. The
-  // dashboard handles its own loading skeletons via useDashboardData;
-  // this section is additive.
-  if (!loading && daily.length === 0 && osMix.length === 0) return null;
+  // Cold-load: show a section-shaped skeleton so the dashboard layout
+  // doesn't jump as the three fetches resolve. Empty-state branch is
+  // handled in WS5 with an EmptyState card; here we still return null
+  // (the loaded layout below) to keep WS2 self-contained.
+  if (loading) return <SubscriberLifecycleSkeleton />;
+  if (daily.length === 0 && osMix.length === 0) return null;
 
   return (
     <GlassCard className="flex flex-col gap-4 p-4">
