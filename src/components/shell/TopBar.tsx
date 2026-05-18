@@ -34,6 +34,11 @@ export function TopBar() {
   const meta =
     ROUTE_META.find((r) => pathname.startsWith(r.match))?.meta ?? FALLBACK;
   const isDashboard = pathname.startsWith("/dashboard");
+  // /campaigns/<id> is a per-campaign drill-down: OS / Platform chips
+  // are coherent only at the index level (one campaign already has a
+  // fixed platform). Trailing-slash variants and query strings don't
+  // matter — pathname is what next/navigation gives us.
+  const isCampaignProfile = /^\/campaigns\/[^/]+/.test(pathname);
 
   return (
     <header
@@ -63,7 +68,13 @@ export function TopBar() {
           {/* Suspense boundary required because useGlobalFilters reads
               search params, which suspend during route transitions. */}
           <Suspense fallback={null}>
-            {isDashboard ? <DashboardFilterChips /> : <StandardFilterChips />}
+            {isDashboard ? (
+              <DashboardFilterChips />
+            ) : isCampaignProfile ? (
+              <CampaignProfileFilterChips />
+            ) : (
+              <StandardFilterChips />
+            )}
           </Suspense>
         </div>
       )}
@@ -79,6 +90,22 @@ export function TopBar() {
         <UserButton appearance={{ elements: { avatarBox: "h-9 w-9" } }} />
       </div>
     </header>
+  );
+}
+
+/**
+ * Filter chips for the per-campaign profile route (/campaigns/<id>).
+ * OS + Platform are UNMOUNTED here — a campaign is one campaign; OS /
+ * Platform either no-op (the value matches the campaign's platform)
+ * or zero the result. Same unmount-not-CSS-hide trick as the
+ * Lifecycle tab so the chips can't be keyboard-tabbed-to.
+ */
+function CampaignProfileFilterChips() {
+  return (
+    <>
+      <DateRangePicker />
+      <ClientSelector />
+    </>
   );
 }
 

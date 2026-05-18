@@ -2,403 +2,298 @@
 
 import { Suspense, useMemo } from "react";
 import Link from "next/link";
-import {
-  AlertTriangle,
-  ArrowDownRight,
-  ArrowLeft,
-  ArrowUpRight,
-  Sparkles,
-  TrendingDown,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useSearchParams } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { LivePulse } from "@/components/ui/LivePulse";
+import { SectionError } from "@/components/ui/SectionError";
+import { TrendChartSkeleton, KpiCardSkeleton } from "@/components/ui/Skeleton";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
+import { useCampaignProfile } from "@/lib/campaigns/use-campaign-profile";
 import { findClient } from "@/lib/mock/clients";
-import { getCampaignDetail } from "@/lib/mock/campaigns";
-import type { CampaignDetail } from "@/lib/mock/campaigns";
-import type { Channel } from "@/types/dashboard";
+import type {
+  CampaignSummary,
+  CampaignTrendPoint,
+  TrendPoint,
+} from "@/types/dashboard";
 
-const CHANNEL_TINT: Record<Channel, { bg: string; fg: string }> = {
-  Meta:      { bg: "var(--tint-ua-soft)",       fg: "var(--color-ua)" },
-  TikTok:    { bg: "var(--tint-creative-soft)", fg: "var(--color-creative)" },
-  Google:    { bg: "var(--tint-yellow-soft)",   fg: "var(--color-yellow)" },
-  AppsFlyer: { bg: "var(--tint-organic-soft)",  fg: "var(--color-organic)" },
-};
-
-const INSIGHT_META: Record<
-  CampaignDetail["insights"][number]["type"],
-  { Icon: typeof Sparkles; accentVar: string; tintVar: string; label: string }
-> = {
-  anomaly:     { Icon: TrendingDown,  accentVar: "--color-creative", tintVar: "--tint-creative-soft", label: "Anomaly" },
-  opportunity: { Icon: Sparkles,      accentVar: "--color-yellow",   tintVar: "--tint-yellow-soft",   label: "Opportunity" },
-  risk:        { Icon: AlertTriangle, accentVar: "--color-creative", tintVar: "--tint-creative-soft", label: "Risk" },
-};
-
-const fmtMoney = (n: number) =>
-  n >= 1000 ? `$${Math.round(n).toLocaleString()}` : `$${n.toFixed(2)}`;
-
-export function CampaignProfile({ id }: { id: string }) {
+/**
+ * Profile page for one campaign. Renders the header + KPI strip + a
+ * daily trend chart. WS5 fills in the adset / creative / geo / peer
+ * breakdown sections below.
+ */
+export function CampaignProfile({ campaignId }: { campaignId: string }) {
   return (
     <Suspense fallback={null}>
-      <Inner id={id} />
+      <Inner campaignId={campaignId} />
     </Suspense>
   );
 }
 
-function Inner({ id }: { id: string }) {
+function Inner({ campaignId }: { campaignId: string }) {
   const { from, to, client } = useGlobalFilters();
   const c = findClient(client);
   const days = Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
+  const { data, loading, error, refetch } = useCampaignProfile({
+    campaignId,
+    from,
+    to,
+    client,
+  });
 
-  const detail = useMemo(
-    () => getCampaignDetail(id, { from, to, client }),
-    [id, from, to, client],
-  );
+  const params = useSearchParams();
+  const backQuery = params.toString();
+  const backHref = backQuery ? `/campaigns?${backQuery}` : "/campaigns";
 
-  if (!detail) {
+  if (loading && data === null) {
     return (
-      <div className="flex flex-col gap-4 py-6">
-        <Link
-          href="/campaigns"
-          className="inline-flex items-center gap-1.5 self-start font-body text-xs uppercase tracking-[0.18em] text-[color:var(--text-muted)] transition-colors hover:text-cloud-white"
-        >
-          <ArrowLeft className="h-3 w-3" strokeWidth={2.5} />
-          Back to campaigns
-        </Link>
-        <p className="font-body text-sm text-[color:var(--text-muted)]">
-          Campaign not found.
-        </p>
+      <div className="flex flex-col gap-6 py-2 md:gap-7" data-testid="profile-loading">
+        <BackLink href={backHref} />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <KpiCardSkeleton key={i} />
+          ))}
+        </div>
+        <TrendChartSkeleton />
       </div>
     );
   }
 
-  const tint = CHANNEL_TINT[detail.channel];
+  if (error && data === null) {
+    return (
+      <div className="flex flex-col gap-6 py-2 md:gap-7">
+        <BackLink href={backHref} />
+        <SectionError
+          section="this campaign's profile"
+          shape="min-h-[14rem]"
+          onRetry={refetch}
+          data-testid="profile-error"
+        />
+      </div>
+    );
+  }
 
-  // KpiCard expects the brand-formatted strings, so we shape each tile
-  // here. Direction is per-metric: lower-better for CPI, higher-better
-  // everywhere else.
-  const KPIS = [
+  const summary = data?.summary ?? null;
+  if (!summary) {
+    return (
+      <div className="flex flex-col gap-4 py-6" data-testid="profile-empty">
+        <BackLink href={backHref} />
+        <GlassCard className="flex flex-col gap-2 p-6">
+          <h2 className="font-display text-xl font-bold text-cloud-white">
+            Campaign not found in this window
+          </h2>
+          <p className="font-body text-sm text-[color:var(--text-secondary)]">
+            No spend rows for <code className="text-cloud-white">{campaignId}</code>{" "}
+            between {fromTo(from, to)}. Try widening the date range, or use the
+            back link to return to the index.
+          </p>
+        </GlassCard>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6 py-2 md:gap-7">
+      <BackLink href={backHref} />
+
+      <ProfileHeader summary={summary} clientName={c.name} days={days} />
+
+      <KpiStrip summary={summary} />
+
+      <ProfileTrendChart trend={data?.trend ?? []} />
+    </div>
+  );
+}
+
+function BackLink({ href }: { href: string }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-1.5 self-start font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)] transition-[color,transform] duration-280 ease-out-quart hover:-translate-x-0.5 hover:text-cloud-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+    >
+      <ArrowLeft className="h-3 w-3" strokeWidth={2.5} />
+      Back to campaigns
+    </Link>
+  );
+}
+
+function fromTo(from: Date, to: Date): string {
+  return `${from.toISOString().slice(0, 10)} and ${to.toISOString().slice(0, 10)}`;
+}
+
+function ProfileHeader({
+  summary,
+  clientName,
+  days,
+}: {
+  summary: CampaignSummary;
+  clientName: string;
+  days: number;
+}) {
+  const chips: { label: string; value: string }[] = [
+    { label: "Network", value: summary.network || "—" },
+    { label: "Platform", value: summary.platform || "—" },
+    { label: "Family", value: summary.family || "—" },
+    { label: "Geo", value: summary.geo || "—" },
+  ].filter((c) => c.value !== "—");
+
+  return (
+    <header className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map((chip) => (
+            <span
+              key={chip.label}
+              className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]"
+              style={{
+                background: "var(--surface-hover)",
+                color: "var(--text-secondary)",
+              }}
+            >
+              {chip.label}: {chip.value}
+            </span>
+          ))}
+          <StatusPill state={summary.campaign_status} />
+          <span className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+            {clientName} · last {days} days
+          </span>
+        </div>
+        <h2 className="font-display text-2xl font-extrabold leading-tight tracking-tight text-cloud-white sm:text-3xl">
+          {summary.campaign_name || summary.campaign_id}
+        </h2>
+        {summary.campaign_name && (
+          <p className="font-body text-xs text-[color:var(--text-muted)]">
+            {summary.campaign_id}
+          </p>
+        )}
+      </div>
+    </header>
+  );
+}
+
+function StatusPill({ state }: { state: string | null }) {
+  if (!state) return null;
+  const s = state.trim().toLowerCase();
+  const isRunning = s === "running" || s === "active";
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]"
+      style={{
+        background: isRunning
+          ? "color-mix(in oklab, var(--color-ua) 14%, transparent)"
+          : "var(--surface-hover)",
+        color: isRunning ? "var(--color-ua)" : "var(--text-muted)",
+      }}
+    >
+      {isRunning && <LivePulse accent="mint" size={6} />}
+      {state}
+    </span>
+  );
+}
+
+function KpiStrip({ summary }: { summary: CampaignSummary }) {
+  const kpis = [
     {
-      id: "roas",
-      label: "ROAS (D7)",
-      value: `${detail.roas.toFixed(2)}x`,
-      delta: detail.deltaRoas,
-      direction: "higher-better" as const,
-      hint: "vs target 1.30x",
+      id: "cpaD7",
+      label: "CPA D7",
+      value: summary.cpa_d7 != null ? fmtCpi(summary.cpa_d7) : "—",
+      delta: pctOrNull(summary.cpaD7Delta),
+      direction: "lower-better" as const,
+      hint: "spend ÷ subscribers at D7",
       highlight: true,
-      series: detail.trend.map((p) => ({ date: p.date, value: p.roas })),
     },
     {
       id: "spend",
       label: "Spend",
-      value: fmtMoney(detail.spend),
-      delta: detail.deltaSpend,
+      value: fmtMoney(summary.spend),
+      delta: pctOrNull(summary.spendDelta),
       direction: "higher-better" as const,
-      hint: `vs prev ${days}d`,
+      hint: "what we paid for ads in this window",
       highlight: false,
-      series: detail.trend.map((p) => ({ date: p.date, value: p.spend })),
     },
     {
       id: "installs",
       label: "Installs",
-      value: detail.installs.toLocaleString(),
-      delta: detail.deltaInstalls,
+      value: summary.installs.toLocaleString(),
+      delta: pctOrNull(summary.installsDelta),
       direction: "higher-better" as const,
-      hint: `vs prev ${days}d`,
+      hint: "people who downloaded the app",
       highlight: false,
-      series: detail.trend.map((p) => ({ date: p.date, value: p.installs })),
     },
     {
-      id: "cpi",
-      label: "CPI",
-      value: `$${detail.cpi.toFixed(2)}`,
-      delta: detail.deltaCpi,
-      direction: "lower-better" as const,
-      hint: "lower is better",
+      id: "roiD7",
+      label: "ROI D7",
+      value: `${summary.roi_d7.toFixed(2)}x`,
+      delta: pctOrNull(summary.roiD7Delta),
+      direction: "higher-better" as const,
+      hint: "cohort D7 revenue ÷ spend",
       highlight: false,
-      series: detail.trend.map((p) => ({ date: p.date, value: p.cpi })),
     },
   ];
 
   return (
-    <div className="flex flex-col gap-6 py-2 md:gap-7">
-      {/* Breadcrumb back-link */}
-      <Link
-        href={`/campaigns${typeof window !== "undefined" && window.location.search ? window.location.search : ""}`}
-        className="inline-flex items-center gap-1.5 self-start font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)] transition-[color,transform] duration-280 ease-out-quart hover:-translate-x-0.5 hover:text-cloud-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
-      >
-        <ArrowLeft className="h-3 w-3" strokeWidth={2.5} />
-        Back to campaigns
-      </Link>
-
-      {/* Header */}
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]"
-              style={{ background: tint.bg, color: tint.fg }}
-            >
-              {detail.channel}
-            </span>
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]"
-              style={{
-                background:
-                  detail.status === "active"
-                    ? "color-mix(in oklab, var(--color-ua) 14%, transparent)"
-                    : "var(--surface-hover)",
-                color:
-                  detail.status === "active"
-                    ? "var(--color-ua)"
-                    : "var(--text-muted)",
-              }}
-            >
-              {detail.status === "active" && (
-                <LivePulse accent="mint" size={6} />
-              )}
-              {detail.status}
-            </span>
-            <span className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
-              {c.name} · last {days} days
-            </span>
-          </div>
-          <h2 className="font-display text-2xl font-extrabold leading-tight tracking-tight text-cloud-white sm:text-3xl">
-            {detail.name}
-          </h2>
-          <p className="max-w-2xl font-body text-sm text-[color:var(--text-secondary)]">
-            Per-campaign breakdown for the active window. The KPI tiles, trend
-            chart, and platform split all react to your global date range and
-            client.
-          </p>
-        </div>
-
-        <div
-          className="flex items-center gap-3 rounded-lg p-3"
-          style={{
-            background: "var(--surface-glass)",
-            border: "1px solid var(--border-glass)",
-          }}
-        >
-          <div className="flex flex-col">
-            <p className="font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
-              Revenue
-            </p>
-            <p className="font-display text-lg font-extrabold tabular-nums text-cloud-white">
-              {fmtMoney(detail.revenue)}
-            </p>
-          </div>
-        </div>
-      </header>
-
-      {/* KPI strip — same shape as the dashboard, ROAS lit yellow */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {KPIS.map((k, i) => (
-          <KpiCard
-            key={k.id}
-            id={k.id}
-            label={k.label}
-            value={k.value}
-            delta={k.delta}
-            direction={k.direction}
-            hint={k.hint}
-            highlight={k.highlight}
-            size="compact"
-            enterIndex={i + 1}
-            series={k.series}
-          />
-        ))}
-      </section>
-
-      {/* Trend chart with metric switcher (re-uses the dashboard component) */}
-      <TrendChart trend={detail.trend} enterIndex={5} />
-
-      {/* Platform split + Insights */}
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-5">
-        <GlassCard glow="ua" enterIndex={6} className="flex flex-col gap-5 p-6 lg:col-span-1">
-          <div>
-            <h3 className="font-display text-md font-bold leading-none text-cloud-white">
-              Platform split
-            </h3>
-            <p className="mt-1 font-body text-xs text-[color:var(--text-muted)]">
-              iOS / Android performance for this campaign over the active window.
-            </p>
-          </div>
-          <ul className="flex flex-col gap-4">
-            {detail.byPlatform.map((p) => {
-              const max = Math.max(...detail.byPlatform.map((x) => x.spend), 1);
-              const pct = (p.spend / max) * 100;
-              const isLeader = p.spend === max;
-              return (
-                <li key={p.platform} className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between font-body text-sm">
-                    <span className="font-medium text-cloud-white">
-                      {p.platform}
-                    </span>
-                    <span className="tabular-nums text-[color:var(--text-muted)]">
-                      {fmtMoney(p.spend)} · {p.installs.toLocaleString()} installs ·{" "}
-                      <span className="text-cloud-white">{p.roas.toFixed(2)}x</span>
-                    </span>
-                  </div>
-                  <div
-                    className="relative h-2 w-full overflow-hidden rounded-full"
-                    style={{ background: "var(--surface-track)" }}
-                  >
-                    <div
-                      className="absolute inset-y-0 left-0 rounded-full transition-transform duration-1000 ease-out-quart"
-                      style={{
-                        width: `${pct}%`,
-                        background: isLeader
-                          ? "linear-gradient(90deg, var(--color-ua), var(--color-ua-glow))"
-                          : "var(--color-ua)",
-                        boxShadow: isLeader
-                          ? "0 0 14px color-mix(in oklab, var(--color-ua-glow) 65%, transparent)"
-                          : "0 0 8px color-mix(in oklab, var(--color-ua) 40%, transparent)",
-                      }}
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </GlassCard>
-
-        <GlassCard glow="ua" enterIndex={7} className="flex flex-col gap-4 p-6 lg:col-span-2">
-          <div>
-            <h3 className="font-display text-md font-bold leading-none text-cloud-white">
-              Lumen&rsquo;s read
-            </h3>
-            <p className="mt-1 font-body text-xs text-[color:var(--text-muted)]">
-              What the AI noticed about this campaign — what to scale, what to fix.
-            </p>
-          </div>
-          {detail.insights.length === 0 ? (
-            <p className="font-body text-sm text-[color:var(--text-muted)]">
-              Nothing flagged in the current window. The campaign is performing
-              within its expected band.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {detail.insights.map((insight, i) => {
-                const meta = INSIGHT_META[insight.type];
-                const accent = `var(${meta.accentVar})`;
-                return (
-                  <li
-                    key={i}
-                    className="flex items-start gap-3 rounded-md p-3"
-                    style={{
-                      background: `var(${meta.tintVar})`,
-                      border: `1px solid color-mix(in oklab, ${accent} 28%, transparent)`,
-                    }}
-                  >
-                    <span
-                      aria-hidden
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-md"
-                      style={{
-                        background: `color-mix(in oklab, ${accent} 18%, transparent)`,
-                        color: accent,
-                      }}
-                    >
-                      <meta.Icon className="h-4 w-4" strokeWidth={2.25} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className="text-[10px] font-semibold uppercase tracking-[0.18em]"
-                          style={{ color: accent }}
-                        >
-                          {meta.label}
-                        </span>
-                        {insight.metricChip && (
-                          <span
-                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums"
-                            style={{
-                              background: `color-mix(in oklab, ${accent} 18%, transparent)`,
-                              color: accent,
-                            }}
-                          >
-                            {insight.metricChip}
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1 font-display text-sm font-bold leading-snug text-cloud-white">
-                        {insight.title}
-                      </p>
-                      <p className="mt-1 font-body text-xs leading-relaxed text-[color:var(--text-secondary)]">
-                        {insight.body}
-                      </p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </GlassCard>
-      </section>
-
-      {/* Top creatives */}
-      <GlassCard glow="ua" enterIndex={8} className="flex flex-col gap-4 p-6">
-        <div>
-          <h3 className="font-display text-md font-bold leading-none text-cloud-white">
-            Top creatives
-          </h3>
-          <p className="mt-1 font-body text-xs text-[color:var(--text-muted)]">
-            The three highest-spend creatives in this campaign. CTR + ROAS shown
-            for context.
-          </p>
-        </div>
-        <ul className="flex flex-col divide-y divide-[color:var(--border-subtle)]">
-          {detail.creatives.map((cr, i) => (
-            <li
-              key={cr.id}
-              className="flex items-center gap-3 py-3 transition-colors duration-280 ease-out-quart hover:bg-[color:var(--surface-hover)]"
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "grid h-7 w-7 shrink-0 place-items-center rounded-md font-display text-xs font-extrabold",
-                  i === 0
-                    ? "text-navy"
-                    : "text-[color:var(--text-secondary)]",
-                )}
-                style={
-                  i === 0
-                    ? {
-                        background:
-                          "linear-gradient(135deg, var(--color-yellow) 0%, var(--color-yellow-light) 100%)",
-                        boxShadow:
-                          "0 0 12px color-mix(in oklab, var(--color-yellow) 40%, transparent)",
-                      }
-                    : { background: "var(--surface-hover)" }
-                }
-              >
-                {i + 1}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-body text-sm font-semibold text-cloud-white">
-                  {cr.label}
-                </p>
-                <p className="font-body text-xs text-[color:var(--text-muted)]">
-                  CTR {cr.ctr.toFixed(2)}% · ROAS {cr.roas.toFixed(2)}x
-                </p>
-              </div>
-              <span className="font-body text-sm font-semibold tabular-nums text-cloud-white">
-                {fmtMoney(cr.spend)}
-              </span>
-              <span className="text-[color:var(--text-muted)]">
-                {cr.roas >= 1 ? (
-                  <ArrowUpRight className="h-4 w-4 text-ua" strokeWidth={2.25} />
-                ) : (
-                  <ArrowDownRight className="h-4 w-4 text-creative" strokeWidth={2.25} />
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </GlassCard>
-    </div>
+    <section
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      data-testid="profile-kpi-strip"
+    >
+      {kpis.map((k, i) => (
+        <KpiCard
+          key={k.id}
+          id={k.id}
+          label={k.label}
+          value={k.value}
+          delta={k.delta}
+          direction={k.direction}
+          hint={k.hint}
+          highlight={k.highlight}
+          size="compact"
+          enterIndex={i + 1}
+        />
+      ))}
+    </section>
   );
 }
+
+function ProfileTrendChart({ trend }: { trend: CampaignTrendPoint[] }) {
+  // Translate the campaign-trend shape to the dashboard's TrendPoint
+  // shape so the existing TrendChart renders without a rebuild. Fields
+  // we don't have stay at 0 — the chart hides metric tabs for which
+  // every point reads 0.
+  const adapted: TrendPoint[] = useMemo(
+    () =>
+      trend.map((p) => ({
+        date: p.date.slice(5, 10),
+        spend: Math.round(p.spend),
+        installs: Math.round(p.installs),
+        cpi: +p.cpi.toFixed(2),
+        roas: +p.roi_d7.toFixed(2),
+        subStart: p.sub_start_d7 != null ? Math.round(p.sub_start_d7) : 0,
+        subD7: p.sub_d7 != null ? Math.round(p.sub_d7) : 0,
+        cpaD7: p.cpa_d7 != null ? +p.cpa_d7.toFixed(2) : 0,
+      })),
+    [trend],
+  );
+
+  if (adapted.length === 0) {
+    return (
+      <GlassCard className="flex flex-col gap-2 p-6" data-testid="profile-trend-empty">
+        <h3 className="font-display text-md font-bold leading-none text-cloud-white">
+          Daily trend
+        </h3>
+        <p className="font-body text-xs text-[color:var(--text-muted)]">
+          No daily data points in the active window.
+        </p>
+      </GlassCard>
+    );
+  }
+
+  return <TrendChart trend={adapted} enterIndex={5} initialMetric="cpaD7" />;
+}
+
+const fmtMoney = (n: number) =>
+  n >= 1000 ? `$${Math.round(n).toLocaleString()}` : `$${n.toFixed(2)}`;
+const fmtCpi = (n: number) => `$${n.toFixed(2)}`;
+const pctOrNull = (frac: number | null): number | null =>
+  frac == null ? null : +(frac * 100).toFixed(1);
