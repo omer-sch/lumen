@@ -165,21 +165,43 @@ Dashboard / Campaigns / Ask / Reports / Feed / Knowledge
 
 ### Dashboard — daily home base
 
-The page you open every morning. Fast, scannable, personal over time.
+The page you open every morning. One route (`/dashboard`), three sub-tabs that scope the question you're asking. Switching tabs via the strip below the topbar updates `?tab=`; deep links land on the right tab.
 
-**What lives here:**
-- Global filter bar: date range picker (7d / 14d / 30d / 90d / custom) + client selector. This filter state is global and travels to Campaigns, Ask, and Reports.
-- KPI tiles (client-appropriate metric set; **for the GlobalComix pilot: Spend, Installs, CPA D7, ROI D7** -- swap to CPI / ROAS for performance / e-commerce clients). Count-up animations, delta vs previous period.
-- Trend chart with metric switcher: one chart, four metrics matching the KPI tiles above, toggle between them.
-- Channel mix: spend share across Meta, TikTok, Google, AppsFlyer.
-- Pinned tiles section: visualizations the user built in Ask and chose to keep. Persistent, personal, reorderable.
-- AI Mode toggle (see below).
+**Global filter bar.** Date range picker (7d / 14d / 30d / 90d / custom) + OS chip (Total / iOS / Android / Web) + Channels chip (multi-select Meta / Google / TikTok / ASA / AppLovin) + client selector. Filter state lives in the URL and travels across Campaigns, Ask, and Reports. The OS and Channels chips conditionally unmount per active tab (see Lifecycle below).
 
-**Two modes, toggled in the header:**
+**Three tabs:**
 
-"My Dashboard" is the default -- the curated view above. Static until you change it.
+#### Performance (default)
 
-"AI Dashboard" is a separate mode the user enters by choice. The AI looks at all available data, decides what is most important right now, chooses chart types and metrics, and builds the entire dashboard from zero. It rebuilds every time you enter it -- it is never static. Each tile the AI chose includes a brief "why I showed you this" explanation. The user cannot pin AI Mode tiles directly; they can ask to recreate a specific chart in Ask and pin it from there.
+The acquisition story. KPI strip (Spend / Installs / CPA D7 / Sub D7), TrendChart with metric switcher, NetworkBreakdown with color-coded scorecard cells, ChannelMix donut, CadenceTable (Daily / Weekly / Monthly toggle, URL-persisted as `?cadence=`), WeekendsVsWeekdays, PaybackCurve (D0 → D90).
+
+Date semantic: "Install cohorts opening in this window." A 7-day window will show `—` for Sub D7 on the last 6 days (cohort maturity gate).
+
+Filters active: all four chips.
+
+#### Lifecycle
+
+The subscriber state. SubscriberLifecycle card with KPI strip (New subs / Cancellations / Net Sub), OS mix bars (iOS / Android / Web — as a chart dimension, NOT a filter), and Net Sub Over Time (renders the full active window, never hardcoded).
+
+Date semantic: "Subscription events in this window" (`event_date BETWEEN from AND to` on `dwh_total_subs_globalcomix`).
+
+Filters active: Date + Client only. OS + Platform chips unmount from the topbar because lifecycle's data scope ignores them.
+
+#### Attribution
+
+The trust story. BCAC headline (single hero KpiCard, the tab's "at what cost"), PaidVsOrganic (Sub Total / Sub Paid / Sub Organic + share bar — the "what mix"), Coverage Warnings panel inlining the three open BQ-investigation questions (AppLovin pre-coverage 2026-05-05, SKAdNetwork stale, Pubmint missing spend), DataFreshnessBar.
+
+Date semantic: "Attribution data reported in this window."
+
+Filters active: all four chips.
+
+**Two modes, toggled in the header (across all tabs):**
+
+"My Dashboard" is the default -- the curated tab content above. Static until you change it.
+
+"AI Dashboard" is a separate mode the user enters by choice. The AI looks at all available data, decides what is most important right now, chooses chart types and metrics, and builds the entire dashboard from zero. It rebuilds every time you enter it -- it is never static. Each tile the AI chose includes a brief "why I showed you this" explanation. The user cannot pin AI Mode tiles directly; they can ask to recreate a specific chart in Ask and pin it from there. AI Mode is shared across tabs today; per-tab AI Mode is a future refinement.
+
+**Pinned tiles section** lives below the tab content, at the page level. Pins persist regardless of which tab you were on when you made them.
 
 **What does NOT live here:** campaign-level breakdown (that's Campaigns), NL query input (that's Ask), full reports (that's Reports), AI insight cards (that's Feed).
 
