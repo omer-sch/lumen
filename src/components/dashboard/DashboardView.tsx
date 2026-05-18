@@ -45,10 +45,10 @@ export function DashboardView() {
 }
 
 function DashboardInner() {
-  const { from, to, client, setCustomRange } = useGlobalFilters();
+  const { from, to, client, os, platforms, setCustomRange } = useGlobalFilters();
   const { mode } = useDashboardMode();
   const { data, loading, errors, bounds, windowEmpty, refetch } =
-    useDashboardData({ from, to, client });
+    useDashboardData({ from, to, client, os, platforms });
   const coverage = getClientCoverage(client);
   const supportedKpis = getSupportedKpis(client);
 

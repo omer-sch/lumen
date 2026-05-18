@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatKpi } from "@/lib/format";
 import { getClientApiBase } from "@/lib/mock/clients";
+import type { OsFilter, PlatformFilter } from "@/lib/filters/types";
 import type {
   BQTrendPoint,
   BQTrendPointByNetwork,
@@ -20,6 +21,12 @@ type Args = {
   to: Date;
   /** Client slug from `useGlobalFilters`. */
   client: string;
+  /** OS filter from `useGlobalFilters`. "total" omits the param so the
+   *  cache shape matches pre-filter-wiring entries on a fresh load. */
+  os: OsFilter;
+  /** Platform filter from `useGlobalFilters`. Empty array omits the param
+   *  for the same cache-continuity reason. */
+  platforms: PlatformFilter[];
 };
 
 /**
@@ -74,9 +81,19 @@ function isMultiSourceClient(slug: string): boolean {
  * arrays — the page renders the other tiles plus a `SectionError`
  * placeholder for the failed slot.
  */
-export function useDashboardData({ from, to, client }: Args): State {
+export function useDashboardData({
+  from,
+  to,
+  client,
+  os,
+  platforms,
+}: Args): State {
   const fromIso = toISODate(from);
   const toIso = toISODate(to);
+  // Stable identity for the platforms array - we want a refetch only when
+  // the actual values change, not when the user re-renders with a new
+  // array reference carrying the same contents.
+  const platformsKey = platforms.join(",");
 
   const [nonce, setNonce] = useState(0);
   const [state, setState] = useState<State>({
@@ -110,6 +127,12 @@ export function useDashboardData({ from, to, client }: Args): State {
     abortRef.current = ctrl;
 
     const qs = new URLSearchParams({ client, from: fromIso, to: toIso });
+    // Only non-default values land on the URL so cache entries from
+    // before the filter spine still hit on the first post-deploy load.
+    // The route's parseGlobalFilter() treats missing params as defaults.
+    if (os !== "total") qs.set("os", os);
+    if (platforms.length > 0) qs.set("platforms", platforms.join(","));
+    // data-bounds is client-only (no date / OS / platform filtering).
     const boundsQs = new URLSearchParams({ client });
     // Agent-strategy clients hit `/api/bq/*`; lumen-union clients (100play,
     // …) route through `/api/bq/<slug>/*` so the per-client query module is
@@ -200,9 +223,11 @@ export function useDashboardData({ from, to, client }: Args): State {
 
     return () => ctrl.abort();
     // We don't include `from`/`to` Date objects directly — their ISO strings
-    // are the stable identity that should trigger a refetch.
+    // are the stable identity that should trigger a refetch. `platformsKey`
+    // (= platforms.join(",")) avoids a re-fetch on every render that builds
+    // a new array reference with the same contents.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, fromIso, toIso, nonce, refetch]);
+  }, [client, fromIso, toIso, os, platformsKey, nonce, refetch]);
 
   return state;
 }
