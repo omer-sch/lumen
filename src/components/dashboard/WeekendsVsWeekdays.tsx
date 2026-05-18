@@ -4,7 +4,24 @@ import { useEffect, useState } from "react";
 
 import { GlassCard } from "@/components/ui/GlassCard";
 import { WeekendsVsWeekdaysSkeleton } from "@/components/ui/Skeleton";
+import { cellTone, type CellTone } from "@/lib/dashboard/cell-tone";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
+
+/** Soft cell-tone tint matching CadenceTable's helper. Kept inline here
+ *  rather than imported because it's tiny + the two tables can drift
+ *  independently if a future iteration wants different tint strengths. */
+function toneBackground(tone: CellTone): string {
+  switch (tone) {
+    case "good":
+      return "color-mix(in oklab, var(--color-ua) 10%, transparent)";
+    case "bad":
+      return "color-mix(in oklab, var(--color-creative) 10%, transparent)";
+    case "warn":
+      return "color-mix(in oklab, var(--color-yellow) 8%, transparent)";
+    default:
+      return "transparent";
+  }
+}
 
 type WeekendsRow = {
   bucket: "weekday" | "weekend";
@@ -94,35 +111,63 @@ export function WeekendsVsWeekdays() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr
-                key={r.bucket}
-                className="border-t"
-                style={{ borderColor: "var(--border-subtle)" }}
-              >
-                <td className="py-2 pr-3 font-medium text-[color:var(--text-primary)]">
-                  {r.bucket === "weekend" ? "Weekend" : "Weekday"}
-                </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
-                  {fmtMoney(r.spend)}
-                </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
-                  {fmtCount(r.installs)}
-                </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
-                  {fmtCount(r.sub_d7)}
-                </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
-                  {fmtMoney(r.cpa_d7)}
-                </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
-                  {fmtRoi(r.roi_d7)}
-                </td>
-                <td className="py-2 text-right tabular-nums text-[color:var(--text-secondary)]">
-                  {fmtRatio(r.install_cvr)}
-                </td>
-              </tr>
-            ))}
+            {rows.map((r) => {
+              // In a 2-row weekday-vs-weekend table, each row IS the
+              // other's baseline. Find the other row to use as the
+              // comparison anchor; if only one row exists (degenerate),
+              // neutral the tone so we don't pretend to compare nothing.
+              const other = rows.find((x) => x.bucket !== r.bucket);
+              const cpaTone = other
+                ? cellTone(r.cpa_d7, other.cpa_d7, "lower-better")
+                : "neutral";
+              const roiTone = other
+                ? cellTone(r.roi_d7, other.roi_d7, "higher-better")
+                : "neutral";
+              const cvrTone = other
+                ? cellTone(r.install_cvr, other.install_cvr, "higher-better")
+                : "neutral";
+              return (
+                <tr
+                  key={r.bucket}
+                  className="group border-t transition-colors hover:bg-[color-mix(in_oklab,var(--color-ua)_6%,transparent)]"
+                  style={{ borderColor: "var(--border-subtle)" }}
+                >
+                  <td className="py-2 pr-3 font-medium text-[color:var(--text-primary)]">
+                    {r.bucket === "weekend" ? "Weekend" : "Weekday"}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
+                    {fmtMoney(r.spend)}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
+                    {fmtCount(r.installs)}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-secondary)]">
+                    {fmtCount(r.sub_d7)}
+                  </td>
+                  <td
+                    className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-primary)] transition-colors"
+                    style={{ background: toneBackground(cpaTone) }}
+                    title={other ? `CPA D7 vs the other bucket` : undefined}
+                  >
+                    {fmtMoney(r.cpa_d7)}
+                  </td>
+                  <td
+                    className="py-2 pr-3 text-right tabular-nums text-[color:var(--text-primary)] transition-colors"
+                    style={{ background: toneBackground(roiTone) }}
+                    title={other ? `ROI D7 vs the other bucket` : undefined}
+                  >
+                    {fmtRoi(r.roi_d7)}
+                  </td>
+                  <td
+                    className="py-2 text-right tabular-nums text-[color:var(--text-primary)] transition-colors"
+                    style={{ background: toneBackground(cvrTone) }}
+                    title={other ? `Install CVR vs the other bucket` : undefined}
+                  >
+                    {fmtRatio(r.install_cvr)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         <SpendBars rows={rows} totalSpend={totalSpend} />
