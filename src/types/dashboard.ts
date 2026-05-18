@@ -372,6 +372,16 @@ export type CampaignRow = {
   campaign_id: string;
   campaign_name: string;
   network: string;
+  /**
+   * Adjust-side campaign state ("running" / "paused"). Optional+null
+   * mirrors the cohort-field pattern below: missing when the source
+   * table doesn't expose the column, when the campaign was dropped from
+   * Adjust between sync cycles, or for gaming-vocab clients whose spend
+   * tables don't carry the column. The status pill on the campaigns
+   * row renders mint LivePulse for "running", muted for "paused", and
+   * a neutral chip otherwise.
+   */
+  campaign_status?: string | null;
   spend: number;
   installs: number;
   cpi: number;

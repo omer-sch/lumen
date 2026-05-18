@@ -100,6 +100,24 @@ const CAMPAIGN_NAME_COLUMN_BY_TABLE: Record<string, string> = {
 };
 
 /**
+ * Per-table expression for `campaign_status` ("running" / "paused"). Every
+ * Adjust-sourced spend table carries this column under the same name —
+ * the map is here for symmetry with the name map and to leave a clean
+ * extension point if a future onboarded source uses a different label.
+ *
+ * Tables not in the map fall back to `CAST(NULL AS STRING) AS
+ * campaign_status` so the SQL still parses, leaving the renderer to
+ * print "—" instead of breaking the page.
+ */
+const CAMPAIGN_STATUS_COLUMN_BY_TABLE: Record<string, string> = {
+  dwh_apple_globalcomix_adjust: "campaign_status",
+  dwh_google_ads_globalcomix_adjust: "campaign_status",
+  dwh_tik_tok_globalcomix_adjust: "campaign_status",
+  dwh_applovin_globalcomix_adjust: "campaign_status",
+  dwh_fb2_globalcomix_adjust: "campaign_status",
+};
+
+/**
  * Filter options threaded through the SQL builder by WS6's global filter
  * spine. `os` narrows to a single platform; `platforms` narrows to a
  * subset of networks (empty means all). Each spend source emits its OS
@@ -159,6 +177,9 @@ function buildSpendSubquery(
       const campaignNameExpr =
         CAMPAIGN_NAME_COLUMN_BY_TABLE[src.table] ??
         "CAST(NULL AS STRING) AS campaign_name";
+      const campaignStatusExpr =
+        CAMPAIGN_STATUS_COLUMN_BY_TABLE[src.table] ??
+        "CAST(NULL AS STRING) AS campaign_status";
 
       // OS predicate per the source's osStrategy. When os = total no
       // predicate is emitted (the leg participates in full).
@@ -192,7 +213,8 @@ function buildSpendSubquery(
         impressions,
         COALESCE(num_ftd7, 0) AS ftd_d7,
         campaign_id,
-        ${campaignNameExpr}
+        ${campaignNameExpr},
+        ${campaignStatusExpr}
       FROM ${fq}
       WHERE (${dedupe})${osPredicate}`;
     });
@@ -209,7 +231,8 @@ function buildSpendSubquery(
       CAST(0 AS INT64) AS impressions,
       CAST(0 AS INT64) AS ftd_d7,
       CAST(NULL AS STRING) AS campaign_id,
-      CAST(NULL AS STRING) AS campaign_name
+      CAST(NULL AS STRING) AS campaign_name,
+      CAST(NULL AS STRING) AS campaign_status
     WHERE FALSE)`;
   }
 
@@ -1204,6 +1227,7 @@ async function _queryGlobalComixCampaigns(
         campaign_id,
         ANY_VALUE(campaign_name) AS campaign_name_raw,
         ANY_VALUE(network) AS network,
+        ANY_VALUE(campaign_status) AS campaign_status,
         SUM(cost_usd) AS spend,
         SUM(installs) AS installs
       FROM ${spendSub}
@@ -1236,6 +1260,7 @@ async function _queryGlobalComixCampaigns(
       c.campaign_id,
       COALESCE(c.campaign_name_raw, c.campaign_id) AS campaign_name,
       c.network,
+      c.campaign_status,
       c.spend,
       c.installs,
       SAFE_DIVIDE(c.spend, NULLIF(c.installs, 0))               AS cpi,
@@ -1262,6 +1287,9 @@ async function _queryGlobalComixCampaigns(
     campaign_id: String(r.campaign_id ?? ""),
     campaign_name: String(r.campaign_name ?? ""),
     network: String(r.network ?? ""),
+    // `campaign_status` is "running" / "paused" from Adjust. Tables that
+    // don't expose the column resolve to NULL → renderer prints "—".
+    campaign_status: r.campaign_status == null ? null : String(r.campaign_status),
     spend: numberish(r.spend),
     installs: numberish(r.installs),
     cpi: numberish(r.cpi),

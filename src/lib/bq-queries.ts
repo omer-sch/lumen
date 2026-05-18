@@ -327,6 +327,10 @@ async function _queryCampaigns(
     campaign_id: String(r.campaign_id ?? ""),
     campaign_name: String(r.campaign_name ?? ""),
     network: normalizeNetwork(String(r.network ?? "")),
+    // Gaming-vocab clients don't carry an Adjust-side status column —
+    // their spend tables are agent-dataset shaped, not Adjust-shaped.
+    // Renderer prints "—" in place of the status pill.
+    campaign_status: null,
     spend: numberish(r.spend),
     installs: numberish(r.installs),
     cpi: numberish(r.cpi),
