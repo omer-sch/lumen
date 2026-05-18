@@ -38,6 +38,7 @@ describe("GET /api/bq/trend", () => {
       "globalcomix",
       "2026-04-15",
       "2026-05-14",
+      {},
     );
   });
 

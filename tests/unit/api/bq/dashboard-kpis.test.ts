@@ -59,6 +59,7 @@ describe("GET /api/bq/dashboard-kpis", () => {
       "globalcomix",
       "2026-04-15",
       "2026-05-14",
+      {},
     );
   });
 

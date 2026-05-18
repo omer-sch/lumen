@@ -3,6 +3,13 @@
 import { useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import {
+  isOsFilter,
+  isPlatformFilter,
+  type OsFilter,
+  type PlatformFilter,
+} from "@/lib/filters/types";
+
 export type DateRangePreset = "7d" | "14d" | "30d" | "90d" | "custom";
 
 export interface GlobalFilters {
@@ -13,6 +20,10 @@ export interface GlobalFilters {
   to: Date;
   /** Client slug — always a specific live BQ client. */
   client: string;
+  /** OS filter (WS6). Default "total" — no OS predicate applied. */
+  os: OsFilter;
+  /** Platform filter (WS6). Empty array means "all platforms" — no filter. */
+  platforms: PlatformFilter[];
 }
 
 const DEFAULT_CLIENT = "globalcomix";
@@ -82,13 +93,18 @@ export function useGlobalFilters() {
   const fromParam = params.get("from");
   const toParam = params.get("to");
   const clientParam = params.get("client");
+  const osParam = params.get("os");
+  const platformsParam = params.get("platforms");
 
   const filters: GlobalFilters = useMemo(() => {
     const range: DateRangePreset = isPreset(rangeParam) ? rangeParam : "30d";
     const client = clientParam ?? DEFAULT_CLIENT;
     const { from, to } = resolveRange(range, fromParam, toParam);
-    return { range, from, to, client };
-  }, [rangeParam, fromParam, toParam, clientParam]);
+    const osCandidate = osParam?.trim().toLowerCase() ?? "";
+    const os: OsFilter = isOsFilter(osCandidate) ? osCandidate : "total";
+    const platforms = parsePlatforms(platformsParam);
+    return { range, from, to, client, os, platforms };
+  }, [rangeParam, fromParam, toParam, clientParam, osParam, platformsParam]);
 
   const replaceWith = useCallback(
     (mutate: (sp: URLSearchParams) => void) => {
@@ -139,7 +155,44 @@ export function useGlobalFilters() {
     [replaceWith],
   );
 
-  return { ...filters, setRange, setCustomRange, setClient };
+  const setOs = useCallback(
+    (os: OsFilter) => {
+      replaceWith((sp) => {
+        // "total" is the default — omit it from the URL so deep links stay clean.
+        if (os === "total") sp.delete("os");
+        else sp.set("os", os);
+      });
+    },
+    [replaceWith],
+  );
+
+  const setPlatforms = useCallback(
+    (platforms: PlatformFilter[]) => {
+      replaceWith((sp) => {
+        // Empty array means "all platforms" — omit from URL.
+        if (platforms.length === 0) sp.delete("platforms");
+        // Deduplicate + sort so the URL is canonical regardless of click order.
+        else sp.set("platforms", [...new Set(platforms)].sort().join(","));
+      });
+    },
+    [replaceWith],
+  );
+
+  return { ...filters, setRange, setCustomRange, setClient, setOs, setPlatforms };
+}
+
+/**
+ * Parse the comma-separated platforms query param. Unknown tokens are
+ * dropped silently — keeps a garbage URL from breaking the dashboard.
+ */
+function parsePlatforms(raw: string | null): PlatformFilter[] {
+  if (!raw) return [];
+  const out: PlatformFilter[] = [];
+  for (const token of raw.split(",")) {
+    const t = token.trim().toLowerCase();
+    if (isPlatformFilter(t) && !out.includes(t)) out.push(t);
+  }
+  return out;
 }
 
 /** Returns the inclusive day count of the active window. */

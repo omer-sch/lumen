@@ -3,6 +3,8 @@ import "server-only";
 import { withRedisCache } from "@/lib/cache/with-redis-cache";
 import { getBigQueryClient } from "@/lib/bq";
 import { getMultiSourceConfig, qualifyTable } from "@/lib/bq-security";
+import { osSqlPredicate } from "@/lib/analyst/campaign-classifier";
+import type { OsFilter, PlatformFilter } from "@/lib/filters/types";
 import type {
   BQTrendPointByNetwork,
   CampaignRow,
@@ -42,6 +44,17 @@ const BQ_LOCATION = "US";
 
 const FROM = "@from";
 const TO = "@to";
+
+/**
+ * WS6 — Global filter inputs threaded through every public query. The
+ * shape matches the URL state in `useGlobalFilters`. Both fields are
+ * optional with conservative defaults so existing call sites pass-through
+ * without change.
+ */
+export type GlobalComixFilter = {
+  os?: OsFilter;
+  platforms?: PlatformFilter[];
+};
 
 // ── Reusable subqueries ─────────────────────────────────────────────────────
 
@@ -86,11 +99,57 @@ const CAMPAIGN_NAME_COLUMN_BY_TABLE: Record<string, string> = {
   dwh_fb2_globalcomix_adjust: "campagin_name AS campaign_name",
 };
 
-function buildSpendSubquery(client: string): string {
+/**
+ * Filter options threaded through the SQL builder by WS6's global filter
+ * spine. `os` narrows to a single platform; `platforms` narrows to a
+ * subset of networks (empty means all). Each spend source emits its OS
+ * predicate per its osStrategy:
+ *
+ *   - "column":         WHERE LOWER(os) = '<os>'
+ *   - "campaign_name":  REGEXP_CONTAINS on the campaign-name token
+ *   - "implicit_ios":   leg included only when os ∈ {ios, total};
+ *                       otherwise replaced with WHERE FALSE to zero out.
+ *   - "none":           leg included only when os = total.
+ *
+ * The platforms filter, when non-empty, drops legs whose `network` label
+ * isn't in the set. Empty means no platform filtering.
+ */
+export type SpendSubqueryOptions = {
+  os?: OsFilter;
+  platforms?: PlatformFilter[];
+};
+
+// Display label -> IntentChannel slug. Keep in sync with
+// BQ_NETWORK_NAMES_FOR_CHANNEL in src/lib/agents/hermes/snapshot.ts.
+const NETWORK_TO_CHANNEL: Record<string, PlatformFilter> = {
+  Meta: "meta",
+  Google: "google",
+  TikTok: "tiktok",
+  "Apple Search Ads": "apple_search_ads",
+  AppLovin: "applovin",
+};
+
+function buildSpendSubquery(
+  client: string,
+  opts: SpendSubqueryOptions = {},
+): string {
   const cfg = getMultiSourceConfig(client);
   const dedupe = cfg.spendDedupePredicate;
+  const os: OsFilter = opts.os ?? "total";
+  const platformSet =
+    opts.platforms && opts.platforms.length > 0
+      ? new Set(opts.platforms)
+      : null;
 
   const legs = cfg.spendSources
+    .filter((src) => {
+      // Platform filter: drop legs not in the requested set.
+      if (platformSet) {
+        const slug = NETWORK_TO_CHANNEL[src.network];
+        if (!slug || !platformSet.has(slug)) return false;
+      }
+      return true;
+    })
     .map((src) => {
       const fq = qualifyTable(src.table);
       // Resolve the campaign_name column expression for this source.
@@ -100,10 +159,30 @@ function buildSpendSubquery(client: string): string {
       const campaignNameExpr =
         CAMPAIGN_NAME_COLUMN_BY_TABLE[src.table] ??
         "CAST(NULL AS STRING) AS campaign_name";
-      // Every source carries clicks, impressions, num_ftd7 on the `No
-      // Breakdown` slice — pulled here so the unified subquery feeds the
-      // engagement KPI tiles (CTR, CPM, CPC) and the FTD column on the
-      // network table without a second pass over the warehouse.
+
+      // OS predicate per the source's osStrategy. When os = total no
+      // predicate is emitted (the leg participates in full).
+      let osPredicate = "";
+      if (os !== "total") {
+        switch (src.osStrategy) {
+          case "column":
+            osPredicate = ` AND LOWER(os) = '${os}'`;
+            break;
+          case "campaign_name":
+            osPredicate = ` AND ${osSqlPredicate(os, CAMPAIGN_NAME_COLUMN_BY_TABLE[src.table]?.includes("AS") ? "campagin_name" : "campaign_name")}`;
+            break;
+          case "implicit_ios":
+            // iOS-only source. Include the leg when os = ios, zero it out otherwise.
+            if (os !== "ios") osPredicate = " AND FALSE";
+            break;
+          case "none":
+            // No OS dimension reachable. Suppress the leg entirely when
+            // os != total (already handled above by the outer check).
+            osPredicate = " AND FALSE";
+            break;
+        }
+      }
+
       return `SELECT
         date,
         '${src.network}' AS network,
@@ -115,11 +194,26 @@ function buildSpendSubquery(client: string): string {
         campaign_id,
         ${campaignNameExpr}
       FROM ${fq}
-      WHERE (${dedupe})`;
-    })
-    .join("\n      UNION ALL\n      ");
+      WHERE (${dedupe})${osPredicate}`;
+    });
 
-  return `(${legs})`;
+  // If the platform filter dropped every leg, emit a 0-row placeholder
+  // so the outer query still parses + returns no rows.
+  if (legs.length === 0) {
+    return `(SELECT
+      DATE '1970-01-01' AS date,
+      CAST(NULL AS STRING) AS network,
+      CAST(0 AS NUMERIC) AS cost_usd,
+      CAST(0 AS INT64) AS installs,
+      CAST(0 AS INT64) AS clicks,
+      CAST(0 AS INT64) AS impressions,
+      CAST(0 AS INT64) AS ftd_d7,
+      CAST(NULL AS STRING) AS campaign_id,
+      CAST(NULL AS STRING) AS campaign_name
+    WHERE FALSE)`;
+  }
+
+  return `(${legs.join("\n      UNION ALL\n      ")})`;
 }
 
 /**
@@ -155,6 +249,10 @@ export type CohortSubqueryOptions = {
    *  false — paid-only, matching the historical KPI / Trend behavior.
    *  Set true for the Paid-vs-Organic strip and any BCAC-style total. */
   includeOrganic?: boolean;
+  /** WS6 OS filter. Default "total" = no predicate. */
+  os?: OsFilter;
+  /** WS6 platform filter. Empty / undefined = all networks. */
+  platforms?: PlatformFilter[];
 };
 
 /**
@@ -189,6 +287,11 @@ export function buildCohortSubquery(
 
   const groupBy = opts.groupBy ?? ["date", "network"];
   const includeOrganic = opts.includeOrganic ?? false;
+  const os: OsFilter = opts.os ?? "total";
+  const platformSet =
+    opts.platforms && opts.platforms.length > 0
+      ? new Set(opts.platforms)
+      : null;
 
   // Each dimension renders as a `<projection> AS <output_name>` pair.
   // Order matters: the outer `GROUP BY` echoes positional indices.
@@ -261,6 +364,19 @@ export function buildCohortSubquery(
           .join(", ")}`
       : "";
 
+  // WS6 OS predicate: cohort table has _OS_name populated reliably so the
+  // filter applies directly.
+  const osPredicateSql = os === "total" ? "" : ` AND LOWER(_OS_name) = '${os}'`;
+
+  // WS6 platform predicate: filter the CASE-normalized `network` value
+  // post-grouping is awkward; instead we filter on the raw
+  // _Network_Attribution strings BEFORE the CASE so the leg never enters
+  // the aggregate. Build the IN list from the canonical attribution
+  // strings for each requested platform.
+  const platformPredicateSql = platformSet
+    ? ` AND (${cohortAttributionPredicate(platformSet, includeOrganic)})`
+    : "";
+
   // Always-on metric aggregates. Adding a new metric here is intentionally
   // global: every cohort caller sees it. Costs are paid in BQ bytes
   // scanned, not query latency on this scale.
@@ -288,9 +404,65 @@ ${dimensionsBlock}${dimensionsBlock ? "," : ""}
       SUM(COALESCE(_7D_Cohort_Size, 0))                 AS cohort_d7
     FROM ${fq}
     WHERE _Day_Date IS NOT NULL
-      AND NOT (_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios')
+      AND NOT (_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios')${osPredicateSql}${platformPredicateSql}
 ${groupByBlock}
   )`;
+}
+
+/**
+ * Helper used by the cached exports: only include `os` / `platforms` in
+ * the params object when they're at non-default values. Keeps the cache
+ * key identical to pre-WS6 for the headline (os=total, platforms=[])
+ * case so existing warm cache survives the rollout.
+ */
+function withFilterParams<T extends Record<string, unknown>>(
+  base: T,
+  filter: { os?: OsFilter; platforms?: PlatformFilter[] },
+): T & { os?: OsFilter; platforms?: PlatformFilter[] } {
+  const out: T & { os?: OsFilter; platforms?: PlatformFilter[] } = { ...base };
+  if (filter.os && filter.os !== "total") out.os = filter.os;
+  if (filter.platforms && filter.platforms.length > 0)
+    out.platforms = [...filter.platforms].sort();
+  return out;
+}
+
+/**
+ * Build a SQL predicate that restricts cohort rows to the requested
+ * platform set by listing the canonical _Network_Attribution strings
+ * the WS1.B CASE block maps for each network. Source of truth is the
+ * CASE itself: any future attribution string needs to land in both
+ * places.
+ */
+function cohortAttributionPredicate(
+  platforms: Set<PlatformFilter>,
+  includeOrganic: boolean,
+): string {
+  const clauses: string[] = [];
+  if (platforms.has("meta")) {
+    clauses.push(
+      "_Network_Attribution IN ('Facebook Installs', 'Instagram Installs', 'Off-Facebook Installs')",
+    );
+  }
+  if (platforms.has("google")) {
+    clauses.push("_Network_Attribution LIKE 'Google Ads%'");
+  }
+  if (platforms.has("tiktok")) {
+    clauses.push("_Network_Attribution = 'TikTok SAN'");
+  }
+  if (platforms.has("apple_search_ads")) {
+    clauses.push("_Network_Attribution = 'Apple Search Ads'");
+  }
+  if (platforms.has("applovin")) {
+    clauses.push(
+      "_Network_Attribution IN ('Axon by AppLovin Android', 'Axon by AppLovin iOS')",
+    );
+  }
+  if (includeOrganic) {
+    clauses.push(
+      "_Network_Attribution IN ('Organic', 'Google Organic Search', 'Untrusted Devices')",
+    );
+  }
+  return clauses.length > 0 ? clauses.join(" OR ") : "FALSE";
 }
 
 // ── KPI totals + period-over-period deltas ─────────────────────────────────
@@ -299,9 +471,10 @@ async function _queryGlobalComixKPIs(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<KPIData> {
-  const spendSub = buildSpendSubquery(client);
-  const cohortSub = buildCohortSubquery(client);
+  const spendSub = buildSpendSubquery(client, filter);
+  const cohortSub = buildCohortSubquery(client, filter);
   const bq = getBigQueryClient();
 
   // Two periods, one CTE each per side: raw spend aggregates + cohort
@@ -576,9 +749,10 @@ async function _queryGlobalComixTrend(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<BQTrendPointByNetwork[]> {
-  const spendSub = buildSpendSubquery(client);
-  const cohortSub = buildCohortSubquery(client);
+  const spendSub = buildSpendSubquery(client, filter);
+  const cohortSub = buildCohortSubquery(client, filter);
   const bq = getBigQueryClient();
 
   // Per-(date, network) grain — the chart draws one line per ad network
@@ -716,8 +890,9 @@ async function _queryGlobalComixChannelMix(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<ChannelBreakdown[]> {
-  const spendSub = buildSpendSubquery(client);
+  const spendSub = buildSpendSubquery(client, filter);
   const bq = getBigQueryClient();
 
   const query = `
@@ -768,9 +943,10 @@ async function _queryGlobalComixNetworkBreakdown(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<NetworkRow[]> {
-  const spendSub = buildSpendSubquery(client);
-  const cohortSub = buildCohortSubquery(client);
+  const spendSub = buildSpendSubquery(client, filter);
+  const cohortSub = buildCohortSubquery(client, filter);
   const bq = getBigQueryClient();
 
   // Two trailing CTEs (spend_trailing, rev_trailing) cover the 30 days
@@ -932,9 +1108,10 @@ async function _queryGlobalComixPayback(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<PaybackPoint[]> {
-  const spendSub = buildSpendSubquery(client);
-  const cohortSub = buildCohortSubquery(client);
+  const spendSub = buildSpendSubquery(client, filter);
+  const cohortSub = buildCohortSubquery(client, filter);
   const bq = getBigQueryClient();
 
   const query = `
@@ -993,8 +1170,9 @@ async function _queryGlobalComixCampaigns(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<CampaignRow[]> {
-  const spendSub = buildSpendSubquery(client);
+  const spendSub = buildSpendSubquery(client, filter);
   const cfg = getMultiSourceConfig(client);
   const cohortTable = qualifyTable(cfg.cohortTable);
   const bq = getBigQueryClient();
@@ -1168,9 +1346,10 @@ async function _queryGlobalComixWeekends(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<WeekendsRow[]> {
-  const spendSub = buildSpendSubquery(client);
-  const cohortSub = buildCohortSubquery(client);
+  const spendSub = buildSpendSubquery(client, filter);
+  const cohortSub = buildCohortSubquery(client, filter);
   const bq = getBigQueryClient();
 
   // EXTRACT(DAYOFWEEK FROM ...) returns 1=Sunday, 7=Saturday in BQ.
@@ -1255,10 +1434,13 @@ async function _queryGlobalComixGeo(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<GeoRow[]> {
   const cohortSub = buildCohortSubquery(client, {
     groupBy: ["country", "network"],
     includeOrganic: true,
+    os: filter.os,
+    platforms: filter.platforms,
   });
   const bq = getBigQueryClient();
 
@@ -1330,9 +1512,12 @@ async function _queryGlobalComixCreatives(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<CreativeRow[]> {
   const cohortSub = buildCohortSubquery(client, {
     groupBy: ["ad_id", "creative", "network"],
+    os: filter.os,
+    platforms: filter.platforms,
   });
   const bq = getBigQueryClient();
 
@@ -1408,8 +1593,9 @@ async function _queryGlobalComixAttributionValidation(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<AttributionValidationRow[]> {
-  void client;
+  void filter;
   const cohortSub = buildCohortSubquery(client, {
     groupBy: ["date", "network", "os"],
   });
@@ -1544,90 +1730,96 @@ export const queryGlobalComixKPIs = (
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ) =>
   withRedisCache(
     {
       client,
       query: "kpis",
-      params: { from, to },
+      params: withFilterParams({ from, to }, filter),
       ttlSeconds: DASHBOARD_TTL_S,
     },
-    () => _queryGlobalComixKPIs(client, from, to),
+    () => _queryGlobalComixKPIs(client, from, to, filter),
   );
 
 export const queryGlobalComixTrend = (
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ) =>
   withRedisCache(
     {
       client,
       query: "trend",
-      params: { from, to },
+      params: withFilterParams({ from, to }, filter),
       ttlSeconds: DASHBOARD_TTL_S,
     },
-    () => _queryGlobalComixTrend(client, from, to),
+    () => _queryGlobalComixTrend(client, from, to, filter),
   );
 
 export const queryGlobalComixChannelMix = (
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ) =>
   withRedisCache(
     {
       client,
       query: "channel-mix",
-      params: { from, to },
+      params: withFilterParams({ from, to }, filter),
       ttlSeconds: DASHBOARD_TTL_S,
     },
-    () => _queryGlobalComixChannelMix(client, from, to),
+    () => _queryGlobalComixChannelMix(client, from, to, filter),
   );
 
 export const queryGlobalComixNetworkBreakdown = (
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ) =>
   withRedisCache(
     {
       client,
       query: "network-breakdown",
-      params: { from, to },
+      params: withFilterParams({ from, to }, filter),
       ttlSeconds: DASHBOARD_TTL_S,
     },
-    () => _queryGlobalComixNetworkBreakdown(client, from, to),
+    () => _queryGlobalComixNetworkBreakdown(client, from, to, filter),
   );
 
 export const queryGlobalComixPayback = (
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ) =>
   withRedisCache(
     {
       client,
       query: "payback",
-      params: { from, to },
+      params: withFilterParams({ from, to }, filter),
       ttlSeconds: DASHBOARD_TTL_S,
     },
-    () => _queryGlobalComixPayback(client, from, to),
+    () => _queryGlobalComixPayback(client, from, to, filter),
   );
 
 export const queryGlobalComixCampaigns = (
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ) =>
   withRedisCache(
     {
       client,
       query: "campaigns",
-      params: { from, to },
+      params: withFilterParams({ from, to }, filter),
       ttlSeconds: DASHBOARD_TTL_S,
     },
-    () => _queryGlobalComixCampaigns(client, from, to),
+    () => _queryGlobalComixCampaigns(client, from, to, filter),
   );
 
 export const queryGlobalComixDataBounds = (client: string) =>
@@ -1654,60 +1846,64 @@ export const queryGlobalComixWeekends = (
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ) =>
   withRedisCache(
     {
       client,
       query: "weekends",
-      params: { from, to },
+      params: withFilterParams({ from, to }, filter),
       ttlSeconds: DASHBOARD_TTL_S,
     },
-    () => _queryGlobalComixWeekends(client, from, to),
+    () => _queryGlobalComixWeekends(client, from, to, filter),
   );
 
 export const queryGlobalComixGeo = (
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ) =>
   withRedisCache(
     {
       client,
       query: "geo",
-      params: { from, to },
+      params: withFilterParams({ from, to }, filter),
       ttlSeconds: DASHBOARD_TTL_S,
     },
-    () => _queryGlobalComixGeo(client, from, to),
+    () => _queryGlobalComixGeo(client, from, to, filter),
   );
 
 export const queryGlobalComixCreatives = (
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ) =>
   withRedisCache(
     {
       client,
       query: "creatives",
-      params: { from, to },
+      params: withFilterParams({ from, to }, filter),
       ttlSeconds: DASHBOARD_TTL_S,
     },
-    () => _queryGlobalComixCreatives(client, from, to),
+    () => _queryGlobalComixCreatives(client, from, to, filter),
   );
 
 export const queryGlobalComixAttributionValidation = (
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ) =>
   withRedisCache(
     {
       client,
       query: "attribution-validation",
-      params: { from, to },
+      params: withFilterParams({ from, to }, filter),
       ttlSeconds: DASHBOARD_TTL_S,
     },
-    () => _queryGlobalComixAttributionValidation(client, from, to),
+    () => _queryGlobalComixAttributionValidation(client, from, to, filter),
   );
 
 // Not Redis-cached on purpose — see the header comment above. The outer

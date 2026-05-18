@@ -782,3 +782,147 @@ describe("WS5 ANALYST_QUERY_IDS registrations", () => {
     expect(ANALYST_QUERY_IDS.ATTRIBUTION_VALIDATION).toBe("attribution-validation");
   });
 });
+
+// ── WS6 — buildSpendSubquery OS / platform predicates ─────────────────────
+describe("buildSpendSubquery: OS predicate per source.osStrategy", () => {
+  it("os='total' emits no OS predicate on any leg", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixKPIs("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // No `LOWER(os) = ...` and no REGEXP_CONTAINS over campaign_name for OS.
+    expect(query).not.toMatch(/LOWER\(os\)\s*=/);
+    expect(query).not.toMatch(/REGEXP_CONTAINS\(LOWER\(campaign_name\)/);
+  });
+
+  it("os='ios' emits LOWER(os)='ios' on column-strategy sources (Meta, AppLovin)", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixKPIs("globalcomix", FROM, TO, { os: "ios" });
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toMatch(/LOWER\(os\)\s*=\s*'ios'/);
+  });
+
+  it("os='ios' emits REGEXP_CONTAINS on campaign_name for the campaign_name-strategy sources (Google, TikTok)", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixKPIs("globalcomix", FROM, TO, { os: "ios" });
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // The classifier predicate uses (^|[_-])ios([_-]|$).
+    expect(query).toMatch(
+      /REGEXP_CONTAINS\(LOWER\(campaign_name\), r'\(\^\|\[_-\]\)ios\(\[_-\]\|\$\)'\)/,
+    );
+  });
+
+  it("os='android' zeros the implicit_ios Apple leg via WHERE FALSE", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixKPIs("globalcomix", FROM, TO, { os: "android" });
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // The Apple leg's WHERE should contain AND FALSE so it contributes 0 rows.
+    // Pattern: dwh_apple_globalcomix_adjust + breakdown filter + AND FALSE
+    expect(query).toMatch(
+      /dwh_apple_globalcomix_adjust[\s\S]*?WHERE \(breakdown_type = 'No Breakdown'\) AND FALSE/,
+    );
+  });
+
+  it("platforms filter drops legs whose network slug isn't in the set", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixKPIs("globalcomix", FROM, TO, { platforms: ["meta"] });
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toContain("dwh_fb2_globalcomix_adjust");
+    expect(query).not.toContain("dwh_google_ads_globalcomix_adjust");
+    expect(query).not.toContain("dwh_tik_tok_globalcomix_adjust");
+    expect(query).not.toContain("dwh_apple_globalcomix_adjust");
+    expect(query).not.toContain("dwh_applovin_globalcomix_adjust");
+  });
+
+  it("cohort side gains LOWER(_OS_name) when OS != total", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixKPIs("globalcomix", FROM, TO, { os: "android" });
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toMatch(/LOWER\(_OS_name\)\s*=\s*'android'/);
+  });
+
+  it("cohort side filters attribution strings when platforms is non-empty", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixKPIs("globalcomix", FROM, TO, {
+      platforms: ["meta", "google"],
+    });
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // The cohort WHERE picks up the meta + google attribution predicates.
+    // Both strings already appear in the CASE block above, so the assertion
+    // pins the predicate's UNION form via the OR concatenation the
+    // cohortAttributionPredicate emits.
+    expect(query).toMatch(
+      /_Network_Attribution IN \('Facebook Installs', 'Instagram Installs', 'Off-Facebook Installs'\) OR _Network_Attribution LIKE 'Google Ads%'/,
+    );
+  });
+});
+
+// ── WS6 — Cache key continuity for the default filter ─────────────────────
+describe("Cache-key continuity at the default filter state", () => {
+  it("(os=total, platforms=[]) yields the same paramHash as the pre-WS6 call", async () => {
+    const mod = await import("@/lib/globalcomix-queries");
+    queryFn.mockResolvedValue([[]]);
+
+    cacheCalls.length = 0;
+    await mod.queryGlobalComixKPIs("globalcomix", FROM, TO);
+    const noFilterHash = paramHash(cacheCalls[0].params);
+
+    cacheCalls.length = 0;
+    await mod.queryGlobalComixKPIs("globalcomix", FROM, TO, {
+      os: "total",
+      platforms: [],
+    });
+    const explicitDefaultHash = paramHash(cacheCalls[0].params);
+
+    expect(explicitDefaultHash).toBe(noFilterHash);
+  });
+
+  it("non-default filters produce a different cache key", async () => {
+    const mod = await import("@/lib/globalcomix-queries");
+    queryFn.mockResolvedValue([[]]);
+
+    cacheCalls.length = 0;
+    await mod.queryGlobalComixKPIs("globalcomix", FROM, TO);
+    const defaultHash = paramHash(cacheCalls[0].params);
+
+    cacheCalls.length = 0;
+    await mod.queryGlobalComixKPIs("globalcomix", FROM, TO, {
+      os: "ios",
+    });
+    const iosHash = paramHash(cacheCalls[0].params);
+    expect(iosHash).not.toBe(defaultHash);
+
+    cacheCalls.length = 0;
+    await mod.queryGlobalComixKPIs("globalcomix", FROM, TO, {
+      platforms: ["meta"],
+    });
+    const metaHash = paramHash(cacheCalls[0].params);
+    expect(metaHash).not.toBe(defaultHash);
+    expect(metaHash).not.toBe(iosHash);
+  });
+
+  it("canonicalizes platform order so the cache key is identical regardless of input order", async () => {
+    const mod = await import("@/lib/globalcomix-queries");
+    queryFn.mockResolvedValue([[]]);
+
+    cacheCalls.length = 0;
+    await mod.queryGlobalComixKPIs("globalcomix", FROM, TO, {
+      platforms: ["meta", "google"],
+    });
+    const aHash = paramHash(cacheCalls[0].params);
+
+    cacheCalls.length = 0;
+    await mod.queryGlobalComixKPIs("globalcomix", FROM, TO, {
+      platforms: ["google", "meta"],
+    });
+    const bHash = paramHash(cacheCalls[0].params);
+
+    expect(aHash).toBe(bHash);
+  });
+});

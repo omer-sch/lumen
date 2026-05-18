@@ -8,6 +8,7 @@ import { toBounds } from "@/lib/bq-coerce";
 export { toBounds } from "@/lib/bq-coerce";
 import { getSchemaForClient, getTableForClient } from "@/lib/bq-security";
 import { serverEnv } from "@/lib/env.server";
+import type { GlobalComixFilter } from "@/lib/globalcomix-queries";
 import {
   queryGlobalComixCampaigns,
   queryGlobalComixChannelMix,
@@ -60,6 +61,7 @@ async function _queryDashboardKPIs(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<KPIData> {
   assertIsoDate(from, "from");
   assertIsoDate(to, "to");
@@ -68,8 +70,11 @@ async function _queryDashboardKPIs(
   // cohort for ROAS. The dispatch happens here so the cached export
   // surface stays a single function and the API routes don't have to
   // branch on client strategy.
+  //
+  // Agent-strategy clients (playw3, 100play) ignore `filter` — they have
+  // no OS or per-platform dimension reachable through their agent view.
   if (getSchemaForClient(client).strategy === "multi-source") {
-    return queryGlobalComixKPIs(client, from, to);
+    return queryGlobalComixKPIs(client, from, to, filter);
   }
   const table = getTableForClient(client);
   const { spendCol, revenueCol } = getSchemaForClient(client);
@@ -141,11 +146,12 @@ async function _queryTrend(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<BQTrendPoint[] | BQTrendPointByNetwork[]> {
   assertIsoDate(from, "from");
   assertIsoDate(to, "to");
   if (getSchemaForClient(client).strategy === "multi-source") {
-    return queryGlobalComixTrend(client, from, to);
+    return queryGlobalComixTrend(client, from, to, filter);
   }
   const table = getTableForClient(client);
   const { spendCol, revenueCol } = getSchemaForClient(client);
@@ -185,11 +191,12 @@ async function _queryChannelMix(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<ChannelBreakdown[]> {
   assertIsoDate(from, "from");
   assertIsoDate(to, "to");
   if (getSchemaForClient(client).strategy === "multi-source") {
-    return queryGlobalComixChannelMix(client, from, to);
+    return queryGlobalComixChannelMix(client, from, to, filter);
   }
   const table = getTableForClient(client);
   const { spendCol } = getSchemaForClient(client);
@@ -255,11 +262,12 @@ async function _queryCampaigns(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<CampaignRow[]> {
   assertIsoDate(from, "from");
   assertIsoDate(to, "to");
   if (getSchemaForClient(client).strategy === "multi-source") {
-    return queryGlobalComixCampaigns(client, from, to);
+    return queryGlobalComixCampaigns(client, from, to, filter);
   }
   const table = getTableForClient(client);
   const { spendCol, revenueCol } = getSchemaForClient(client);
@@ -335,13 +343,14 @@ async function _queryNetworkBreakdown(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<NetworkRow[]> {
   assertIsoDate(from, "from");
   assertIsoDate(to, "to");
   if (getSchemaForClient(client).strategy !== "multi-source") {
     return [];
   }
-  return queryGlobalComixNetworkBreakdown(client, from, to);
+  return queryGlobalComixNetworkBreakdown(client, from, to, filter);
 }
 
 // ── Cohort payback curve (D0 → D90) ────────────────────────────────────────
@@ -349,13 +358,14 @@ async function _queryPayback(
   client: string,
   from: string,
   to: string,
+  filter: GlobalComixFilter = {},
 ): Promise<PaybackPoint[]> {
   assertIsoDate(from, "from");
   assertIsoDate(to, "to");
   if (getSchemaForClient(client).strategy !== "multi-source") {
     return [];
   }
-  return queryGlobalComixPayback(client, from, to);
+  return queryGlobalComixPayback(client, from, to, filter);
 }
 
 // ── Earliest/latest dates with spend > 0 for a client ──────────────────────
