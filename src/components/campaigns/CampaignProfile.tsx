@@ -10,6 +10,11 @@ import { SectionError } from "@/components/ui/SectionError";
 import { TrendChartSkeleton, KpiCardSkeleton } from "@/components/ui/Skeleton";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { TrendChart } from "@/components/dashboard/TrendChart";
+import { AdsetBreakdown } from "@/components/campaigns/profile/AdsetBreakdown";
+import { CreativeBreakdown } from "@/components/campaigns/profile/CreativeBreakdown";
+import { GeoBreakdown } from "@/components/campaigns/profile/GeoBreakdown";
+import { PeerComparison } from "@/components/campaigns/profile/PeerComparison";
+import { CoverageWarning } from "@/components/campaigns/profile/CoverageWarning";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import { useCampaignProfile } from "@/lib/campaigns/use-campaign-profile";
 import { findClient } from "@/lib/mock/clients";
@@ -98,11 +103,25 @@ function Inner({ campaignId }: { campaignId: string }) {
     <div className="flex flex-col gap-6 py-2 md:gap-7">
       <BackLink href={backHref} />
 
+      <CoverageWarning summary={summary} from={from} />
+
       <ProfileHeader summary={summary} clientName={c.name} days={days} />
 
       <KpiStrip summary={summary} />
 
       <ProfileTrendChart trend={data?.trend ?? []} />
+
+      <AdsetBreakdown adsets={data?.adsets ?? []} />
+
+      <CreativeBreakdown creatives={data?.creatives ?? []} />
+
+      <GeoBreakdown geo={data?.geo ?? []} />
+
+      <PeerComparison
+        campaignId={summary.campaign_id}
+        family={summary.family}
+        geo={summary.geo}
+      />
     </div>
   );
 }
