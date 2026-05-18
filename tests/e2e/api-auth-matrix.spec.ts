@@ -34,6 +34,14 @@ const BQ_ROUTES: Array<{ name: string; url: string }> = [
   { name: "freshness",      url: `/api/bq/freshness` },
   { name: "network-breakdown", url: `/api/bq/network-breakdown?client=${CLIENT}&from=${FROM}&to=${TO}` },
   { name: "payback",        url: `/api/bq/payback?client=${CLIENT}&from=${FROM}&to=${TO}` },
+  // WS4 + WS5 routes added 2026-05-17. Each must be gated the same way
+  // as the headline dashboard routes — the middleware handles this
+  // uniformly, but the matrix proves it for every new entry.
+  { name: "total-subs",            url: `/api/bq/total-subs?client=${CLIENT}&from=${FROM}&to=${TO}` },
+  { name: "weekends",              url: `/api/bq/weekends?client=${CLIENT}&from=${FROM}&to=${TO}` },
+  { name: "geo",                   url: `/api/bq/geo?client=${CLIENT}&from=${FROM}&to=${TO}` },
+  { name: "creatives",             url: `/api/bq/creatives?client=${CLIENT}&from=${FROM}&to=${TO}` },
+  { name: "attribution-validation", url: `/api/bq/attribution-validation?client=${CLIENT}&from=${FROM}&to=${TO}` },
   { name: "100play:dashboard-kpis", url: `/api/bq/100play/dashboard-kpis?client=${HUNDRED}&from=${FROM}&to=${TO}` },
   { name: "100play:campaigns",      url: `/api/bq/100play/campaigns?client=${HUNDRED}&from=${FROM}&to=${TO}` },
   { name: "100play:channel-mix",    url: `/api/bq/100play/channel-mix?client=${HUNDRED}&from=${FROM}&to=${TO}` },
