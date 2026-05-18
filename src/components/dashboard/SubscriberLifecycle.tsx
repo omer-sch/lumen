@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 
 import { GlassCard } from "@/components/ui/GlassCard";
+import { KpiCard } from "@/components/dashboard/KpiCard";
 import { SubscriberLifecycleSkeleton } from "@/components/ui/Skeleton";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
+
+const fmtCount = (n: number) => Math.round(n).toLocaleString();
 
 type DailyRow = {
   date: string;
@@ -101,10 +104,41 @@ export function SubscriberLifecycle() {
         </p>
       </header>
 
+      {/* Tile parity with the dashboard's KPI strip - KpiCard handles
+          count-up animation, delta chip ("—" when no prior period), and
+          the stagger entry per enterIndex. Lifecycle has no period-over-
+          period baseline today, so delta is null on every tile; the chip
+          renders as a muted em-dash with a "No prior-period baseline"
+          tooltip via KpiCard's existing logic. */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <KpiTile label="New subscribers" value={totals.subs} />
-        <KpiTile label="Cancellations" value={totals.churn} />
-        <KpiTile label="Net Sub" value={totals.netSub} highlight />
+        <KpiCard
+          id="lifecycle-new-subs"
+          label="New subscribers"
+          value={fmtCount(totals.subs)}
+          delta={null}
+          direction="higher-better"
+          size="compact"
+          enterIndex={1}
+        />
+        <KpiCard
+          id="lifecycle-cancellations"
+          label="Cancellations"
+          value={fmtCount(totals.churn)}
+          delta={null}
+          direction="lower-better"
+          size="compact"
+          enterIndex={2}
+        />
+        <KpiCard
+          id="lifecycle-net-sub"
+          label="Net Sub"
+          value={fmtCount(totals.netSub)}
+          delta={null}
+          direction="higher-better"
+          size="compact"
+          enterIndex={3}
+          highlight
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -112,37 +146,6 @@ export function SubscriberLifecycle() {
         <NetSubBars rows={trend.slice(-30)} />
       </div>
     </GlassCard>
-  );
-}
-
-function KpiTile({
-  label,
-  value,
-  highlight,
-}: {
-  label: string;
-  value: number;
-  highlight?: boolean;
-}) {
-  return (
-    <div
-      className="flex flex-col gap-1 rounded-md p-3"
-      style={{
-        background: highlight
-          ? "color-mix(in oklab, var(--color-ua) 8%, var(--surface-input))"
-          : "var(--surface-input)",
-        border: highlight
-          ? "1px solid color-mix(in oklab, var(--color-ua) 25%, transparent)"
-          : "1px solid var(--border-subtle)",
-      }}
-    >
-      <span className="font-body text-xs uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
-        {label}
-      </span>
-      <span className="font-display text-2xl font-bold tabular-nums text-cloud-white">
-        {value.toLocaleString()}
-      </span>
-    </div>
   );
 }
 
@@ -170,7 +173,7 @@ function OsMix({ rows }: { rows: OsMixRow[] }) {
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
                 style={{ background: OS_TINT[r.os] ?? "var(--text-muted)" }}
               />
-              <span className="min-w-[64px] text-[color:var(--text-light-primary)]">
+              <span className="min-w-[64px] text-[color:var(--text-primary)]">
                 {r.os}
               </span>
               <div
@@ -185,7 +188,7 @@ function OsMix({ rows }: { rows: OsMixRow[] }) {
                   }}
                 />
               </div>
-              <span className="w-12 text-right tabular-nums text-[color:var(--text-light-secondary)]">
+              <span className="w-12 text-right tabular-nums text-[color:var(--text-secondary)]">
                 {pct}%
               </span>
             </li>

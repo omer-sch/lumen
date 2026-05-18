@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { GlassCard } from "@/components/ui/GlassCard";
+import { KpiCard } from "@/components/dashboard/KpiCard";
 import { PaidVsOrganicSkeleton } from "@/components/ui/Skeleton";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 
@@ -96,10 +97,39 @@ export function PaidVsOrganic() {
         </p>
       </header>
 
+      {/* BCAC + Sub Total ride the shared KpiCard so they pick up
+          count-up animation, stagger entry, and the brand chip shape.
+          BCAC is the section headline so it takes the mint highlight
+          and the lower-better polarity. Sub Paid / Organic stays as a
+          local PairTile because KpiCard's value is a single string -
+          two numbers next to each other don't fit cleanly. PairTile
+          mirrors the KpiCard box shape so the row reads consistent. */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <BcacTile bcac={bcac} />
-        <Tile label="Sub Total" value={fmtCount(totals.subD7)} />
-        <Tile label="Sub Paid / Organic" value={`${fmtCount(totals.paid)} / ${fmtCount(totals.organic)}`} />
+        <KpiCard
+          id="paid-vs-organic-bcac"
+          label="BCAC"
+          value={bcac == null ? "—" : fmtMoney(bcac)}
+          delta={null}
+          direction="lower-better"
+          size="compact"
+          enterIndex={1}
+          highlight
+          hint="Paid spend ÷ all subs"
+        />
+        <KpiCard
+          id="paid-vs-organic-sub-total"
+          label="Sub Total"
+          value={fmtCount(totals.subD7)}
+          delta={null}
+          direction="higher-better"
+          size="compact"
+          enterIndex={2}
+        />
+        <PairTile
+          label="Sub Paid / Organic"
+          paid={fmtCount(totals.paid)}
+          organic={fmtCount(totals.organic)}
+        />
       </div>
 
       <ShareBar paidShare={paidShare} organicShare={organicShare} />
@@ -107,43 +137,59 @@ export function PaidVsOrganic() {
   );
 }
 
-function BcacTile({ bcac }: { bcac: number | null }) {
+/**
+ * PairTile renders two numbers side-by-side under a single label. We
+ * don't try to fit this into KpiCard because KpiCard's value is a
+ * single pre-formatted string + a CountUpNumber animation; "284 / 1310"
+ * doesn't decompose cleanly into either of those.
+ *
+ * Visual shape (border, radius, padding, label tracking) mirrors the
+ * compact KpiCard's outer box so the three-tile row reads consistently.
+ */
+function PairTile({
+  label,
+  paid,
+  organic,
+}: {
+  label: string;
+  paid: string;
+  organic: string;
+}) {
   return (
     <div
-      className="flex flex-col gap-1 rounded-md p-3"
+      className="flex h-full flex-col gap-4 rounded-lg p-5"
       style={{
-        background: "color-mix(in oklab, var(--color-ua) 8%, var(--surface-input))",
-        border: "1px solid color-mix(in oklab, var(--color-ua) 25%, transparent)",
+        background: "var(--surface-glass)",
+        border: "1px solid var(--border-glass)",
+        WebkitBackdropFilter: "var(--blur-glass)",
+        backdropFilter: "var(--blur-glass)",
+        boxShadow: "var(--shadow-glass)",
       }}
     >
-      <span className="font-body text-xs uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
-        BCAC
-      </span>
-      <span className="font-display text-2xl font-bold tabular-nums text-cloud-white">
-        {bcac == null ? "—" : fmtMoney(bcac)}
-      </span>
-      <span className="font-body text-[11px] text-[color:var(--text-muted)]">
-        Paid spend ÷ all subs
-      </span>
-    </div>
-  );
-}
-
-function Tile({ label, value }: { label: string; value: string }) {
-  return (
-    <div
-      className="flex flex-col gap-1 rounded-md p-3"
-      style={{
-        background: "var(--surface-input)",
-        border: "1px solid var(--border-subtle)",
-      }}
-    >
-      <span className="font-body text-xs uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
+      <span className="font-body text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
         {label}
       </span>
-      <span className="font-display text-2xl font-bold tabular-nums text-cloud-white">
-        {value}
-      </span>
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span
+          className="font-display font-extrabold leading-none tracking-tight tabular-nums text-[color:var(--text-primary)]"
+          style={{ fontSize: "var(--text-3xl)" }}
+        >
+          {paid}
+        </span>
+        <span className="font-body text-sm text-[color:var(--text-muted)]">/</span>
+        <span
+          className="font-display font-extrabold leading-none tracking-tight tabular-nums"
+          style={{
+            fontSize: "var(--text-3xl)",
+            color: "var(--color-organic)",
+          }}
+        >
+          {organic}
+        </span>
+      </div>
+      <p className="font-body text-xs text-[color:var(--text-muted)]">
+        Paid · Organic
+      </p>
     </div>
   );
 }
