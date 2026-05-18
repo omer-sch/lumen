@@ -1,14 +1,25 @@
 import "server-only";
 
 import {
+  queryGlobalComixAttributionValidation,
   queryGlobalComixCampaigns,
   queryGlobalComixChannelMix,
+  queryGlobalComixCreatives,
   queryGlobalComixDataBounds,
+  queryGlobalComixGeo,
   queryGlobalComixKPIs,
   queryGlobalComixNetworkBreakdown,
   queryGlobalComixPayback,
   queryGlobalComixTrend,
+  queryGlobalComixWeekends,
+  type GlobalComixFilter,
 } from "@/lib/globalcomix-queries";
+import {
+  queryGlobalComixNetSubTrend,
+  queryGlobalComixSubsDaily,
+  queryGlobalComixSubsOsMix,
+} from "@/lib/globalcomix-subs-queries";
+import type { OsFilter, PlatformFilter } from "@/lib/filters/types";
 
 /**
  * Result row for a single warmed query inside one client's pass.
@@ -44,30 +55,78 @@ export type WarmResult = {
  * paths cannot drift. If we ever add a new cached query, this is the
  * single function to update.
  */
+/**
+ * Filter combinations the warmer prepays for. Eight combos chosen
+ * deliberately (NOT the full 4 OS x 6 platform-subset cross-product):
+ *
+ *   1. Default (os=total, all platforms) - the URL with no filters.
+ *   2. Each OS narrowed: ios, android, web.
+ *   3. Each single-platform narrowing: meta, google, tiktok,
+ *      apple_search_ads.
+ *
+ * AppLovin is not on the list because it has a coverageStart of
+ * 2026-05-05 - warming a 30-day window today might cross that
+ * threshold, but the cold-miss path is fine for it. The dashboard's
+ * primary entry points cluster on (default, single-OS, single-platform)
+ * per Looker access patterns; the full cross-product (40+ combos) earns
+ * Redis pressure without matching real usage. Real usage data should
+ * inform any future expansion.
+ */
+const WARM_FILTERS: ReadonlyArray<{ label: string; filter: GlobalComixFilter }> = [
+  { label: "default", filter: {} },
+  ...(["ios", "android", "web"] as OsFilter[]).map((os) => ({
+    label: `os=${os}`,
+    filter: { os },
+  })),
+  ...(["meta", "google", "tiktok", "apple_search_ads"] as PlatformFilter[]).map(
+    (p) => ({ label: `platforms=${p}`, filter: { platforms: [p] } }),
+  ),
+];
+
 export async function warmClientCache(client: string): Promise<WarmResult[]> {
   const today = todayUtc();
   const thirtyDaysAgo = isoDateUtc(addDaysUtc(today, -29));
   const to = isoDateUtc(today);
   const from = thirtyDaysAgo;
 
-  const tasks: Array<{ name: string; run: () => Promise<unknown> }> = [
-    { name: "kpis", run: () => queryGlobalComixKPIs(client, from, to) },
-    { name: "trend", run: () => queryGlobalComixTrend(client, from, to) },
-    {
-      name: "channel-mix",
-      run: () => queryGlobalComixChannelMix(client, from, to),
-    },
-    {
-      name: "network-breakdown",
-      run: () => queryGlobalComixNetworkBreakdown(client, from, to),
-    },
-    { name: "payback", run: () => queryGlobalComixPayback(client, from, to) },
-    {
-      name: "campaigns",
-      run: () => queryGlobalComixCampaigns(client, from, to),
-    },
-    { name: "data-bounds", run: () => queryGlobalComixDataBounds(client) },
+  // Tasks split into two layers:
+  //   - "Filtered" queries get fan-out across WARM_FILTERS so each
+  //     (OS, platform) combo lands a primed key.
+  //   - "Filter-free" queries (data-bounds, subs lifecycle, OS-mix,
+  //     attribution validation) run once per pass since they don't
+  //     read the filter.
+  const filteredTasks: Array<{ name: string; run: (f: GlobalComixFilter) => Promise<unknown> }> = [
+    { name: "kpis", run: (f) => queryGlobalComixKPIs(client, from, to, f) },
+    { name: "trend", run: (f) => queryGlobalComixTrend(client, from, to, f) },
+    { name: "channel-mix", run: (f) => queryGlobalComixChannelMix(client, from, to, f) },
+    { name: "network-breakdown", run: (f) => queryGlobalComixNetworkBreakdown(client, from, to, f) },
+    { name: "payback", run: (f) => queryGlobalComixPayback(client, from, to, f) },
+    { name: "campaigns", run: (f) => queryGlobalComixCampaigns(client, from, to, f) },
+    { name: "weekends", run: (f) => queryGlobalComixWeekends(client, from, to, f) },
+    { name: "geo", run: (f) => queryGlobalComixGeo(client, from, to, f) },
+    { name: "creatives", run: (f) => queryGlobalComixCreatives(client, from, to, f) },
   ];
+
+  const filterFreeTasks: Array<{ name: string; run: () => Promise<unknown> }> = [
+    { name: "data-bounds", run: () => queryGlobalComixDataBounds(client) },
+    { name: "total-subs-daily", run: () => queryGlobalComixSubsDaily(client, from, to) },
+    { name: "total-subs-os-mix", run: () => queryGlobalComixSubsOsMix(client, from, to) },
+    { name: "net-sub-trend", run: () => queryGlobalComixNetSubTrend(client, from, to) },
+    { name: "attribution-validation", run: () => queryGlobalComixAttributionValidation(client, from, to) },
+  ];
+
+  // Build the full task list: each filtered task x each WARM_FILTERS
+  // entry, plus the filter-free tasks once.
+  const tasks: Array<{ name: string; run: () => Promise<unknown> }> = [];
+  for (const t of filteredTasks) {
+    for (const { label, filter } of WARM_FILTERS) {
+      tasks.push({
+        name: label === "default" ? t.name : `${t.name}[${label}]`,
+        run: () => t.run(filter),
+      });
+    }
+  }
+  for (const t of filterFreeTasks) tasks.push(t);
 
   // Run them in parallel — these queries don't share state and BigQuery
   // happily handles concurrent reads from the same project. The wall
