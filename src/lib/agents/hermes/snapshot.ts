@@ -36,19 +36,18 @@ import type { HermesSnapshot, Intent } from "./state";
 //
 // What's available from the existing BQ queries:
 //   * networks: per-network totals for the active period (spend, sub
-//     funnel, ROAS, plus trailingCpaD7Avg as a 30-day prior baseline).
-//   * campaigns: per-campaign spend + installs + cpi + spendDelta
-//     (period-over-period at the campaign level).
+//     funnel, ROI D7, plus trailingCpaD7Avg as a 30-day prior baseline).
+//   * campaigns: per-campaign spend + installs + cpi + spendDelta PLUS
+//     cohort-attributed sub_d7 + sub_start_d7 + cpa_d7 + roi_d7. The
+//     2026-05-17 investigation confirmed the cohort table's `_Campaign_ID`
+//     is a real numeric id (distinct from the unreliable
+//     `_Campaign_Attribution` string) and joins cleanly.
 //   * trend: daily per-(date, network) rows for the active period.
 //
 // What's NOT available without a new BQ query:
 //   * Period-over-period deltas at the NETWORK level for spend / sub
 //     funnel (only cpaD7 has trailing baseline). Network deltas are
 //     left undefined and the renderer skips the delta arrow.
-//   * Cohort-attributed sub funnel at the CAMPAIGN level (the cohort
-//     table's campaign attribution is unreliable per
-//     queryGlobalComixCampaigns header comment). Per-campaign sub
-//     fields are 0 with a documented caveat (better than fabricating).
 //
 // What changed in Phase 0:
 //   * channelWeekly.history is now populated from ReadyData.history.
@@ -292,24 +291,34 @@ function projectChannelHistory(
 // ── BQ CampaignRow -> reports::CampaignRow ─────────────────────────────
 
 function bqCampaignToReport(c: BQCampaignRow): ReportCampaignRow {
-  // Note (trust contract): cohort-attributed sub-funnel does not join
-  // reliably to the campaign_id, so the substart / subD0 / subD7
-  // columns are not populated. Setting them to 0 would lie; leaving
-  // them at 0 with this caveat in code is the lesser evil for the
-  // first real-data cut. Renderer falls back to dashes for 0.
+  // Cohort-attributed per-campaign fields landed in 2026-05-17 (the
+  // `_Campaign_ID` join is now wired). subD7 / cpaD7 honour the same
+  // maturity gate the network-row case uses so a tiny cohort doesn't
+  // render a $21k acquisition cost as truth. subD0 / cpaD0 are not yet
+  // surfaced by the query (D0 cohort hadn't been promoted to the
+  // per-campaign select yet) — added in WS3 with the dimensional
+  // expansion. Until then those two stay null with a documented gap.
+  const sub_d7 = c.sub_d7 ?? null;
+  const sub_start_d7 = c.sub_start_d7 ?? null;
+  const cpa_d7_raw = c.cpa_d7 ?? null;
+  const d7Mature =
+    sub_d7 != null && sub_d7 >= COHORT_D7_MATURITY_THRESHOLD;
   return {
     campaignName: c.campaign_name,
     spend: round(c.spend, 0),
     installs: round(c.installs, 0),
     cpi: round(c.cpi, 2),
-    substart: 0,
-    cpSubstart: 0,
+    substart: sub_start_d7 != null ? round(sub_start_d7, 0) : 0,
+    cpSubstart:
+      sub_start_d7 != null && sub_start_d7 > 0
+        ? round(c.spend / sub_start_d7, 2)
+        : 0,
     cpSubstartDelta: 0,
     subD0: 0,
     cpaD0: 0,
     cpaD0Delta: 0,
-    subD7: null,
-    cpaD7: null,
+    subD7: d7Mature ? round(sub_d7!, 0) : null,
+    cpaD7: d7Mature && cpa_d7_raw != null ? round(cpa_d7_raw, 2) : null,
     cpaD7Delta: null,
   };
 }

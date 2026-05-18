@@ -69,7 +69,7 @@ function net(over: Partial<NetworkRow>): NetworkRow {
 function camp(over: Partial<CampaignRow>): CampaignRow {
   return {
     campaign_id: "c1", campaign_name: "X", network: "Meta",
-    spend: 100, installs: 10, cpi: 10, roas: 0.3, spendDelta: null,
+    spend: 100, installs: 10, cpi: 10, roi_d7: 0.3, spendDelta: null,
     ...over,
   };
 }

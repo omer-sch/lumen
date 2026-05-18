@@ -73,20 +73,52 @@ export const CLIENT_NETWORK_COVERAGE: Record<string, string[]> = {
 export type QueryStrategy = "agent" | "multi-source" | "lumen-union";
 
 /**
+ * How a given spend source resolves its OS dimension. The shape varies
+ * across the four (now five) sources, so a single boolean would lie.
+ *
+ *   - "column"          The table's `os` column is populated; OS predicate
+ *                       is `WHERE LOWER(os) = @os`. Used for Meta and
+ *                       AppLovin (Adjust populates both reliably).
+ *   - "campaign_name"   The `os` column is unpopulated on the dedupe slice
+ *                       this layer reads. OS lives inside the campaign
+ *                       name as a token (iOS / Android / Web) that
+ *                       `classifyCampaignName` knows how to parse;
+ *                       `osSqlPredicate` emits the matching SQL predicate.
+ *                       Used for Google (os empty on No Breakdown) and
+ *                       TikTok (os 100% NULL across 90d, verified 2026-05-17).
+ *   - "implicit_ios"    The source is iOS-only by product definition
+ *                       (Apple Search Ads). The leg is included when
+ *                       OS = ios or total; suppressed (WHERE FALSE) when
+ *                       OS = android or web.
+ *   - "none"            No reachable OS dimension. The leg is included
+ *                       only when OS = total; suppressed otherwise.
+ *
+ * Replaces the prior `hasOs: boolean` shape, which silently zeroed
+ * TikTok the moment the OS filter was set to anything other than total.
+ */
+export type OsResolutionStrategy =
+  | "column"
+  | "campaign_name"
+  | "implicit_ios"
+  | "none";
+
+/**
  * One per-network warehouse source for the `multi-source` strategy. The
  * SQL builder UNIONs across this list; `network` is the canonical display
- * label, `hasOs` flips whether the source can be sliced by OS for the
- * Google iOS attribution-gap exclusion.
+ * label that the UI shows directly.
  */
 export type MultiSourceTable = {
   table: string;
   network: string;
-  /** True when the table carries a usable `os` column. Apple has no OS
-   *  column (Apple Search Ads is iOS-only by definition); Google has the
-   *  column but it is unpopulated for the `No Breakdown` slice the
-   *  aggregates use, so we treat it as `false` and rely on the cohort-side
-   *  OS filter for the iOS exclusion. */
-  hasOs: boolean;
+  /** How this source carries its OS dimension. See OsResolutionStrategy. */
+  osStrategy: OsResolutionStrategy;
+  /**
+   * Earliest date the source has spend rows. When the active date window
+   * starts before this, the UI should surface a coverage tooltip on the
+   * affected row instead of letting the source quietly read zero.
+   * Optional: omitted when the source covers the full historical window.
+   */
+  coverageStart?: string;
 };
 
 export type MultiSourceConfig = {
@@ -144,10 +176,20 @@ const CLIENT_SCHEMA: Record<string, ClientSchema> = {
       // roll up to "Meta"; Apple Search Ads spelled out so analysts don't
       // confuse it with Apple-the-platform installs.
       spendSources: [
-        { table: "dwh_fb2_globalcomix_adjust", network: "Meta", hasOs: true },
-        { table: "dwh_google_ads_globalcomix_adjust", network: "Google", hasOs: false },
-        { table: "dwh_tik_tok_globalcomix_adjust", network: "TikTok", hasOs: true },
-        { table: "dwh_apple_globalcomix_adjust", network: "Apple Search Ads", hasOs: false },
+        // Meta: Adjust's `os` column is populated; column filter works.
+        { table: "dwh_fb2_globalcomix_adjust", network: "Meta", osStrategy: "column" },
+        // Google: `os` is empty on the `No Breakdown` slice that drives
+        // the spend UNION. OS lives in campaign_name (YH_GG_*_iOS_* / *_Android_*).
+        { table: "dwh_google_ads_globalcomix_adjust", network: "Google", osStrategy: "campaign_name" },
+        // TikTok: investigation 2026-05-17 confirmed `os` is 100% NULL
+        // across the last 90 days. OS lives in campaign_name
+        // (YH_TT_*_iOS_* / *_Android_*) so the classifier predicate is
+        // the only reachable OS dimension.
+        { table: "dwh_tik_tok_globalcomix_adjust", network: "TikTok", osStrategy: "campaign_name" },
+        // Apple Search Ads: iOS-only by product definition.
+        { table: "dwh_apple_globalcomix_adjust", network: "Apple Search Ads", osStrategy: "implicit_ios" },
+        // AppLovin is added in WS2 (separate commit) — same shape but
+        // with osStrategy: "column" + coverageStart: "2026-05-05".
       ],
       cohortTable: "uni_adjust_cohort_report_globalcomix",
       // Every dwh_*_adjust table fans rows out across `breakdown_type` —
@@ -227,6 +269,25 @@ export function getTableForClient(client: string): string {
  */
 export function qualifyTable(table: string): string {
   return `\`${serverEnv.BQ_PROJECT}.${serverEnv.BQ_DATASET}.${table}\``;
+}
+
+/**
+ * Reports whether the requested date window crosses a source's
+ * `coverageStart`. Used by the UI to surface a "data starts 2026-05-05"
+ * tooltip on the affected network row, instead of letting a young source
+ * silently read as zero spend.
+ *
+ * Returns `{ isPartial: false }` when the source has no coverageStart at
+ * all (full historical coverage) or when the window starts on/after the
+ * coverage date.
+ */
+export function coverageGapFor(
+  source: MultiSourceTable,
+  range: { from: string; to: string },
+): { isPartial: boolean; sinceDate?: string } {
+  if (!source.coverageStart) return { isPartial: false };
+  if (range.from >= source.coverageStart) return { isPartial: false };
+  return { isPartial: true, sinceDate: source.coverageStart };
 }
 
 /**

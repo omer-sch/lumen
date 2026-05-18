@@ -337,9 +337,28 @@ export type CampaignRow = {
   spend: number;
   installs: number;
   cpi: number;
-  roas: number;
+  /**
+   * Return on D7 ad spend: cohort `_7D_Revenue_Total` / spend. Renamed
+   * from `roas` to match GlobalComix's subscription vocabulary (the
+   * yellowHEAD team reads this column as "ROI D7" in the Looker dashboard).
+   * Gaming-vocab clients (Playw3, 100play) still compute revenue/spend
+   * under the same name — the rename is a label change, not a math change.
+   */
+  roi_d7: number;
   /** `null` for campaigns that didn't exist in the previous period. */
   spendDelta: number | null;
+  // ── Subscription funnel (multi-source / GlobalComix only) ──
+  // Per-campaign cohort attribution post-2026-05-17. Joined on `_Campaign_ID`
+  // (the cohort table's real numeric id, distinct from the unreliable
+  // `_Campaign_Attribution` string). Gaming-vocab clients (Playw3, 100play)
+  // leave these undefined so their rendering path keeps showing dashes.
+  /** Cohort-attributed Sub Start events at D7 (`_7D_subscription_start_Events`). */
+  sub_start_d7?: number | null;
+  /** Distinct paying subscribers in the cohort by D7 (`_7D_Paying_Users`). */
+  sub_d7?: number | null;
+  /** Cost per acquired subscriber at D7: spend / sub_d7. `null` when sub_d7
+   *  is below the maturity threshold; the renderer prints "—" there. */
+  cpa_d7?: number | null;
 };
 
 export type FreshnessData = {

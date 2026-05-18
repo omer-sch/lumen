@@ -90,7 +90,7 @@ beforeEach(async () => {
       spend: 1000,
       installs: 200,
       cpi: 5,
-      roas: 0,
+      roi_d7: 0,
       spendDelta: 0.1,
     },
   ]);
@@ -289,7 +289,7 @@ describe("buildHermesGraph", () => {
         spend: 2000,
         installs: 250,
         cpi: 8,
-        roas: 0,
+        roi_d7: 0,
         spendDelta: -0.12,
       },
     ]);

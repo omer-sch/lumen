@@ -56,7 +56,7 @@ function makeCampaign(over: Partial<CampaignRow>): CampaignRow {
     spend: 100,
     installs: 10,
     cpi: 10,
-    roas: 0.5,
+    roi_d7: 0.5,
     spendDelta: 0,
     ...over,
   };

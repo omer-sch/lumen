@@ -32,7 +32,7 @@ const URL =
 describe("GET /api/bq/100play/campaigns", () => {
   it("returns 200 with the campaign array", async () => {
     query100playCampaigns.mockResolvedValue([
-      { campaign_id: "c1", campaign_name: "c1", network: "Meta", spend: 1, installs: 0, cpi: 0, roas: 0, spendDelta: null },
+      { campaign_id: "c1", campaign_name: "c1", network: "Meta", spend: 1, installs: 0, cpi: 0, roi_d7: 0, spendDelta: null },
     ]);
     const { GET } = await import("@/app/api/bq/100play/campaigns/route");
     const res = await GET(buildRequest(URL));

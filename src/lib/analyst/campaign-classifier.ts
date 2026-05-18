@@ -233,6 +233,33 @@ export function classifyCampaignName(name: string): CampaignClassification {
 }
 
 /**
+ * Emit a SQL predicate over `<column>` that matches the same OS tokens
+ * `classifyCampaignName` recognizes. Used by the spend-side SQL builder
+ * to filter `campaign_name`-strategy sources (Google, TikTok) by OS
+ * without diverging from the in-process classifier's view of which
+ * tokens count.
+ *
+ * Token boundaries: a platform token (iOS / Android / Web) must appear
+ * delimited by underscore, hyphen, or string boundary — matching the
+ * classifier's `parts.split("_")` semantics. Case-insensitive so the
+ * warehouse's "iOS" / "ios" mix both match.
+ *
+ * Safe to interpolate: `os` is whitelisted against the three known
+ * values; `column` is taken from internal config in the SQL builder
+ * (never request input). A future caller passing a non-whitelisted
+ * `os` is treated as a programmer error and throws.
+ */
+export function osSqlPredicate(
+  os: "ios" | "android" | "web",
+  column: string,
+): string {
+  if (os !== "ios" && os !== "android" && os !== "web") {
+    throw new Error(`osSqlPredicate: unsupported os token "${os}"`);
+  }
+  return `REGEXP_CONTAINS(LOWER(${column}), r'(^|[_-])${os}([_-]|$)')`;
+}
+
+/**
  * Convenience: classify a single BQ CampaignRow and project the
  * enrichment fields. Used by getReadyData() to widen the campaigns
  * array into EnrichedCampaignRow.

@@ -67,7 +67,7 @@ function camp(over: Partial<BQCampaignRow>): BQCampaignRow {
     spend: 0,
     installs: 0,
     cpi: 0,
-    roas: 0,
+    roi_d7: 0,
     spendDelta: null,
     ...over,
   };

@@ -266,6 +266,10 @@ async function _queryCampaigns(
   const dedupe = dedupeAnd(client);
   const bq = getBigQueryClient();
 
+  // `roi_d7` aliases what was historically labelled `roas` — same math
+  // (revenue / spend), renamed at the type layer so the GlobalComix
+  // subscription vocabulary reads cleanly. Gaming-vocab clients (Playw3
+  // here, 100play in the sibling module) still produce the same number.
   const query = `
     WITH curr AS (
       SELECT
@@ -275,7 +279,7 @@ async function _queryCampaigns(
         SUM(${spendCol}) AS spend,
         SUM(installs) AS installs,
         SAFE_DIVIDE(SUM(${spendCol}), NULLIF(SUM(installs), 0)) AS cpi,
-        SAFE_DIVIDE(SUM(${revenueCol}), NULLIF(SUM(${spendCol}), 0)) AS roas
+        SAFE_DIVIDE(SUM(${revenueCol}), NULLIF(SUM(${spendCol}), 0)) AS roi_d7
       FROM ${table}
       WHERE date BETWEEN @from AND @to${dedupe}
       GROUP BY campaign_id
@@ -297,7 +301,7 @@ async function _queryCampaigns(
       c.spend,
       c.installs,
       c.cpi,
-      c.roas,
+      c.roi_d7,
       SAFE_DIVIDE(c.spend - p.spend, NULLIF(p.spend, 0)) AS spend_delta
     FROM curr c
     LEFT JOIN prev p USING (campaign_id)
@@ -318,7 +322,7 @@ async function _queryCampaigns(
     spend: numberish(r.spend),
     installs: numberish(r.installs),
     cpi: numberish(r.cpi),
-    roas: numberish(r.roas),
+    roi_d7: numberish(r.roi_d7),
     spendDelta: numberOrNull(r.spend_delta),
   }));
 }

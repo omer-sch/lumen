@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyCampaignName,
   enrichCampaignRow,
+  osSqlPredicate,
 } from "@/lib/analyst/campaign-classifier";
 import type { CampaignRow } from "@/types/dashboard";
 
@@ -227,7 +228,7 @@ describe("enrichCampaignRow", () => {
       spend: 7320,
       installs: 1700,
       cpi: 4.28,
-      roas: 0,
+      roi_d7: 0,
       spendDelta: 0.13,
     };
     const enriched = enrichCampaignRow(row);
@@ -248,7 +249,7 @@ describe("enrichCampaignRow", () => {
       spend: 1000,
       installs: 200,
       cpi: 5,
-      roas: 0,
+      roi_d7: 0,
       spendDelta: null,
     };
     const enriched = enrichCampaignRow(row);
@@ -257,4 +258,78 @@ describe("enrichCampaignRow", () => {
     expect(enriched.campaignType).toBe("Unknown");
     expect(enriched.platform).toBe("");
   });
+});
+
+// ── WS1.A — osSqlPredicate shape + classifier symmetry ─────────────────────
+// The SQL builder reads `os` from the global filter and emits a predicate
+// over the spend-side `campaign_name` column. The promise is: the predicate
+// matches the same rows `classifyCampaignName` would classify as that OS.
+
+describe("osSqlPredicate (SQL shape)", () => {
+  it("emits a token-bounded REGEXP_CONTAINS for each OS", () => {
+    expect(osSqlPredicate("ios", "campaign_name")).toBe(
+      "REGEXP_CONTAINS(LOWER(campaign_name), r'(^|[_-])ios([_-]|$)')",
+    );
+    expect(osSqlPredicate("android", "campaign_name")).toBe(
+      "REGEXP_CONTAINS(LOWER(campaign_name), r'(^|[_-])android([_-]|$)')",
+    );
+    expect(osSqlPredicate("web", "campaign_name")).toBe(
+      "REGEXP_CONTAINS(LOWER(campaign_name), r'(^|[_-])web([_-]|$)')",
+    );
+  });
+
+  it("rejects an os token outside the known whitelist", () => {
+    // Defensive against a future caller passing a non-canonical value
+    // (the TS type already constrains this, but a runtime guard keeps
+    // the SQL builder safe from accidental injection of regex meta).
+    expect(() =>
+      // @ts-expect-error — testing the runtime guard
+      osSqlPredicate("desktop", "campaign_name"),
+    ).toThrow(/unsupported os token/);
+  });
+});
+
+describe("classifier <-> osSqlPredicate symmetry", () => {
+  // The promise: for every fixture campaign name with a detectable
+  // platform, an in-process regex compiled from `osSqlPredicate(os)`
+  // returns `true` iff `classifyCampaignName(name).platform === os`.
+  //
+  // This anchors the two sides of the OS predicate (TS classifier and
+  // SQL builder) against the same vocabulary. If a future canonical
+  // pattern shifts the platform token's position, this catches the
+  // drift before the dashboard quietly zeroes a network leg.
+
+  function predicateMatches(
+    os: "ios" | "android" | "web",
+    name: string,
+  ): boolean {
+    // Mirror the SQL: REGEXP_CONTAINS over LOWER(name).
+    return new RegExp(`(^|[_-])${os}([_-]|$)`).test(name.toLowerCase());
+  }
+
+  const platformsToCheck: ReadonlyArray<"ios" | "android" | "web"> = [
+    "ios",
+    "android",
+    "web",
+  ];
+
+  // The canonical fixture covers ASA, Meta, Google, TikTok shapes
+  // (the four spend sources where the campaign_name strategy applies).
+  const fixtures = CANONICAL_CASES.filter(
+    ([, exp]) => exp.platform !== "",
+  );
+
+  for (const [name, expected] of fixtures) {
+    const expectedOs = expected.platform.toLowerCase() as
+      | "ios"
+      | "android"
+      | "web";
+    it(`predicate matches ${expectedOs} for ${name}`, () => {
+      for (const os of platformsToCheck) {
+        const sqlMatch = predicateMatches(os, name);
+        const tsMatch = expectedOs === os;
+        expect(sqlMatch, `${os} expected ${tsMatch}`).toBe(tsMatch);
+      }
+    });
+  }
 });

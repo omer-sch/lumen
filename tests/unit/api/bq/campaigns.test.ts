@@ -33,7 +33,7 @@ const URL = "/api/bq/campaigns?client=globalcomix&from=2026-04-15&to=2026-05-14"
 describe("GET /api/bq/campaigns", () => {
   it("returns 200 with the campaign array", async () => {
     queryCampaigns.mockResolvedValue([
-      { campaign_id: "c1", campaign_name: "Meta_Promo", network: "Meta", spend: 1, installs: 1, cpi: 1, roas: 1, spendDelta: 0 },
+      { campaign_id: "c1", campaign_name: "Meta_Promo", network: "Meta", spend: 1, installs: 1, cpi: 1, roi_d7: 1, spendDelta: 0 },
     ]);
     const { GET } = await import("@/app/api/bq/campaigns/route");
     const res = await GET(buildRequest(URL));

@@ -421,3 +421,120 @@ describe("globalcomix-queries cache-wrapping contract", () => {
     );
   });
 });
+
+// ── WS1.B — Organic + AppLovin cohort branches; Pubmint TODO marker ────────
+describe("buildCohortSubquery: attribution-bucket CASE", () => {
+  it("maps the three Organic strings into the 'Organic' bucket", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixKPIs("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // All three Organic flavors should resolve to the same display label.
+    expect(query).toContain("'Organic'");
+    expect(query).toContain("'Google Organic Search'");
+    expect(query).toContain("'Untrusted Devices'");
+    // The branch returns the literal 'Organic' (one occurrence in the
+    // THEN clause is enough to prove the case wiring landed).
+    expect(query).toMatch(/THEN 'Organic'/);
+  });
+
+  it("maps both Axon AppLovin strings into the 'AppLovin' bucket", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixKPIs("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toContain("'Axon by AppLovin Android'");
+    expect(query).toContain("'Axon by AppLovin iOS'");
+    expect(query).toMatch(/THEN 'AppLovin'/);
+  });
+
+  it("leaves a TODO marker for Pubmint (open Q2 awaiting Gabby's call)", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixKPIs("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // Pubmint stays out of the bucketed CASE branches.
+    expect(query).not.toMatch(/THEN 'Pubmint'/);
+    // The TODO comment ships inside the SQL so a future reader sees the gap.
+    expect(query).toContain("TODO(open-q-2)");
+  });
+
+  it("keeps the Google iOS attribution filter exactly as before", async () => {
+    queryFn.mockResolvedValue([[{}]]);
+    const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixKPIs("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toMatch(/NOT \(_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios'\)/);
+  });
+});
+
+// ── WS1.C — campaign cohort JOIN + maturity-friendly nulls ─────────────────
+describe("queryGlobalComixCampaigns: cohort _Campaign_ID join", () => {
+  it("LEFT JOINs the cohort table on `campaign_id` and selects ROI D7 / sub funnel", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixCampaigns } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixCampaigns("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // No more hardcoded zero — ROI D7 is real, sourced from rev_d7 / spend.
+    expect(query).not.toMatch(/CAST\(0 AS FLOAT64\)\s+AS\s+roas/);
+    expect(query).toMatch(/AS roi_d7/);
+    // The cohort CTE projects the three new fields the dashboard reads.
+    expect(query).toMatch(/AS sub_d7/);
+    expect(query).toMatch(/AS sub_start_d7/);
+    expect(query).toMatch(/AS cpa_d7/);
+    // Join shape: LEFT JOIN preserves spend-only campaigns (cohort NULLs
+    // surface as null fields the renderer prints as "—").
+    expect(query).toMatch(/LEFT JOIN curr_cohort cc\s+USING \(campaign_id\)/);
+    // _Campaign_ID is the join key (distinct from the unreliable
+    // _Campaign_Attribution string). It's CAST to STRING so the join
+    // lands cleanly against the spend-side campaign_id (also STRING).
+    expect(query).toMatch(/CAST\(_Campaign_ID AS STRING\)\s+AS campaign_id/);
+  });
+
+  it("returns null cohort fields for campaigns with no Adjust attribution", async () => {
+    queryFn.mockResolvedValue([
+      [
+        {
+          campaign_id: "c-orphan",
+          campaign_name: "YH_FB_orphan",
+          network: "Meta",
+          spend: 500,
+          installs: 50,
+          cpi: 10,
+          // Cohort CTE didn't match — these come back null from BQ.
+          sub_d7: null,
+          sub_start_d7: null,
+          cpa_d7: null,
+          roi_d7: null,
+          spend_delta: null,
+        },
+      ],
+    ]);
+    const { queryGlobalComixCampaigns } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    const rows = await queryGlobalComixCampaigns("globalcomix", FROM, TO);
+    expect(rows).toHaveLength(1);
+    const r = rows[0];
+    expect(r.spend).toBe(500);
+    // numberish coerces null to 0 for totals, numberOrNull keeps null for
+    // optional cohort fields so the UI can render "—" honestly.
+    expect(r.sub_d7).toBeNull();
+    expect(r.sub_start_d7).toBeNull();
+    expect(r.cpa_d7).toBeNull();
+    // ROI D7 uses numberish (0 when missing) so the column stays numeric.
+    expect(r.roi_d7).toBe(0);
+  });
+
+  it("emits the cohort's Google iOS exclusion filter inside the curr_cohort CTE", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixCampaigns } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixCampaigns("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toMatch(/NOT \(_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios'\)/);
+  });
+});

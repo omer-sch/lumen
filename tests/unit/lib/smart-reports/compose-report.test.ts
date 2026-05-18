@@ -83,7 +83,7 @@ function fakeReadyData(): ReadyData {
         spend: 800,
         installs: 80,
         cpi: 10,
-        roas: 0.3,
+        roi_d7: 0.3,
         spendDelta: 0.1,
         family: "Sub Evergreen",
         geo: "WW",

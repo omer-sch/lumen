@@ -122,7 +122,7 @@ function makeCampaign(over: {
     spend: 500,
     installs: 50,
     cpi: 10,
-    roas: 0.3,
+    roi_d7: 0.3,
     spendDelta: 0.05,
     family: over.family,
     geo: over.geo,

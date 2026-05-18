@@ -167,6 +167,19 @@ function buildCohortSubquery(client: string): string {
         WHEN _Network_Attribution IN ('Facebook Installs', 'Instagram Installs', 'Off-Facebook Installs') THEN 'Meta'
         WHEN _Network_Attribution = 'TikTok SAN' THEN 'TikTok'
         WHEN _Network_Attribution = 'Apple Search Ads' THEN 'Apple Search Ads'
+        -- AppLovin attribution arrives split across the two Axon strings.
+        -- Spend table is wired in WS2; the cohort branch lands here so
+        -- the moment AppLovin spend joins, revenue/sub funnel attributes.
+        WHEN _Network_Attribution IN ('Axon by AppLovin Android', 'Axon by AppLovin iOS') THEN 'AppLovin'
+        -- Organic bucket: investigation 2026-05-17 confirmed three real
+        -- attribution strings driving 49k+ rows / 90d that were dropped
+        -- by the prior NULL fallback. "Untrusted Devices" folds in per
+        -- the same investigation (Adjust's bucket for device-fingerprint
+        -- mismatches that should not count as paid).
+        WHEN _Network_Attribution IN ('Organic', 'Google Organic Search', 'Untrusted Devices') THEN 'Organic'
+        -- TODO(open-q-2): Pubmint iOS / Pubmint Android (~7.7k rows / 90d)
+        -- fall through to NULL. No matching spend table exists today;
+        -- awaiting Gabby's call on whether to bucket as paid or organic.
         ELSE NULL
       END AS network,
       SUM(COALESCE(_0D_Revenue_Total, 0))  AS rev_d0,
@@ -813,14 +826,23 @@ async function _queryGlobalComixCampaigns(
   to: string,
 ): Promise<CampaignRow[]> {
   const spendSub = buildSpendSubquery(client);
+  const cfg = getMultiSourceConfig(client);
+  const cohortTable = qualifyTable(cfg.cohortTable);
   const bq = getBigQueryClient();
 
-  // Campaign-level ROAS is intentionally synthesized as `0` here — the
-  // cohort table's `_Campaign_Attribution` doesn't reliably match the
-  // platform-side `campaign_id` for the gaming-app verticals that drive
-  // most spend, so a join on campaign would silently drop most rows.
-  // The Campaigns page consumes spend/installs/CPI directly; ROAS is
-  // surfaced in aggregate (KPI tile + trend) only for now.
+  // The previous version of this query hardcoded ROAS to 0 with the
+  // comment "cohort `_Campaign_Attribution` doesn't reliably match" — the
+  // 2026-05-17 investigation confirmed the table actually carries a real
+  // numeric `_Campaign_ID` column (distinct from the unreliable string
+  // attribution) which joins cleanly to the spend-side `campaign_id`.
+  // Cohort-attributed subscriber / sub-start / ROI D7 flow through to
+  // the dashboard and (via EnrichedCampaignRow) into Hermes / Smart
+  // Reports decks automatically.
+  //
+  // Maturity gate: callers downstream (snapshot.ts, anomstack, the
+  // dashboard table) gate on `sub_d7 >= COHORT_D7_MATURITY_THRESHOLD`.
+  // We return raw values here; null vs 0 lets the renderer print "—"
+  // for campaigns that had spend but no matured cohort.
   const query = `
     WITH curr AS (
       SELECT
@@ -832,6 +854,18 @@ async function _queryGlobalComixCampaigns(
       FROM ${spendSub}
       WHERE date BETWEEN ${FROM} AND ${TO}
       GROUP BY campaign_id
+    ),
+    curr_cohort AS (
+      SELECT
+        CAST(_Campaign_ID AS STRING)               AS campaign_id,
+        SUM(COALESCE(_7D_Revenue_Total, 0))        AS rev_d7,
+        SUM(COALESCE(_7D_Paying_Users, 0))         AS sub_d7,
+        SUM(COALESCE(_7D_subscription_start_Events, 0)) AS sub_start_d7
+      FROM ${cohortTable}
+      WHERE _Day_Date BETWEEN ${FROM} AND ${TO}
+        AND _Campaign_ID IS NOT NULL
+        AND NOT (_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios')
+      GROUP BY _Campaign_ID
     ),
     prev AS (
       SELECT
@@ -849,11 +883,15 @@ async function _queryGlobalComixCampaigns(
       c.network,
       c.spend,
       c.installs,
-      SAFE_DIVIDE(c.spend, NULLIF(c.installs, 0)) AS cpi,
-      CAST(0 AS FLOAT64) AS roas,
-      SAFE_DIVIDE(c.spend - p.spend, NULLIF(p.spend, 0)) AS spend_delta
+      SAFE_DIVIDE(c.spend, NULLIF(c.installs, 0))               AS cpi,
+      cc.sub_d7                                                  AS sub_d7,
+      cc.sub_start_d7                                            AS sub_start_d7,
+      SAFE_DIVIDE(c.spend, NULLIF(cc.sub_d7, 0))                 AS cpa_d7,
+      SAFE_DIVIDE(cc.rev_d7, NULLIF(c.spend, 0))                 AS roi_d7,
+      SAFE_DIVIDE(c.spend - p.spend, NULLIF(p.spend, 0))         AS spend_delta
     FROM curr c
-    LEFT JOIN prev p USING (campaign_id)
+    LEFT JOIN curr_cohort cc USING (campaign_id)
+    LEFT JOIN prev p          USING (campaign_id)
     WHERE c.spend > 0
     ORDER BY c.spend DESC
     LIMIT 100
@@ -872,7 +910,13 @@ async function _queryGlobalComixCampaigns(
     spend: numberish(r.spend),
     installs: numberish(r.installs),
     cpi: numberish(r.cpi),
-    roas: numberish(r.roas),
+    roi_d7: numberish(r.roi_d7),
+    // Cohort fields: null when the cohort LEFT JOIN didn't match (a campaign
+    // with spend but no Adjust attribution) so the renderer can distinguish
+    // "no data" from a real zero.
+    sub_d7: numberOrNull(r.sub_d7),
+    sub_start_d7: numberOrNull(r.sub_start_d7),
+    cpa_d7: numberOrNull(r.cpa_d7),
     spendDelta: numberOrNull(r.spend_delta),
   }));
 }
