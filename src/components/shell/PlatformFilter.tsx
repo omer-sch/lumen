@@ -92,17 +92,21 @@ export function PlatformFilter() {
           "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-body text-xs font-semibold uppercase tracking-wider transition-[transform,background-color,color,border-color] duration-280 ease-out-quart hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
         )}
         style={{
+          // Match ClientSelector's visual weight: --border-default for the
+          // neutral state, --text-secondary for the muted text (not the
+          // light-mode --text-light-* tokens, which read dark-on-dark).
           background: narrowed
             ? "var(--color-ua-dim)"
             : "var(--surface-input)",
-          color: narrowed ? "var(--color-ua)" : "var(--text-light-secondary)",
+          color: narrowed ? "var(--color-ua)" : "var(--text-secondary)",
           border: narrowed
             ? "1px solid color-mix(in oklab, var(--color-ua) 35%, transparent)"
-            : "1px solid var(--border-subtle)",
+            : "1px solid var(--border-default)",
         }}
       >
-        <NetworkIcon className="h-3.5 w-3.5" strokeWidth={2} />
-        <span className="hidden sm:inline">Channels ·</span>
+        {/* Icon strokeWidth left at lucide default to match ClientSelector.
+            "Channels · " prefix dropped per the design review. */}
+        <NetworkIcon className="h-3.5 w-3.5" />
         <span>{summary}</span>
         <ChevronDown
           className={cn(

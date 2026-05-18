@@ -69,17 +69,24 @@ export function OsFilter() {
           "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-body text-xs font-semibold uppercase tracking-wider transition-[transform,background-color,color,border-color] duration-280 ease-out-quart hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
         )}
         style={{
+          // Match ClientSelector's visual weight: neutral state uses
+          // --border-default (not --border-subtle); the muted neutral
+          // text uses --text-secondary (dark-mode), NOT the
+          // --text-light-* tokens which are light-mode-only and rendered
+          // invisible against the dark topbar.
           background: narrowed
             ? "var(--color-ua-dim)"
             : "var(--surface-input)",
-          color: narrowed ? "var(--color-ua)" : "var(--text-light-secondary)",
+          color: narrowed ? "var(--color-ua)" : "var(--text-secondary)",
           border: narrowed
             ? "1px solid color-mix(in oklab, var(--color-ua) 35%, transparent)"
-            : "1px solid var(--border-subtle)",
+            : "1px solid var(--border-default)",
         }}
       >
-        <Smartphone className="h-3.5 w-3.5" strokeWidth={2} />
-        <span className="hidden sm:inline">OS ·</span>
+        {/* Icon strokeWidth left at lucide's default so it reads at the
+            same weight as ClientSelector's <Users>. Prefix label "OS · "
+            dropped per the design review - icon + value is enough. */}
+        <Smartphone className="h-3.5 w-3.5" />
         <span>{SHORT_LABEL[os]}</span>
         <ChevronDown
           className={cn(
