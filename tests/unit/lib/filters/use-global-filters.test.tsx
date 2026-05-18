@@ -196,6 +196,57 @@ describe("useGlobalFilters: setters write to the URL", () => {
   });
 });
 
+describe("useGlobalFilters: tab", () => {
+  it("defaults to 'performance' when ?tab is missing", async () => {
+    const { useGlobalFilters } = await import(
+      "@/lib/filters/use-global-filters"
+    );
+    const { result } = renderHook(() => useGlobalFilters());
+    expect(result.current.tab).toBe("performance");
+  });
+
+  it("reads each canonical tab from the URL", async () => {
+    const { useGlobalFilters } = await import(
+      "@/lib/filters/use-global-filters"
+    );
+    for (const t of ["performance", "lifecycle", "attribution"] as const) {
+      nav.setParams(`tab=${t}`);
+      const { result } = renderHook(() => useGlobalFilters());
+      expect(result.current.tab).toBe(t);
+    }
+  });
+
+  it("falls back to 'performance' on a garbage tab value", async () => {
+    const { useGlobalFilters } = await import(
+      "@/lib/filters/use-global-filters"
+    );
+    nav.setParams("tab=settings"); // not a valid tab
+    const { result } = renderHook(() => useGlobalFilters());
+    expect(result.current.tab).toBe("performance");
+  });
+
+  it("setTab writes the non-default value to the URL", async () => {
+    const { useGlobalFilters } = await import(
+      "@/lib/filters/use-global-filters"
+    );
+    const { result } = renderHook(() => useGlobalFilters());
+    act(() => result.current.setTab("lifecycle"));
+    const url = nav.replace.mock.calls[0][0] as string;
+    expect(url).toMatch(/tab=lifecycle/);
+  });
+
+  it("setTab('performance') OMITS the default from the URL", async () => {
+    const { useGlobalFilters } = await import(
+      "@/lib/filters/use-global-filters"
+    );
+    nav.setParams("tab=lifecycle");
+    const { result } = renderHook(() => useGlobalFilters());
+    act(() => result.current.setTab("performance"));
+    const url = nav.replace.mock.calls[0][0] as string;
+    expect(url).not.toMatch(/tab=/);
+  });
+});
+
 describe("previousWindow", () => {
   it("shifts the same-length window backwards by its length", async () => {
     const { previousWindow, windowDays } = await import(

@@ -4,8 +4,10 @@ import { useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
+  isDashboardTab,
   isOsFilter,
   isPlatformFilter,
+  type DashboardTab,
   type OsFilter,
   type PlatformFilter,
 } from "@/lib/filters/types";
@@ -24,6 +26,9 @@ export interface GlobalFilters {
   os: OsFilter;
   /** Platform filter (WS6). Empty array means "all platforms" — no filter. */
   platforms: PlatformFilter[];
+  /** Dashboard sub-page tab. Default "performance". Persists as `?tab=`
+   *  on the URL when non-default. */
+  tab: DashboardTab;
 }
 
 const DEFAULT_CLIENT = "globalcomix";
@@ -95,6 +100,7 @@ export function useGlobalFilters() {
   const clientParam = params.get("client");
   const osParam = params.get("os");
   const platformsParam = params.get("platforms");
+  const tabParam = params.get("tab");
 
   const filters: GlobalFilters = useMemo(() => {
     const range: DateRangePreset = isPreset(rangeParam) ? rangeParam : "30d";
@@ -103,8 +109,12 @@ export function useGlobalFilters() {
     const osCandidate = osParam?.trim().toLowerCase() ?? "";
     const os: OsFilter = isOsFilter(osCandidate) ? osCandidate : "total";
     const platforms = parsePlatforms(platformsParam);
-    return { range, from, to, client, os, platforms };
-  }, [rangeParam, fromParam, toParam, clientParam, osParam, platformsParam]);
+    const tabCandidate = tabParam?.trim().toLowerCase() ?? "";
+    const tab: DashboardTab = isDashboardTab(tabCandidate)
+      ? tabCandidate
+      : "performance";
+    return { range, from, to, client, os, platforms, tab };
+  }, [rangeParam, fromParam, toParam, clientParam, osParam, platformsParam, tabParam]);
 
   const replaceWith = useCallback(
     (mutate: (sp: URLSearchParams) => void) => {
@@ -178,7 +188,27 @@ export function useGlobalFilters() {
     [replaceWith],
   );
 
-  return { ...filters, setRange, setCustomRange, setClient, setOs, setPlatforms };
+  const setTab = useCallback(
+    (tab: DashboardTab) => {
+      replaceWith((sp) => {
+        // "performance" is the default; omit it from the URL so the
+        // shipped /dashboard link stays clean.
+        if (tab === "performance") sp.delete("tab");
+        else sp.set("tab", tab);
+      });
+    },
+    [replaceWith],
+  );
+
+  return {
+    ...filters,
+    setRange,
+    setCustomRange,
+    setClient,
+    setOs,
+    setPlatforms,
+    setTab,
+  };
 }
 
 /**

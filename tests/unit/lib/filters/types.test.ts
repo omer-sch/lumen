@@ -3,8 +3,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ALL_DASHBOARD_TABS,
   ALL_OS,
   ALL_PLATFORMS,
+  isDashboardTab,
   isOsFilter,
   isPlatformFilter,
 } from "@/lib/filters/types";
@@ -54,6 +56,33 @@ describe("ALL_OS / ALL_PLATFORMS constants", () => {
       "tiktok",
       "apple_search_ads",
       "applovin",
+    ]);
+  });
+});
+
+describe("isDashboardTab", () => {
+  it("accepts the three canonical tab values", () => {
+    expect(isDashboardTab("performance")).toBe(true);
+    expect(isDashboardTab("lifecycle")).toBe(true);
+    expect(isDashboardTab("attribution")).toBe(true);
+  });
+
+  it("rejects unknown / casing / unrelated tokens", () => {
+    expect(isDashboardTab("PERFORMANCE")).toBe(false);
+    expect(isDashboardTab("dashboard")).toBe(false);
+    expect(isDashboardTab("")).toBe(false);
+    expect(isDashboardTab(null)).toBe(false);
+    expect(isDashboardTab(undefined)).toBe(false);
+    expect(isDashboardTab(0)).toBe(false);
+  });
+});
+
+describe("ALL_DASHBOARD_TABS constant", () => {
+  it("covers exactly the three canonical tab values, in default-first order", () => {
+    expect([...ALL_DASHBOARD_TABS]).toEqual([
+      "performance",
+      "lifecycle",
+      "attribution",
     ]);
   });
 });

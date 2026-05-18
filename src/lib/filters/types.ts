@@ -60,3 +60,30 @@ export function isPlatformFilter(value: unknown): value is PlatformFilter {
     value === "applovin"
   );
 }
+
+/**
+ * Dashboard sub-page tab. Three scopes, three URLs:
+ *   - "performance"  Acquisition. KPI strip + trend + per-channel + cadence.
+ *   - "lifecycle"    Subscriber state. Subs / churn / net sub over time.
+ *   - "attribution"  Trust + coverage. BCAC, paid-vs-organic, attribution
+ *                    validation, data freshness.
+ *
+ * Each tab has its own filter-relevance semantics (OS / Platform don't
+ * apply on Lifecycle, for example) - TopBar conditionally renders the
+ * chips per active tab.
+ */
+export type DashboardTab = "performance" | "lifecycle" | "attribution";
+
+export const ALL_DASHBOARD_TABS: readonly DashboardTab[] = [
+  "performance",
+  "lifecycle",
+  "attribution",
+];
+
+export function isDashboardTab(value: unknown): value is DashboardTab {
+  return (
+    value === "performance" ||
+    value === "lifecycle" ||
+    value === "attribution"
+  );
+}
