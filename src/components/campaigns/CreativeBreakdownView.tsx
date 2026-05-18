@@ -1,14 +1,24 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Megaphone } from "lucide-react";
 import { GlassIcon } from "@/components/ui/GlassIcon";
+import { InfoCallout } from "@/components/ui/InfoCallout";
 import { LivePulse } from "@/components/ui/LivePulse";
+import { SectionError } from "@/components/ui/SectionError";
 import { CreativeBreakdownSkeleton } from "@/components/ui/Skeleton";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
+import { useCreativeBreakdown } from "@/lib/campaigns/use-creative-breakdown";
+import { useTopAdTrend } from "@/lib/campaigns/use-top-ad-trend";
 import { findClient } from "@/lib/mock/clients";
+import {
+  CreativeFilterChips,
+  type LocalFilters,
+} from "./creatives/CreativeFilterChips";
+import { TopAdTrend } from "./creatives/TopAdTrend";
+import { CreativeTable } from "./creatives/CreativeTable";
 
 /**
  * Per-ad drilldown view at /campaigns/creatives. Equivalent of the
@@ -16,11 +26,14 @@ import { findClient } from "@/lib/mock/clients";
  * the Campaigns top-level page so the global filter (date / OS /
  * platform / client) flows in as context.
  *
- * WS4 ships the shell: header + breadcrumb + skeleton. WS5 wires in
- * the data hooks (`useCreativeBreakdown` / `useTopAdTrend`), the
- * filter chip row, the trend chart, the per-ad table, and the coverage
- * warning. Until then the page renders the skeleton so the route is
- * navigable and the layout shape is verifiable end-to-end.
+ * Layout, top to bottom:
+ *   - Header (client+window chip, title, subtitle, back-link to /campaigns).
+ *   - Filter chip row (6 local-state chips: campaign, campaign status,
+ *     adset, ad name, ad status, country).
+ *   - Top Ad trend chart (current vs prior 30 days).
+ *   - Per-ad table (12 columns, ranked by spend DESC).
+ *   - Coverage warning (when Google / Apple rows appear without
+ *     per-ad spend in BQ).
  */
 export function CreativeBreakdownView() {
   return (
@@ -31,12 +44,74 @@ export function CreativeBreakdownView() {
 }
 
 function Inner() {
-  const { from, to, client } = useGlobalFilters();
+  const { from, to, client, os, platforms } = useGlobalFilters();
   const c = findClient(client);
   const days = Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
   const params = useSearchParams();
   const backQuery = params.toString();
   const backHref = backQuery ? `/campaigns?${backQuery}` : "/campaigns";
+
+  const { rows, loading, error, refetch } = useCreativeBreakdown({
+    from,
+    to,
+    client,
+    os,
+    platforms,
+  });
+  const { data: trend, loading: trendLoading } = useTopAdTrend({
+    from,
+    to,
+    client,
+    os,
+    platforms,
+  });
+
+  // Local filter chip state — narrows the visible rows post-fetch.
+  // Owned by the view so a refresh of the underlying data doesn't
+  // wipe a chip selection.
+  const [local, setLocal] = useState<LocalFilters>({
+    campaignNames: [],
+    campaignStatuses: [],
+    adsetNames: [],
+    adNameSearch: "",
+    adStatuses: [],
+    countries: [],
+  });
+
+  const visibleRows = useMemo(() => {
+    if (!rows) return null;
+    const search = local.adNameSearch.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (
+        local.campaignNames.length > 0 &&
+        !local.campaignNames.includes(r.campaign_name ?? "")
+      ) {
+        return false;
+      }
+      if (
+        local.adsetNames.length > 0 &&
+        !local.adsetNames.includes(r.adset_name)
+      ) {
+        return false;
+      }
+      if (
+        search.length > 0 &&
+        !r.ad_name.toLowerCase().includes(search) &&
+        !r.creative_name.toLowerCase().includes(search)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [rows, local]);
+
+  const hasGoogleOrAppleRow = useMemo(
+    () =>
+      (rows ?? []).some(
+        (r) => r.network === "Google" || r.network === "Apple Search Ads",
+      ),
+    [rows],
+  );
 
   return (
     <div className="flex flex-col gap-6 py-2 md:gap-7">
@@ -87,7 +162,33 @@ function Inner() {
         </div>
       </header>
 
-      <CreativeBreakdownSkeleton />
+      {rows === null && loading ? (
+        <CreativeBreakdownSkeleton />
+      ) : error && rows === null ? (
+        <SectionError
+          section="the creative breakdown"
+          shape="min-h-[14rem]"
+          onRetry={refetch}
+          data-testid="creative-breakdown-error"
+        />
+      ) : (
+        <>
+          <CreativeFilterChips
+            rows={rows ?? []}
+            value={local}
+            onChange={setLocal}
+          />
+          <TopAdTrend data={trend} loading={trendLoading} />
+          <CreativeTable rows={visibleRows ?? []} />
+          {hasGoogleOrAppleRow && (
+            <InfoCallout
+              data-testid="creative-coverage-warning"
+              title="Some networks don't expose per-ad spend"
+              body="Google Ads and Apple Search Ads don't expose per-ad spend in BigQuery. Their rows show subscriber counts only; CPA and ROI columns render as “—”."
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }
