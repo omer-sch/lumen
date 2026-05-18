@@ -107,22 +107,22 @@ const CAMPAIGN_NAME_COLUMN_BY_TABLE: Record<string, string> = {
 };
 
 /**
- * Per-table expression for `campaign_status` ("running" / "paused"). Every
- * Adjust-sourced spend table carries this column under the same name —
- * the map is here for symmetry with the name map and to leave a clean
- * extension point if a future onboarded source uses a different label.
+ * Per-table expression for `campaign_status` ("running" / "paused").
  *
- * Tables not in the map fall back to `CAST(NULL AS STRING) AS
- * campaign_status` so the SQL still parses, leaving the renderer to
- * print "—" instead of breaking the page.
+ * The 2026-05-18 attempt to wire this column (WS2 of the campaigns
+ * rework) assumed every Adjust spend table carries it under the same
+ * name — that assumption was wrong. Live BQ rejected `campaign_status`
+ * on the GlobalComix adjust tables (`Unrecognized name: campaign_status;
+ * Did you mean campaign_name?`). The column DOES live on the non-Adjust
+ * Playw3 spend tables (`dwh_fb2_playw3`), so the right fix per source
+ * is going to vary. Until each GlobalComix source is verified, the
+ * map stays empty: every leg falls back to `CAST(NULL AS STRING) AS
+ * campaign_status` and the renderer prints no status pill.
+ *
+ * To re-enable a table: confirm the column exists on it (BQ schema
+ * inspection or the dwh ddl) and add an entry here.
  */
-const CAMPAIGN_STATUS_COLUMN_BY_TABLE: Record<string, string> = {
-  dwh_apple_globalcomix_adjust: "campaign_status",
-  dwh_google_ads_globalcomix_adjust: "campaign_status",
-  dwh_tik_tok_globalcomix_adjust: "campaign_status",
-  dwh_applovin_globalcomix_adjust: "campaign_status",
-  dwh_fb2_globalcomix_adjust: "campaign_status",
-};
+const CAMPAIGN_STATUS_COLUMN_BY_TABLE: Record<string, string> = {};
 
 /**
  * Filter options threaded through the SQL builder by WS6's global filter
@@ -1654,7 +1654,7 @@ async function _queryGlobalComixCreatives(
       COALESCE(c.creative_name, c.ad_id)                     AS ad_name,
       COALESCE(c.creative_name, '')                          AS creative_name,
       c.network                                              AS network,
-      f.thumbnail_url                                        AS thumbnail_url,
+      f._thumbnail_url                                       AS thumbnail_url,
       SUM(c.sub_start_d7)                                    AS sub_start_d7,
       SUM(c.sub_d7)                                          AS sub_d7,
       SUM(c.rev_d7)                                          AS rev_d7
@@ -1664,7 +1664,7 @@ async function _queryGlobalComixCreatives(
     WHERE c.date BETWEEN ${FROM} AND ${TO}
       AND c.ad_id IS NOT NULL
       AND c.network IS NOT NULL
-    GROUP BY c.ad_id, c.creative_name, c.network, f.thumbnail_url
+    GROUP BY c.ad_id, c.creative_name, c.network, f._thumbnail_url
     ORDER BY SUM(c.sub_d7) DESC
     LIMIT 100
   `;
