@@ -209,7 +209,7 @@ Filters active: all four chips.
 
 ### Campaigns — drill-down layer
 
-The page you go to when a number on the dashboard moves and you need to find which campaign caused it. Investigation mode, not overview mode. Two routes: the index (`/campaigns`) and the per-campaign profile (`/campaigns/[campaign_id]`).
+The page you go to when a number on the dashboard moves and you need to find which campaign caused it. Investigation mode, not overview mode. Three routes: the index (`/campaigns`), the per-campaign profile (`/campaigns/[campaign_id]`), and the per-creative drilldown (`/campaigns/creatives`).
 
 **Index (`/campaigns`) — what lives here:**
 - Campaign breakdown table: one row per campaign, columns for Network, Spend, Installs, CPI, plus the client-appropriate unit-cost and return columns (**for the GlobalComix pilot: CPA D7 and ROI D7**; for performance / e-commerce clients: CPI and ROAS), Δ Spend vs the prior equal-length window. Click any row to navigate into the per-campaign profile with the global filter preserved.
@@ -228,6 +228,14 @@ The page you go to when a number on the dashboard moves and you need to find whi
 - Inline coverage warning (currently: AppLovin pre-2026-05-05 windows).
 
 **TopBar on the profile route:** Date + Client only. OS + Platform chips UNMOUNT (not just CSS-hidden) — a campaign is one campaign, so OS / Platform either no-op or zero the result.
+
+**Creatives drilldown (`/campaigns/creatives`) — what lives here:**
+- Per-ad table ranked by spend DESC (top 100). 12 columns: Ad Name / Spend / Impr / Clicks / Installs / CPI / SubStart / CP SubStart / Sub D0 / CPA D0 / Sub D7 / CPA D7. Spend cell has a blue intensity bar; rate cells (CPI / CP SubStart / CPA D7) tint via cellTone vs the table's grand-total averages.
+- Meta thumbnails inline next to the ad name (from `ods_fb2_creatives_globalcomix`); other networks render a Megaphone placeholder.
+- Local filter chip row (6 chips): Campaign + Adset are wired multi-select dropdowns populated from the visible rows, Ad Name is a text search, Campaign Status / Ad Status / Country are placeholder chips pending column verification.
+- Top Ad trend chart at the top: current period vs equivalent prior 30 days for the #1 ad by total spend ($100 minimum).
+- Inline coverage warning when Google or Apple rows surface — their per-ad spend doesn't exist in BigQuery, so their CPI / CPA / ROI cells render "—" honestly.
+- Same global filter context as the index (Date + OS + Platform + Client all apply).
 
 **What does NOT live here:** aggregate KPIs (that's Dashboard), NL queries (that's Ask).
 
