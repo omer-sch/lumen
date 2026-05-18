@@ -1,4 +1,8 @@
-# Dashboard design parity pass — bring the new WS6/WS7 surfaces up to the level of the existing dashboard (2026-05-18)
+# [SUPERSEDED 2026-05-18] Dashboard design parity pass — bring the new WS6/WS7 surfaces up to the level of the existing dashboard (2026-05-18)
+
+> **Do not implement this prompt.** Superseded by `2026-05-18-dashboard-tabs-and-polish.md`, which folds this design polish work into the larger three-tab IA reorganization. Both PRs touch the same set of files, so they bundle. Kept on disk for traceability.
+
+---
 
 Owner: Omer. Single PR on a new branch off `main` named `dashboard-design-parity`. **Behavior must not change in this PR.** The data layer, the queries, the filter logic, the cache wiring — all of it stays exactly as it shipped in `globalcomix-full-implementation`. This is a visual and interaction-polish pass only.
 
