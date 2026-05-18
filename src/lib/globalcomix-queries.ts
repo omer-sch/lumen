@@ -283,7 +283,12 @@ export type CohortGroupBy =
   | "country"
   | "campaign_id"
   | "ad_id"
-  | "creative";
+  | "creative"
+  // Per-adset attribution from `_Adgroup_Attribution`. Used by the
+  // creative breakdown view's filter chip (an analyst scopes a per-ad
+  // table down to one adset to compare creatives within it) and by
+  // any future adset-level table on the per-campaign profile.
+  | "adset";
 
 export type CohortSubqueryOptions = {
   /** Dimensions projected and grouped by. Default ["date", "network"]
@@ -400,6 +405,12 @@ export function buildCohortSubquery(
         dimensionProjections.push({
           name: "creative_name",
           sql: "_Creative_Attribution AS creative_name",
+        });
+        break;
+      case "adset":
+        dimensionProjections.push({
+          name: "adset_name",
+          sql: "_Adgroup_Attribution AS adset_name",
         });
         break;
     }

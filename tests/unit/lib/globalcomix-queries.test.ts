@@ -520,6 +520,23 @@ describe("buildCohortSubquery: groupBy parameterization", () => {
     expect(sql).toMatch(/GROUP BY 1, 2/);
   });
 
+  it("emits _Adgroup_Attribution AS adset_name when groupBy includes adset", async () => {
+    const { buildCohortSubquery } = await import("@/lib/globalcomix-queries");
+    const sql = buildCohortSubquery("globalcomix", { groupBy: ["adset"] });
+    expect(sql).toMatch(/_Adgroup_Attribution AS adset_name/);
+    expect(sql).toMatch(/GROUP BY 1/);
+  });
+
+  it("combines adset with ad_id when both are requested (creative-breakdown shape)", async () => {
+    const { buildCohortSubquery } = await import("@/lib/globalcomix-queries");
+    const sql = buildCohortSubquery("globalcomix", {
+      groupBy: ["date", "ad_id", "adset", "network"],
+    });
+    expect(sql).toMatch(/CAST\(_Ad_ID AS STRING\) AS ad_id/);
+    expect(sql).toMatch(/_Adgroup_Attribution AS adset_name/);
+    expect(sql).toMatch(/GROUP BY 1, 2, 3, 4/);
+  });
+
   it("always projects the expanded metric set (sub_start D0/D7/D14, trial_start, sub D14/D30/D90)", async () => {
     const { buildCohortSubquery } = await import("@/lib/globalcomix-queries");
     const sql = buildCohortSubquery("globalcomix");
