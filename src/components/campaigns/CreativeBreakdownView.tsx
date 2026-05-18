@@ -3,43 +3,44 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight, Megaphone } from "lucide-react";
+import { ArrowLeft, Megaphone } from "lucide-react";
 import { GlassIcon } from "@/components/ui/GlassIcon";
 import { LivePulse } from "@/components/ui/LivePulse";
-import { SectionError } from "@/components/ui/SectionError";
-import { CampaignsTableSkeleton } from "@/components/ui/Skeleton";
+import { CreativeBreakdownSkeleton } from "@/components/ui/Skeleton";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
-import { useCampaignsData } from "@/lib/campaigns/use-campaigns-data";
 import { findClient } from "@/lib/mock/clients";
-import { CampaignsTable } from "./CampaignsTable";
 
-export function CampaignsView() {
+/**
+ * Per-ad drilldown view at /campaigns/creatives. Equivalent of the
+ * GlobalComix Looker dashboard's Creative Breakdown page. Sits under
+ * the Campaigns top-level page so the global filter (date / OS /
+ * platform / client) flows in as context.
+ *
+ * WS4 ships the shell: header + breadcrumb + skeleton. WS5 wires in
+ * the data hooks (`useCreativeBreakdown` / `useTopAdTrend`), the
+ * filter chip row, the trend chart, the per-ad table, and the coverage
+ * warning. Until then the page renders the skeleton so the route is
+ * navigable and the layout shape is verifiable end-to-end.
+ */
+export function CreativeBreakdownView() {
   return (
     <Suspense fallback={null}>
-      <CampaignsInner />
+      <Inner />
     </Suspense>
   );
 }
 
-function CampaignsInner() {
-  const { from, to, client, os, platforms } = useGlobalFilters();
-  const days = Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
+function Inner() {
+  const { from, to, client } = useGlobalFilters();
   const c = findClient(client);
-  const { rows, loading, error, refetch } = useCampaignsData({
-    from,
-    to,
-    client,
-    os,
-    platforms,
-  });
+  const days = Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
   const params = useSearchParams();
-  const creativesQuery = params.toString();
-  const creativesHref = creativesQuery
-    ? `/campaigns/creatives?${creativesQuery}`
-    : "/campaigns/creatives";
+  const backQuery = params.toString();
+  const backHref = backQuery ? `/campaigns?${backQuery}` : "/campaigns";
 
   return (
-    <div className="flex flex-col gap-8 py-2 md:gap-10">
+    <div className="flex flex-col gap-6 py-2 md:gap-7">
+      <BackLink href={backHref} />
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
           <span
@@ -57,22 +58,14 @@ function CampaignsInner() {
             UA · {c.name} · last {days} days
           </span>
           <h2 className="font-display text-2xl font-extrabold leading-tight tracking-tight text-cloud-white sm:text-3xl">
-            Campaigns
+            Creative Breakdown
           </h2>
           <p className="max-w-2xl font-body text-sm text-[color:var(--text-secondary)]">
-            One row per campaign across the active window. Sort any column,
-            scope to a single channel, and read each row&apos;s 7-day trend at a
-            glance, the same drill-down a UA analyst opens when a number on
-            the dashboard moves.
+            Per-ad performance across the active window. Ranked by spend.
+            Meta thumbnails when available; Google and Apple per-ad spend
+            are not in BigQuery today, so their rows show subscriber
+            counts only.
           </p>
-          <Link
-            href={creativesHref}
-            data-testid="campaigns-creatives-link"
-            className="inline-flex items-center gap-1.5 self-start font-body text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)] transition-[color,transform] duration-280 ease-out-quart hover:translate-x-0.5 hover:text-cloud-white"
-          >
-            Creative Breakdown
-            <ArrowRight className="h-3 w-3" strokeWidth={2.5} />
-          </Link>
         </div>
 
         <div
@@ -94,20 +87,20 @@ function CampaignsInner() {
         </div>
       </header>
 
-      {/* Loading / error / data — the table renders itself when it has
-          rows, even mid-refetch, so filter changes don't flash blank. */}
-      {rows === null && loading ? (
-        <CampaignsTableSkeleton />
-      ) : error && rows === null ? (
-        <SectionError
-          section="the campaigns table"
-          shape="min-h-[14rem]"
-          onRetry={refetch}
-          data-testid="campaigns-error"
-        />
-      ) : (
-        <CampaignsTable rows={rows ?? []} />
-      )}
+      <CreativeBreakdownSkeleton />
     </div>
+  );
+}
+
+function BackLink({ href }: { href: string }) {
+  return (
+    <Link
+      href={href}
+      data-testid="creative-breakdown-back-link"
+      className="inline-flex items-center gap-1.5 self-start font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)] transition-[color,transform] duration-280 ease-out-quart hover:-translate-x-0.5 hover:text-cloud-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+    >
+      <ArrowLeft className="h-3 w-3" strokeWidth={2.5} />
+      Back to campaigns
+    </Link>
   );
 }

@@ -247,6 +247,46 @@ export function CampaignsTableSkeleton() {
   );
 }
 
+/** Skeleton matching the Creative Breakdown view (header + 6 chip
+ *  placeholders + top-ad trend chart + 10-row 12-column table).
+ *  Sized so the eventual content swaps in without a vertical layout
+ *  shift; 10 rows is the lower mid-range we expect once filters narrow. */
+export function CreativeBreakdownSkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-6 py-2"
+      data-testid="creative-breakdown-skeleton"
+    >
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-3 w-24 rounded-full" />
+        <Skeleton className="h-7 w-72 rounded-md" />
+        <Skeleton className="h-3 w-96 rounded-full" />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className="h-7 w-24 rounded-full" />
+        ))}
+      </div>
+      <TrendChartSkeleton />
+      <div
+        className="flex flex-col gap-2 rounded-lg p-4"
+        style={{
+          background: "var(--surface-glass)",
+          border: "1px solid var(--border-glass)",
+          WebkitBackdropFilter: "var(--blur-glass)",
+          backdropFilter: "var(--blur-glass)",
+          boxShadow: "var(--shadow-glass)",
+        }}
+      >
+        <Skeleton className="h-3 w-full rounded-full" />
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+          <Skeleton key={i} className="h-5 w-full rounded-md" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Skeleton matching a feed row. */
 export function FeedRowSkeleton() {
   return (
