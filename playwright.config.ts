@@ -128,6 +128,7 @@ export default defineConfig({
         // Diagnostic dashboard scans (real Clerk session + real BQ).
         "**/dashboard-scan.spec.ts",
         "**/topbar-scan.spec.ts",
+        "**/three-tab-scan.spec.ts",
       ],
     },
 

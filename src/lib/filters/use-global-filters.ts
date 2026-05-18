@@ -4,9 +4,11 @@ import { useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
+  isDashboardCadence,
   isDashboardTab,
   isOsFilter,
   isPlatformFilter,
+  type DashboardCadence,
   type DashboardTab,
   type OsFilter,
   type PlatformFilter,
@@ -29,6 +31,10 @@ export interface GlobalFilters {
   /** Dashboard sub-page tab. Default "performance". Persists as `?tab=`
    *  on the URL when non-default. */
   tab: DashboardTab;
+  /** CadenceTable bucket grain. Default "weekly". Persists as
+   *  `?cadence=` on the URL when non-default. Only relevant on the
+   *  Performance tab; other tabs ignore it. */
+  cadence: DashboardCadence;
 }
 
 const DEFAULT_CLIENT = "globalcomix";
@@ -101,6 +107,7 @@ export function useGlobalFilters() {
   const osParam = params.get("os");
   const platformsParam = params.get("platforms");
   const tabParam = params.get("tab");
+  const cadenceParam = params.get("cadence");
 
   const filters: GlobalFilters = useMemo(() => {
     const range: DateRangePreset = isPreset(rangeParam) ? rangeParam : "30d";
@@ -113,8 +120,12 @@ export function useGlobalFilters() {
     const tab: DashboardTab = isDashboardTab(tabCandidate)
       ? tabCandidate
       : "performance";
-    return { range, from, to, client, os, platforms, tab };
-  }, [rangeParam, fromParam, toParam, clientParam, osParam, platformsParam, tabParam]);
+    const cadenceCandidate = cadenceParam?.trim().toLowerCase() ?? "";
+    const cadence: DashboardCadence = isDashboardCadence(cadenceCandidate)
+      ? cadenceCandidate
+      : "weekly";
+    return { range, from, to, client, os, platforms, tab, cadence };
+  }, [rangeParam, fromParam, toParam, clientParam, osParam, platformsParam, tabParam, cadenceParam]);
 
   const replaceWith = useCallback(
     (mutate: (sp: URLSearchParams) => void) => {
@@ -200,6 +211,17 @@ export function useGlobalFilters() {
     [replaceWith],
   );
 
+  const setCadence = useCallback(
+    (cadence: DashboardCadence) => {
+      replaceWith((sp) => {
+        // "weekly" is the default; omit from URL so deep links stay clean.
+        if (cadence === "weekly") sp.delete("cadence");
+        else sp.set("cadence", cadence);
+      });
+    },
+    [replaceWith],
+  );
+
   return {
     ...filters,
     setRange,
@@ -208,6 +230,7 @@ export function useGlobalFilters() {
     setOs,
     setPlatforms,
     setTab,
+    setCadence,
   };
 }
 

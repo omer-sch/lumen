@@ -74,6 +74,19 @@ export function isPlatformFilter(value: unknown): value is PlatformFilter {
  */
 export type DashboardTab = "performance" | "lifecycle" | "attribution";
 
+/**
+ * Performance-tab cadence selector. Drives the CadenceTable's bucket
+ * grain (Daily / Weekly / Monthly) and persists as `?cadence=`. Default
+ * "weekly". Only relevant on the Performance tab today; a future
+ * iteration will lift this to the TrendChart so both stay in agreement
+ * via the same URL state.
+ */
+export type DashboardCadence = "daily" | "weekly" | "monthly";
+
+export function isDashboardCadence(value: unknown): value is DashboardCadence {
+  return value === "daily" || value === "weekly" || value === "monthly";
+}
+
 export const ALL_DASHBOARD_TABS: readonly DashboardTab[] = [
   "performance",
   "lifecycle",

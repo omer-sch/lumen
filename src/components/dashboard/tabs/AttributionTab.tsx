@@ -1,15 +1,17 @@
 "use client";
 
+import { BcacHeadline } from "@/components/dashboard/BcacHeadline";
 import { PaidVsOrganic } from "@/components/dashboard/PaidVsOrganic";
 import { DataFreshnessBar } from "@/components/dashboard/DataFreshnessBar";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { AlertTriangle } from "lucide-react";
 
 /**
- * Attribution tab - the trust story. BCAC headline (rendered inside
- * PaidVsOrganic for now; WS3.D moves it to its own hero KpiCard above
- * PaidVsOrganic in a follow-up commit), paid-vs-organic split, coverage
- * warnings, data freshness debug.
+ * Attribution tab - the trust story. BCAC leads as the hero KpiCard
+ * (promoted out of PaidVsOrganic in WS3.D so the tab's headline metric
+ * is the first thing a CSM reads). PaidVsOrganic now sticks to the
+ * Sub Total / Sub Paid / Sub Organic split + share bar. Coverage
+ * warnings + data freshness debug close out the tab.
  *
  * Filters relevant on this tab: Date, OS, Platform, Client (all four).
  * The TopBar shows the OS + Platform chips the same way Performance
@@ -29,6 +31,7 @@ export function AttributionTab() {
       role="tabpanel"
       aria-labelledby="dashboard-tab-attribution"
     >
+      <BcacHeadline />
       <PaidVsOrganic />
       <CoverageWarnings />
       <DataFreshnessBar />

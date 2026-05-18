@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+// `useState` is retained: trend + loading still hold local fetch state.
+// Cadence itself is now URL-backed via useGlobalFilters.
 
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 
@@ -10,6 +12,7 @@ import { CadenceTableSkeleton } from "@/components/ui/Skeleton";
 import { aggregateTrend, type Cadence } from "@/lib/dashboard/aggregate-trend";
 import { cellTone, type CellTone } from "@/lib/dashboard/cell-tone";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
+import type { DashboardCadence } from "@/lib/filters/types";
 import type { BQTrendPointByNetwork } from "@/types/dashboard";
 
 const CADENCES: { value: Cadence; label: string }[] = [
@@ -58,11 +61,17 @@ function toneBackground(tone: CellTone): string {
  * sums in aggregate-trend.ts — never average daily rates.
  */
 export function CadenceTable() {
-  const { from, to, client, os, platforms } = useGlobalFilters();
+  const { from, to, client, os, platforms, cadence, setCadence } =
+    useGlobalFilters();
   const fromIso = from.toISOString().slice(0, 10);
   const toIso = to.toISOString().slice(0, 10);
+  // useGlobalFilters' cadence is the URL-backed source of truth (so the
+  // user's choice survives refresh + deep-links). Cast to the local
+  // aggregator's Cadence type - the values are identical, just two
+  // independent type aliases ("daily" | "weekly" | "monthly").
+  const activeCadence: Cadence = cadence as Cadence;
+  const onCadenceChange = (c: Cadence) => setCadence(c as DashboardCadence);
 
-  const [cadence, setCadence] = useState<Cadence>("weekly");
   const [trend, setTrend] = useState<BQTrendPointByNetwork[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -96,13 +105,13 @@ export function CadenceTable() {
 
   const rows = useMemo(() => {
     if (trend.length === 0) return [];
-    return aggregateTrend(trend, cadence);
-  }, [trend, cadence]);
+    return aggregateTrend(trend, activeCadence);
+  }, [trend, activeCadence]);
 
   // Period-over-prior-period delta is meaningful only at Weekly /
   // Monthly cadence (row N's "prior" is row N-1). Daily cadence skips it
   // because the prior-day comparison is too noisy to color a cell on.
-  const showDeltaCol = cadence !== "daily" && rows.length > 1;
+  const showDeltaCol = activeCadence !== "daily" && rows.length > 1;
 
   // Baseline for cell tinting: the table's own grand-total average for
   // each rate metric. Computed once over the visible rows so a user
@@ -158,12 +167,12 @@ export function CadenceTable() {
           }}
         >
           {CADENCES.map((c) => {
-            const active = cadence === c.value;
+            const active = activeCadence === c.value;
             return (
               <button
                 key={c.value}
                 type="button"
-                onClick={() => setCadence(c.value)}
+                onClick={() => onCadenceChange(c.value)}
                 aria-pressed={active}
                 className="rounded-sm px-2.5 py-1 font-body text-xs font-medium transition-colors"
                 style={{

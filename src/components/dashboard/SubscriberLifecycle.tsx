@@ -161,7 +161,11 @@ export function SubscriberLifecycle() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <OsMix rows={osMix} />
-        <NetSubBars rows={trend.slice(-30)} />
+        {/* Render the full Net Sub series for the active date range.
+            Previously hardcoded .slice(-30) which lied about the window:
+            a 7-day filter showed 30 bars, a 90-day filter clipped to 30.
+            Recharts handles the variable width via its auto-tick logic. */}
+        <NetSubBars rows={trend} />
       </div>
     </GlassCard>
   );
@@ -229,7 +233,7 @@ function NetSubBars({ rows }: { rows: NetSubPoint[] }) {
   return (
     <div className="flex flex-col gap-2">
       <span className="font-body text-xs uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
-        Net Sub (last 30 days)
+        Net Sub ({rows.length === 1 ? "1 day" : `${rows.length} days`})
       </span>
       <div className="flex h-24 items-end gap-0.5">
         {rows.map((r) => {
