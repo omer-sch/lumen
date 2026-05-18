@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { KpiCard } from "@/components/dashboard/KpiCard";
+import { CountUpNumber } from "@/components/ui/CountUpNumber";
 import { PaidVsOrganicSkeleton } from "@/components/ui/Skeleton";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 
@@ -25,13 +25,19 @@ const fmtMoney = (n: number) =>
 const fmtCount = (n: number) => Math.round(n).toLocaleString();
 
 /**
- * Paid vs Organic + BCAC strip (WS7.E). Compact card that sits above
- * the trend chart so the BCAC headline is visible without scrolling.
+ * Paid vs Organic (WS7.E, redesigned post-review).
+ *
+ * Previous shape was a row of three KPI tiles + a share bar. The review
+ * called it visually noisy and asked for a different read. New shape is
+ * a single integrated card with two columns: BCAC headline on the
+ * left (the section's "answer to the question"), and a paid-vs-organic
+ * split visualization on the right (the supporting decomposition).
+ * One card tells one story.
  *
  * BCAC (Blended Customer Acquisition Cost) = total paid spend / total
- * subs (paid + organic). The view is one of the few that intentionally
- * opts into the Organic bucket (via /api/bq/geo, which uses
- * buildCohortSubquery with includeOrganic: true).
+ * subs (paid + organic). This view is one of the few that opts into
+ * the Organic bucket (via /api/bq/geo, which calls buildCohortSubquery
+ * with includeOrganic: true).
  */
 export function PaidVsOrganic() {
   const { from, to, client } = useGlobalFilters();
@@ -102,11 +108,15 @@ export function PaidVsOrganic() {
   const bcac =
     paidSpend != null && totals.subD7 > 0 ? paidSpend / totals.subD7 : null;
 
-  const paidShare = totals.subD7 > 0 ? totals.paid / totals.subD7 : 0;
-  const organicShare = 1 - paidShare;
+  const total = totals.paid + totals.organic;
+  const paidPct = total > 0 ? totals.paid / total : 0;
+  const organicPct = total > 0 ? totals.organic / total : 0;
 
   return (
-    <GlassCard className="flex flex-col gap-3 p-4">
+    <GlassCard
+      className="flex flex-col gap-4 p-5"
+      enterIndex={8}
+    >
       <header className="flex items-baseline justify-between gap-2">
         <h3 className="font-display text-lg font-bold text-cloud-white">
           Paid vs Organic
@@ -116,129 +126,158 @@ export function PaidVsOrganic() {
         </p>
       </header>
 
-      {/* BCAC + Sub Total ride the shared KpiCard so they pick up
-          count-up animation, stagger entry, and the brand chip shape.
-          BCAC is the section headline so it takes the mint highlight
-          and the lower-better polarity. Sub Paid / Organic stays as a
-          local PairTile because KpiCard's value is a single string -
-          two numbers next to each other don't fit cleanly. PairTile
-          mirrors the KpiCard box shape so the row reads consistent. */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <KpiCard
-          id="paid-vs-organic-bcac"
-          label="BCAC"
-          value={bcac == null ? "—" : fmtMoney(bcac)}
-          delta={null}
-          direction="lower-better"
-          size="compact"
-          enterIndex={1}
-          highlight
-          hint="Paid spend ÷ all subs"
-        />
-        <KpiCard
-          id="paid-vs-organic-sub-total"
-          label="Sub Total"
-          value={fmtCount(totals.subD7)}
-          delta={null}
-          direction="higher-better"
-          size="compact"
-          enterIndex={2}
-        />
-        <PairTile
-          label="Sub Paid / Organic"
-          paid={fmtCount(totals.paid)}
-          organic={fmtCount(totals.organic)}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_1fr] md:gap-8">
+        <BcacBlock bcac={bcac} />
+        <SplitBlock
+          paid={totals.paid}
+          organic={totals.organic}
+          paidPct={paidPct}
+          organicPct={organicPct}
         />
       </div>
-
-      <ShareBar paidShare={paidShare} organicShare={organicShare} />
     </GlassCard>
   );
 }
 
 /**
- * PairTile renders two numbers side-by-side under a single label. We
- * don't try to fit this into KpiCard because KpiCard's value is a
- * single pre-formatted string + a CountUpNumber animation; "284 / 1310"
- * doesn't decompose cleanly into either of those.
- *
- * Visual shape (border, radius, padding, label tracking) mirrors the
- * compact KpiCard's outer box so the three-tile row reads consistently.
+ * Left column: the BCAC headline. Big tabular number in mint, label
+ * above, definition below. No card frame because we're already inside
+ * a GlassCard; doubling the surface would be busy.
  */
-function PairTile({
-  label,
-  paid,
-  organic,
-}: {
-  label: string;
-  paid: string;
-  organic: string;
-}) {
+function BcacBlock({ bcac }: { bcac: number | null }) {
   return (
-    <div
-      className="flex h-full flex-col gap-4 rounded-lg p-5"
-      style={{
-        background: "var(--surface-glass)",
-        border: "1px solid var(--border-glass)",
-        WebkitBackdropFilter: "var(--blur-glass)",
-        backdropFilter: "var(--blur-glass)",
-        boxShadow: "var(--shadow-glass)",
-      }}
-    >
-      <span className="font-body text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-        {label}
+    <div className="flex flex-col gap-1.5 md:min-w-[180px]">
+      <span className="font-body text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--text-muted)]">
+        Blended CAC
       </span>
-      <div className="flex flex-wrap items-baseline gap-2">
-        <span
-          className="font-display font-extrabold leading-none tracking-tight tabular-nums text-[color:var(--text-primary)]"
-          style={{ fontSize: "var(--text-3xl)" }}
-        >
-          {paid}
-        </span>
-        <span className="font-body text-sm text-[color:var(--text-muted)]">/</span>
-        <span
-          className="font-display font-extrabold leading-none tracking-tight tabular-nums"
-          style={{
-            fontSize: "var(--text-3xl)",
-            color: "var(--color-organic)",
-          }}
-        >
-          {organic}
-        </span>
-      </div>
-      <p className="font-body text-xs text-[color:var(--text-muted)]">
-        Paid · Organic
-      </p>
+      <span
+        className="font-display text-4xl font-extrabold leading-none tracking-tight tabular-nums"
+        style={{
+          color: "var(--color-ua)",
+          textShadow: "0 0 18px color-mix(in oklab, var(--color-ua) 35%, transparent)",
+        }}
+      >
+        {bcac == null ? (
+          "—"
+        ) : (
+          <CountUpNumber value={bcac} decimals={2} prefix="$" duration={1100} />
+        )}
+      </span>
+      <span className="font-body text-[11px] text-[color:var(--text-muted)]">
+        Paid spend ÷ all subs
+      </span>
     </div>
   );
 }
 
-function ShareBar({
-  paidShare,
-  organicShare,
+/**
+ * Right column: the paid / organic split. Single horizontal bar with
+ * mint (paid) and a brand secondary (organic) tints. Per-side labels
+ * stacked above (counts) and below (percent share).
+ */
+function SplitBlock({
+  paid,
+  organic,
+  paidPct,
+  organicPct,
 }: {
-  paidShare: number;
-  organicShare: number;
+  paid: number;
+  organic: number;
+  paidPct: number;
+  organicPct: number;
 }) {
-  if (paidShare === 0 && organicShare === 0) return null;
+  const total = paid + organic;
+  if (total === 0) {
+    return (
+      <div className="flex items-center text-[color:var(--text-muted)] font-body text-sm">
+        No subscriber activity to split for this window.
+      </div>
+    );
+  }
   return (
-    <div className="flex h-2 w-full overflow-hidden rounded-full">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <SplitLabel
+          color="var(--color-ua)"
+          label="Paid"
+          count={paid}
+          pct={paidPct}
+        />
+        <SplitLabel
+          color="var(--color-organic)"
+          label="Organic"
+          count={organic}
+          pct={organicPct}
+          align="right"
+        />
+      </div>
+      {/* Single-bar split. Two consecutive colored segments visually
+          encode the relative weight. Sized at 8px to read as a
+          confident divider, not a hairline. */}
       <div
-        className="h-full"
-        style={{
-          width: `${paidShare * 100}%`,
-          background: "var(--color-ua)",
-        }}
-        aria-label={`Paid ${(paidShare * 100).toFixed(0)}%`}
-      />
-      <div
-        className="h-full"
-        style={{
-          width: `${organicShare * 100}%`,
-          background: "var(--color-organic)",
-        }}
-        aria-label={`Organic ${(organicShare * 100).toFixed(0)}%`}
-      />
+        className="flex h-2 w-full overflow-hidden rounded-full"
+        role="img"
+        aria-label={`Paid ${(paidPct * 100).toFixed(0)}%, Organic ${(organicPct * 100).toFixed(0)}%`}
+      >
+        <div
+          className="h-full transition-[width] duration-700 ease-out-quart"
+          style={{
+            width: `${paidPct * 100}%`,
+            background: "var(--color-ua)",
+          }}
+        />
+        <div
+          className="h-full transition-[width] duration-700 ease-out-quart"
+          style={{
+            width: `${organicPct * 100}%`,
+            background: "var(--color-organic)",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SplitLabel({
+  color,
+  label,
+  count,
+  pct,
+  align = "left",
+}: {
+  color: string;
+  label: string;
+  count: number;
+  pct: number;
+  align?: "left" | "right";
+}) {
+  return (
+    <div
+      className={
+        "flex flex-col gap-0.5 " +
+        (align === "right" ? "items-end text-right" : "items-start text-left")
+      }
+    >
+      <span className="inline-flex items-center gap-1.5 font-body text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
+        <span
+          aria-hidden
+          className="inline-block h-2 w-2 rounded-full"
+          style={{ background: color, boxShadow: `0 0 6px ${color}` }}
+        />
+        {label}
+      </span>
+      <span
+        className="font-display text-2xl font-bold leading-none tabular-nums"
+        style={{ color: "var(--text-primary)" }}
+      >
+        {fmtCount(count)}
+      </span>
+      <span
+        className="font-body text-[11px] font-semibold tabular-nums"
+        style={{ color }}
+      >
+        {(pct * 100).toFixed(0)}%
+      </span>
     </div>
   );
 }

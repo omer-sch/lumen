@@ -166,13 +166,14 @@ export function SubscriberLifecycleSkeleton() {
   );
 }
 
-/** Skeleton matching the PaidVsOrganic shape (header + 3 tiles + share
- *  bar). Same KpiCardSkeleton reuse as SubscriberLifecycleSkeleton so
- *  cold-cache placeholder mirrors the loaded layout exactly. */
+/** Skeleton matching the PaidVsOrganic shape (header + BCAC headline
+ *  on the left + paid/organic split on the right + share bar below).
+ *  Reshaped post-review to mirror the two-column integrated layout
+ *  the component switched to. */
 export function PaidVsOrganicSkeleton() {
   return (
     <div
-      className="flex flex-col gap-3 rounded-lg p-4"
+      className="flex flex-col gap-4 rounded-lg p-5"
       style={{
         background: "var(--surface-glass)",
         border: "1px solid var(--border-glass)",
@@ -186,12 +187,30 @@ export function PaidVsOrganicSkeleton() {
         <Skeleton className="h-5 w-36 rounded-md" />
         <Skeleton className="h-3 w-56 rounded-full" />
       </div>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        {[0, 1, 2].map((i) => (
-          <KpiCardSkeleton key={i} />
-        ))}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_1fr] md:gap-8">
+        {/* BCAC block: small label + big number + small caption */}
+        <div className="flex flex-col gap-1.5 md:min-w-[180px]">
+          <Skeleton className="h-3 w-24 rounded-full" />
+          <Skeleton className="h-10 w-32 rounded-md" />
+          <Skeleton className="h-3 w-28 rounded-full" />
+        </div>
+        {/* Split block: two labels + count + percent on each side, then bar */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline justify-between gap-3">
+            <div className="flex flex-col gap-0.5 items-start">
+              <Skeleton className="h-3 w-12 rounded-full" />
+              <Skeleton className="h-6 w-16 rounded-md" />
+              <Skeleton className="h-3 w-8 rounded-full" />
+            </div>
+            <div className="flex flex-col gap-0.5 items-end">
+              <Skeleton className="h-3 w-16 rounded-full" />
+              <Skeleton className="h-6 w-20 rounded-md" />
+              <Skeleton className="h-3 w-8 rounded-full" />
+            </div>
+          </div>
+          <Skeleton className="h-2 w-full rounded-full" />
+        </div>
       </div>
-      <Skeleton className="h-2 w-full rounded-full" />
     </div>
   );
 }

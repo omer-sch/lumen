@@ -90,22 +90,23 @@ function DashboardInner() {
   // min-h-[40rem] floor stops the layout collapsing into illegibility
   // on very short viewports -- body scroll engages below that.
   //
-  // Additional sections (Paid-vs-Organic, Cadence, Weekends, Lifecycle)
+  // Additional sections (Cadence, Weekends, Lifecycle, Paid-vs-Organic)
   // render at THIS level, OUTSIDE MyDashboard. Each fetches its own data
   // independently of useDashboardData's KPI payload - so when the KPI
   // fetch fails and MyDashboard short-circuits to a section-error tile,
   // the additional sections still render whatever they can. Each is a
   // no-op render when its own data path is empty, so they degrade
   // gracefully and never leave a broken-looking empty card.
+  //
+  // Layout order: KPI strip first (the dashboard's daily-driver). Then
+  // the cadence + weekends tables which slice the same data on time
+  // dimensions. Subscriber Lifecycle + Paid-vs-Organic close the page
+  // as a subscriber-focused pair - lifecycle answers "how many subs",
+  // paid-vs-organic answers "where did they come from".
   const showAdditionalSections = mode !== "ai";
   return (
     <div className="flex min-h-[calc(100dvh-6.5rem)] flex-col gap-3 md:min-h-[calc(100dvh-7rem)] md:gap-4">
       <DashboardHeader />
-
-      {/* Paid vs Organic / BCAC strip - above MyDashboard so the blended
-          cost is the first signal a CSM reads. Renders only when My
-          Dashboard mode is active. */}
-      {showAdditionalSections && <PaidVsOrganic />}
 
       {mode === "ai" ? (
         <AIModeView />
@@ -128,9 +129,13 @@ function DashboardInner() {
               aggregateTrend producing "Invalid Date" labels. */}
           <CadenceTable />
           <WeekendsVsWeekdays />
-          {/* SubscriberLifecycle intentionally ignores the global OS
-              chip - lifecycle is its own scope (see component comment). */}
+          {/* Subscriber-focused pair at the foot of the page:
+              SubscriberLifecycle = quantity + churn over time (ignores
+              the OS filter by design - its own scope). PaidVsOrganic
+              = where those subs come from (paid vs organic split +
+              blended CAC). */}
           <SubscriberLifecycle />
+          <PaidVsOrganic />
         </>
       )}
 
