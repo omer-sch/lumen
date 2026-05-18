@@ -54,6 +54,13 @@ const TO = "@to";
 export type GlobalComixFilter = {
   os?: OsFilter;
   platforms?: PlatformFilter[];
+  /**
+   * When set, narrows every query that consumes this filter to a single
+   * campaign id. Threads through `buildSpendSubquery` (per-leg WHERE)
+   * and `buildCohortSubquery` (cohort-side WHERE on `_Campaign_ID`).
+   * Used by the profile-page sub-fetchers in `_queryGlobalComixCampaignProfile`.
+   */
+  campaignId?: string;
 };
 
 // ── Reusable subqueries ─────────────────────────────────────────────────────
@@ -135,6 +142,13 @@ const CAMPAIGN_STATUS_COLUMN_BY_TABLE: Record<string, string> = {
 export type SpendSubqueryOptions = {
   os?: OsFilter;
   platforms?: PlatformFilter[];
+  /**
+   * When set, every leg of the UNION ALL adds `AND campaign_id = @<id>`
+   * so the resulting subquery returns rows for one campaign only. Used
+   * by the profile-page sub-fetchers. `campaign_id` is treated as a
+   * string (the spend tables emit it as STRING already).
+   */
+  campaignId?: string;
 };
 
 // Display label -> IntentChannel slug. Keep in sync with
@@ -158,6 +172,14 @@ function buildSpendSubquery(
     opts.platforms && opts.platforms.length > 0
       ? new Set(opts.platforms)
       : null;
+  // Campaign-id predicate: emitted on every leg when set. The
+  // campaignId is sanitized so SQL injection through the route param
+  // is impossible — only digits, underscores, hyphens, and lowercase
+  // letters survive the gate. Anything else short-circuits to a
+  // never-match string so the subquery returns no rows.
+  const campaignIdPredicate = opts.campaignId
+    ? ` AND campaign_id = '${sanitizeCampaignId(opts.campaignId)}'`
+    : "";
 
   const legs = cfg.spendSources
     .filter((src) => {
@@ -216,7 +238,7 @@ function buildSpendSubquery(
         ${campaignNameExpr},
         ${campaignStatusExpr}
       FROM ${fq}
-      WHERE (${dedupe})${osPredicate}`;
+      WHERE (${dedupe})${osPredicate}${campaignIdPredicate}`;
     });
 
   // If the platform filter dropped every leg, emit a 0-row placeholder
@@ -276,6 +298,12 @@ export type CohortSubqueryOptions = {
   os?: OsFilter;
   /** WS6 platform filter. Empty / undefined = all networks. */
   platforms?: PlatformFilter[];
+  /**
+   * Profile-page filter: when set, the cohort subquery adds
+   * `AND CAST(_Campaign_ID AS STRING) = '<id>'` so the result is
+   * scoped to one campaign. Same wire shape as the spend-side filter.
+   */
+  campaignId?: string;
 };
 
 /**
@@ -400,6 +428,14 @@ export function buildCohortSubquery(
     ? ` AND (${cohortAttributionPredicate(platformSet, includeOrganic)})`
     : "";
 
+  // Campaign-id predicate. _Campaign_ID in the cohort table is INT64;
+  // the spend side carries STRING — cast to STRING here so the
+  // sanitized id matches without forcing the caller to know table
+  // types. Sanitization gates injection through the route param.
+  const campaignIdPredicateSql = opts.campaignId
+    ? ` AND CAST(_Campaign_ID AS STRING) = '${sanitizeCampaignId(opts.campaignId)}'`
+    : "";
+
   // Always-on metric aggregates. Adding a new metric here is intentionally
   // global: every cohort caller sees it. Costs are paid in BQ bytes
   // scanned, not query latency on this scale.
@@ -435,9 +471,35 @@ ${dimensionsBlock}${dimensionsBlock ? "," : ""}
       SUM(COALESCE(_7D_Cohort_Size, 0))                 AS cohort_d7
     FROM ${fq}
     WHERE _Day_Date IS NOT NULL
-      AND NOT (_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios')${osPredicateSql}${platformPredicateSql}
+      AND NOT (_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios')${osPredicateSql}${platformPredicateSql}${campaignIdPredicateSql}
 ${groupByBlock}
   )`;
+}
+
+/**
+ * Whitelist the characters a campaign id is allowed to contain before
+ * splicing it into raw SQL. Adjust campaign ids in GlobalComix are
+ * numeric strings on Meta / Google / TikTok / Apple / AppLovin; the
+ * lowercase letters + `-` slot leaves headroom for a future onboarded
+ * source. Anything else collapses to a never-match string so the
+ * resulting query simply returns no rows.
+ */
+function sanitizeCampaignId(raw: string): string {
+  const clean = raw.replace(/[^a-zA-Z0-9_-]/g, "");
+  // Empty → still emit a predicate that can't match anything legitimate.
+  return clean.length > 0 ? clean : "__none__";
+}
+
+/**
+ * Local ISO-date guard. Mirrors `bq-queries.ts`'s private helper but
+ * lives here so the campaign-profile sub-fetchers don't need an extra
+ * import-cycle hop. `bqErrorResponse` translates the thrown error into
+ * a 400 at the route layer.
+ */
+function assertIsoDateOrThrow(val: string, name: string): void {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+    throw new Error(`Invalid ${name}: ${val}`);
+  }
 }
 
 /**
@@ -448,12 +510,25 @@ ${groupByBlock}
  */
 function withFilterParams<T extends Record<string, unknown>>(
   base: T,
-  filter: { os?: OsFilter; platforms?: PlatformFilter[] },
-): T & { os?: OsFilter; platforms?: PlatformFilter[] } {
-  const out: T & { os?: OsFilter; platforms?: PlatformFilter[] } = { ...base };
+  filter: {
+    os?: OsFilter;
+    platforms?: PlatformFilter[];
+    campaignId?: string;
+  },
+): T & {
+  os?: OsFilter;
+  platforms?: PlatformFilter[];
+  campaignId?: string;
+} {
+  const out: T & {
+    os?: OsFilter;
+    platforms?: PlatformFilter[];
+    campaignId?: string;
+  } = { ...base };
   if (filter.os && filter.os !== "total") out.os = filter.os;
   if (filter.platforms && filter.platforms.length > 0)
     out.platforms = [...filter.platforms].sort();
+  if (filter.campaignId) out.campaignId = filter.campaignId;
   return out;
 }
 
@@ -1481,6 +1556,7 @@ async function _queryGlobalComixGeo(
     includeOrganic: true,
     os: filter.os,
     platforms: filter.platforms,
+    campaignId: filter.campaignId,
   });
   const bq = getBigQueryClient();
 
@@ -1562,6 +1638,7 @@ async function _queryGlobalComixCreatives(
     groupBy: ["date", "ad_id", "creative", "network"],
     os: filter.os,
     platforms: filter.platforms,
+    campaignId: filter.campaignId,
   });
   const bq = getBigQueryClient();
 
@@ -1742,6 +1819,312 @@ async function _queryGlobalComixAttributionValidation(
     adjust_subs: numberish(r.adjust_subs),
     delta_pct: numberOrNull(r.delta_pct),
   }));
+}
+
+// ── Campaign Profile (drill-down for /campaigns/[id]) ──────────────────────
+
+import type {
+  AdsetRow as DashboardAdsetRow,
+  CampaignProfileData,
+  CampaignSummary,
+  CampaignTrendPoint as DashboardCampaignTrendPoint,
+} from "@/types/dashboard";
+import { classifyCampaignName } from "@/lib/analyst/campaign-classifier";
+
+/**
+ * Composes the per-campaign profile payload by fanning out to four
+ * dedicated sub-fetches in parallel. Unknown / empty-window campaign
+ * resolves to `summary: null` and empty arrays — the route returns
+ * 200 with the empty shape so the UI can render its "not found"
+ * empty state without a 500 trip.
+ */
+async function _queryGlobalComixCampaignProfile(
+  client: string,
+  campaignId: string,
+  from: string,
+  to: string,
+): Promise<CampaignProfileData> {
+  assertIsoDateOrThrow(from, "from");
+  assertIsoDateOrThrow(to, "to");
+
+  const filter: GlobalComixFilter = { campaignId };
+  const [summary, trend, adsets, creatives, geo] = await Promise.all([
+    fetchCampaignSummary(client, campaignId, from, to),
+    fetchCampaignDailyTrend(client, campaignId, from, to),
+    fetchCampaignAdsets(client, campaignId, from, to),
+    _queryGlobalComixCreatives(client, from, to, filter),
+    _queryGlobalComixGeo(client, from, to, filter),
+  ]);
+
+  return { summary, trend, adsets, creatives, geo };
+}
+
+/**
+ * One-row summary for the profile-page header / KPI strip. Same SQL
+ * shape as `_queryGlobalComixCampaigns` but scoped via the campaignId
+ * filter and extended with period-over-period deltas for the unit-cost
+ * metrics (cpa_d7, roi_d7, cpi).
+ *
+ * Returns `null` for an unknown campaign or one with no spend in the
+ * active window — the renderer reads `null` as "render empty state".
+ */
+async function fetchCampaignSummary(
+  client: string,
+  campaignId: string,
+  from: string,
+  to: string,
+): Promise<CampaignSummary | null> {
+  const filter: GlobalComixFilter = { campaignId };
+  const spendSubCurr = buildSpendSubquery(client, filter);
+  const spendSubPrev = buildSpendSubquery(client, filter);
+  const cfg = getMultiSourceConfig(client);
+  const cohortTable = qualifyTable(cfg.cohortTable);
+  const bq = getBigQueryClient();
+  const safeId = sanitizeCampaignId(campaignId);
+
+  // Mirrors _queryGlobalComixCampaigns. Two cohort CTEs (current +
+  // previous period) so the four cohort-derived metrics can carry a
+  // delta of their own; campaigns query rolls all rows up to "spend
+  // delta only" because the dashboard renders rolled-up cohorts, but
+  // the profile page wants finer-grained deltas next to each KPI.
+  const query = `
+    WITH curr AS (
+      SELECT
+        ANY_VALUE(campaign_name) AS campaign_name_raw,
+        ANY_VALUE(network) AS network,
+        ANY_VALUE(campaign_status) AS campaign_status,
+        SUM(cost_usd) AS spend,
+        SUM(installs) AS installs
+      FROM ${spendSubCurr}
+      WHERE date BETWEEN ${FROM} AND ${TO}
+    ),
+    prev AS (
+      SELECT
+        SUM(cost_usd) AS spend,
+        SUM(installs) AS installs
+      FROM ${spendSubPrev}
+      WHERE date BETWEEN
+        DATE_SUB(DATE(${FROM}), INTERVAL DATE_DIFF(DATE(${TO}), DATE(${FROM}), DAY) + 1 DAY)
+        AND DATE_SUB(DATE(${FROM}), INTERVAL 1 DAY)
+    ),
+    curr_cohort AS (
+      SELECT
+        SUM(COALESCE(_7D_Revenue_Total, 0))             AS rev_d7,
+        SUM(COALESCE(_7D_Paying_Users, 0))              AS sub_d7,
+        SUM(COALESCE(_7D_subscription_start_Events, 0)) AS sub_start_d7
+      FROM ${cohortTable}
+      WHERE _Day_Date BETWEEN ${FROM} AND ${TO}
+        AND CAST(_Campaign_ID AS STRING) = '${safeId}'
+        AND NOT (_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios')
+    ),
+    prev_cohort AS (
+      SELECT
+        SUM(COALESCE(_7D_Revenue_Total, 0)) AS rev_d7,
+        SUM(COALESCE(_7D_Paying_Users, 0))  AS sub_d7
+      FROM ${cohortTable}
+      WHERE _Day_Date BETWEEN
+        DATE_SUB(DATE(${FROM}), INTERVAL DATE_DIFF(DATE(${TO}), DATE(${FROM}), DAY) + 1 DAY)
+        AND DATE_SUB(DATE(${FROM}), INTERVAL 1 DAY)
+        AND CAST(_Campaign_ID AS STRING) = '${safeId}'
+        AND NOT (_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios')
+    )
+    SELECT
+      c.campaign_name_raw                                          AS campaign_name,
+      c.network                                                    AS network,
+      c.campaign_status                                            AS campaign_status,
+      c.spend                                                       AS spend,
+      c.installs                                                    AS installs,
+      SAFE_DIVIDE(c.spend, NULLIF(c.installs, 0))                   AS cpi,
+      cc.sub_d7                                                     AS sub_d7,
+      cc.sub_start_d7                                               AS sub_start_d7,
+      SAFE_DIVIDE(c.spend, NULLIF(cc.sub_d7, 0))                    AS cpa_d7,
+      SAFE_DIVIDE(cc.rev_d7, NULLIF(c.spend, 0))                    AS roi_d7,
+      SAFE_DIVIDE(c.spend - p.spend, NULLIF(p.spend, 0))            AS spend_delta,
+      SAFE_DIVIDE(c.installs - p.installs, NULLIF(p.installs, 0))   AS installs_delta,
+      SAFE_DIVIDE(
+        SAFE_DIVIDE(c.spend, NULLIF(c.installs, 0))
+        - SAFE_DIVIDE(p.spend, NULLIF(p.installs, 0)),
+        NULLIF(SAFE_DIVIDE(p.spend, NULLIF(p.installs, 0)), 0)
+      )                                                              AS cpi_delta,
+      SAFE_DIVIDE(
+        SAFE_DIVIDE(c.spend, NULLIF(cc.sub_d7, 0))
+        - SAFE_DIVIDE(p.spend, NULLIF(pc.sub_d7, 0)),
+        NULLIF(SAFE_DIVIDE(p.spend, NULLIF(pc.sub_d7, 0)), 0)
+      )                                                              AS cpa_d7_delta,
+      SAFE_DIVIDE(
+        SAFE_DIVIDE(cc.rev_d7, NULLIF(c.spend, 0))
+        - SAFE_DIVIDE(pc.rev_d7, NULLIF(p.spend, 0)),
+        NULLIF(SAFE_DIVIDE(pc.rev_d7, NULLIF(p.spend, 0)), 0)
+      )                                                              AS roi_d7_delta
+    FROM curr c
+    CROSS JOIN prev p
+    CROSS JOIN curr_cohort cc
+    CROSS JOIN prev_cohort pc
+  `;
+
+  const [rows] = await bq.query({
+    query,
+    params: { from, to },
+    location: BQ_LOCATION,
+  });
+  const r = rows[0] as Record<string, unknown> | undefined;
+  // No rows OR spend = 0 → treat as "campaign not in window".
+  if (!r || numberish(r.spend) <= 0) return null;
+
+  const campaign_name = String(r.campaign_name ?? "");
+  const classification = classifyCampaignName(campaign_name);
+
+  return {
+    campaign_id: campaignId,
+    campaign_name,
+    network: String(r.network ?? ""),
+    campaign_status: r.campaign_status == null ? null : String(r.campaign_status),
+    family: classification.family,
+    geo: classification.geo,
+    campaignType: classification.campaignType,
+    platform: classification.platform,
+    spend: numberish(r.spend),
+    installs: numberish(r.installs),
+    cpi: numberish(r.cpi),
+    cpa_d7: numberOrNull(r.cpa_d7),
+    roi_d7: numberish(r.roi_d7),
+    sub_d7: numberOrNull(r.sub_d7),
+    sub_start_d7: numberOrNull(r.sub_start_d7),
+    spendDelta: numberOrNull(r.spend_delta),
+    installsDelta: numberOrNull(r.installs_delta),
+    cpiDelta: numberOrNull(r.cpi_delta),
+    cpaD7Delta: numberOrNull(r.cpa_d7_delta),
+    roiD7Delta: numberOrNull(r.roi_d7_delta),
+  };
+}
+
+/**
+ * Per-day trend for one campaign. Joins spend (per-day rollup) and
+ * cohort (per-day Paying Users / Sub Start / Revenue) on date. The
+ * cohort side carries D7 metrics that mature over time; the renderer
+ * gates the last 6 days as "—" because those cohorts haven't matured.
+ */
+async function fetchCampaignDailyTrend(
+  client: string,
+  campaignId: string,
+  from: string,
+  to: string,
+): Promise<DashboardCampaignTrendPoint[]> {
+  const filter: GlobalComixFilter = { campaignId };
+  const spendSub = buildSpendSubquery(client, filter);
+  const cohortSub = buildCohortSubquery(client, {
+    groupBy: ["date"],
+    campaignId,
+  });
+  const bq = getBigQueryClient();
+
+  const query = `
+    WITH spend_by_day AS (
+      SELECT
+        date,
+        SUM(cost_usd) AS spend,
+        SUM(installs) AS installs
+      FROM ${spendSub}
+      WHERE date BETWEEN ${FROM} AND ${TO}
+      GROUP BY date
+    )
+    SELECT
+      FORMAT_DATE('%Y-%m-%d', s.date)                            AS date,
+      s.spend                                                     AS spend,
+      s.installs                                                  AS installs,
+      SAFE_DIVIDE(s.spend, NULLIF(s.installs, 0))                 AS cpi,
+      c.sub_d7                                                    AS sub_d7,
+      c.sub_start_d7                                              AS sub_start_d7,
+      SAFE_DIVIDE(s.spend, NULLIF(c.sub_d7, 0))                   AS cpa_d7,
+      SAFE_DIVIDE(c.rev_d7, NULLIF(s.spend, 0))                   AS roi_d7
+    FROM spend_by_day s
+    LEFT JOIN ${cohortSub} c USING (date)
+    WHERE s.date BETWEEN ${FROM} AND ${TO}
+    ORDER BY s.date
+  `;
+
+  const [rows] = await bq.query({
+    query,
+    params: { from, to },
+    location: BQ_LOCATION,
+  });
+
+  return rows.map((r: Record<string, unknown>) => ({
+    date: String(r.date ?? ""),
+    spend: numberish(r.spend),
+    installs: numberish(r.installs),
+    cpi: numberish(r.cpi),
+    cpa_d7: numberOrNull(r.cpa_d7),
+    roi_d7: numberish(r.roi_d7),
+    sub_start_d7: numberOrNull(r.sub_start_d7),
+    sub_d7: numberOrNull(r.sub_d7),
+  }));
+}
+
+/**
+ * Per-adset rollup within one campaign. Reads from the cohort table's
+ * `_Adgroup_Attribution` column (a free-form string Adjust sends). The
+ * spend side doesn't dedupe on adset (the spend tables expose adset
+ * via the `Country` breakdown slice which fans rows differently); for
+ * now adset spend / installs are not joined and surface as 0. The
+ * renderer prints "—" for those cells until a later WS wires them in.
+ */
+async function fetchCampaignAdsets(
+  client: string,
+  campaignId: string,
+  from: string,
+  to: string,
+): Promise<DashboardAdsetRow[]> {
+  const cfg = getMultiSourceConfig(client);
+  const cohortTable = qualifyTable(cfg.cohortTable);
+  const bq = getBigQueryClient();
+  const safeId = sanitizeCampaignId(campaignId);
+
+  const query = `
+    SELECT
+      COALESCE(NULLIF(_Adgroup_Attribution, ''), '(unknown adset)') AS adset_name,
+      CASE
+        WHEN _Network_Attribution LIKE 'Google Ads%' THEN 'Google'
+        WHEN _Network_Attribution IN ('Facebook Installs', 'Instagram Installs', 'Off-Facebook Installs') THEN 'Meta'
+        WHEN _Network_Attribution = 'TikTok SAN' THEN 'TikTok'
+        WHEN _Network_Attribution = 'Apple Search Ads' THEN 'Apple Search Ads'
+        WHEN _Network_Attribution IN ('Axon by AppLovin Android', 'Axon by AppLovin iOS') THEN 'AppLovin'
+        ELSE _Network_Attribution
+      END                                                        AS network,
+      SUM(COALESCE(_7D_Paying_Users, 0))                         AS sub_d7,
+      SUM(COALESCE(_7D_Revenue_Total, 0))                        AS rev_d7
+    FROM ${cohortTable}
+    WHERE _Day_Date BETWEEN ${FROM} AND ${TO}
+      AND CAST(_Campaign_ID AS STRING) = '${safeId}'
+      AND NOT (_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios')
+    GROUP BY adset_name, network
+    ORDER BY sub_d7 DESC
+    LIMIT 50
+  `;
+
+  const [rows] = await bq.query({
+    query,
+    params: { from, to },
+    location: BQ_LOCATION,
+  });
+
+  return rows.map((r: Record<string, unknown>) => {
+    const sub_d7 = numberish(r.sub_d7);
+    const rev_d7 = numberish(r.rev_d7);
+    return {
+      adset_name: String(r.adset_name ?? ""),
+      network: String(r.network ?? ""),
+      // Phase 1: per-adset spend not joined yet (see docstring above).
+      // Surfacing 0 here makes CPI / CPA / ROI render as "—" in the UI;
+      // the renderer's null-guard catches the divide-by-zero.
+      spend: 0,
+      installs: 0,
+      cpi: 0,
+      cpa_d7: null,
+      roi_d7: rev_d7,
+      sub_d7: sub_d7 > 0 ? sub_d7 : null,
+    };
+  });
 }
 
 // ── Cached exports (Upstash Redis, per-client keys) ────────────────────────
@@ -1932,6 +2315,29 @@ export const queryGlobalComixCreatives = (
       ttlSeconds: DASHBOARD_TTL_S,
     },
     () => _queryGlobalComixCreatives(client, from, to, filter),
+  );
+
+/**
+ * Cached campaign profile. Cache key includes the campaign id so two
+ * profiles never collide; same TTL as the rest of the dashboard layer
+ * because the cron warmer doesn't yet pre-warm profile keys (these
+ * are only hit when a user clicks into a row, so cold-cache latency
+ * is acceptable).
+ */
+export const queryGlobalComixCampaignProfile = (
+  client: string,
+  campaignId: string,
+  from: string,
+  to: string,
+) =>
+  withRedisCache(
+    {
+      client,
+      query: "campaign-profile",
+      params: { campaignId, from, to },
+      ttlSeconds: DASHBOARD_TTL_S,
+    },
+    () => _queryGlobalComixCampaignProfile(client, campaignId, from, to),
   );
 
 export const queryGlobalComixAttributionValidation = (

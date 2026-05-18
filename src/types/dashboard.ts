@@ -409,6 +409,125 @@ export type CampaignRow = {
   cpa_d7?: number | null;
 };
 
+// ── Campaign profile (drill-down) ─────────────────────────────────────────
+
+/**
+ * Single-campaign aggregates for the profile-page header / KPI strip.
+ * Mirrors `CampaignRow` but adds period-over-period deltas for the
+ * other unit-cost metrics so the KPI tiles can show their own arrow.
+ *
+ * Classifier-derived fields (`family`, `geo`, `campaignType`, `platform`)
+ * are projected here too so the header chip row reads them without
+ * re-parsing the name on the client.
+ */
+export type CampaignSummary = {
+  campaign_id: string;
+  campaign_name: string;
+  network: string;
+  campaign_status: string | null;
+  /** Classifier-derived label combining TYPE + SEASONALITY (or "RTG"). */
+  family: string;
+  /** Classifier-derived geo token from the campaign name. */
+  geo: string;
+  /** Classifier-derived TYPE / SEASONALITY token. */
+  campaignType: string;
+  /** Classifier-derived platform — iOS / Android / Web / "". */
+  platform: string;
+  // Current period totals (same fields as CampaignRow):
+  spend: number;
+  installs: number;
+  cpi: number;
+  cpa_d7: number | null;
+  roi_d7: number;
+  sub_start_d7: number | null;
+  sub_d7: number | null;
+  // Period-over-period deltas as fractions (0.12 = +12%); null when
+  // the previous window had no data so the UI prints "—" rather than
+  // a misleading 0%.
+  spendDelta: number | null;
+  installsDelta: number | null;
+  cpiDelta: number | null;
+  cpaD7Delta: number | null;
+  roiD7Delta: number | null;
+};
+
+/** One per-day point on the campaign profile's trend chart. */
+export type CampaignTrendPoint = {
+  /** ISO date 'YYYY-MM-DD'. The UI may strip to MM-DD for display. */
+  date: string;
+  spend: number;
+  installs: number;
+  cpi: number;
+  cpa_d7: number | null;
+  roi_d7: number;
+  sub_start_d7: number | null;
+  sub_d7: number | null;
+};
+
+/** Per-adset row inside one campaign. Adset comes from the cohort
+ *  table's `_Adgroup_Attribution` field. Spend / installs are joined
+ *  on the campaign-id from the spend side — when the adset can't be
+ *  matched (e.g. AppLovin where Adjust doesn't carry adset attribution)
+ *  the row prints "—" on those columns. */
+export type AdsetRow = {
+  adset_name: string;
+  network: string;
+  spend: number;
+  installs: number;
+  cpi: number;
+  cpa_d7: number | null;
+  roi_d7: number;
+  sub_d7: number | null;
+};
+
+/**
+ * Composite payload returned by `/api/bq/campaigns/<id>/profile`.
+ * Empty arrays / null summary for an unknown campaign id — the
+ * route never 500s on a missing campaign; the UI renders an empty
+ * state with a back link.
+ */
+export type CampaignProfileData = {
+  summary: CampaignSummary | null;
+  trend: CampaignTrendPoint[];
+  adsets: AdsetRow[];
+  /** Per-ad cohort slice. See `CreativeRow` shape in `lib/globalcomix-queries`. */
+  creatives: ProfileCreativeRow[];
+  /** Per-country cohort slice. See `GeoRow` shape in `lib/globalcomix-queries`. */
+  geo: ProfileGeoRow[];
+};
+
+/** Profile-scoped echo of `CreativeRow` from the query layer. Re-typed
+ *  here so the dashboard types module owns the wire contract used by
+ *  the profile UI; the query layer can change its internal shape
+ *  without churning the renderer. */
+export type ProfileCreativeRow = {
+  ad_id: string;
+  ad_name: string;
+  creative_name: string;
+  network: string;
+  thumbnail_url: string | null;
+  spend: number;
+  installs: number;
+  sub_start_d7: number;
+  sub_d7: number;
+  cpa_d7: number;
+  roi_d7: number;
+};
+
+/** Profile-scoped echo of `GeoRow` from the query layer. */
+export type ProfileGeoRow = {
+  country_code: string;
+  country_name: string;
+  spend: number;
+  installs: number;
+  sub_d7: number;
+  rev_d7: number;
+  cpa_d7: number;
+  roi_d7: number;
+  sub_paid: number;
+  sub_organic: number;
+};
+
 export type FreshnessData = {
   /** ISO timestamp of the most recent successful Rivery run. */
   lastUpdated: string;

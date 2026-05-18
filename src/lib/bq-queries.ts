@@ -10,6 +10,7 @@ import { getSchemaForClient, getTableForClient } from "@/lib/bq-security";
 import { serverEnv } from "@/lib/env.server";
 import type { GlobalComixFilter } from "@/lib/globalcomix-queries";
 import {
+  queryGlobalComixCampaignProfile,
   queryGlobalComixCampaigns,
   queryGlobalComixChannelMix,
   queryGlobalComixDataAsOf,
@@ -20,6 +21,7 @@ import {
   queryGlobalComixTrend,
 } from "@/lib/globalcomix-queries";
 import type {
+  CampaignProfileData,
   KPIData,
   BQTrendPoint,
   BQTrendPointByNetwork,
@@ -483,6 +485,36 @@ export const queryChannelMix = _queryChannelMix;
 export const queryCampaigns = _queryCampaigns;
 export const queryNetworkBreakdown = _queryNetworkBreakdown;
 export const queryPayback = _queryPayback;
+
+/**
+ * Per-campaign profile dispatch. Multi-source clients (globalcomix)
+ * call the full orchestrator. Gaming-vocab clients (playw3, future
+ * agent-strategy onboards) get an empty-shape fallback — the profile
+ * route still 200s so the UI renders its "no data" state instead of
+ * surfacing a 500 mid-navigation.
+ */
+export async function queryCampaignProfile(
+  client: string,
+  campaignId: string,
+  from: string,
+  to: string,
+): Promise<CampaignProfileData> {
+  assertIsoDate(from, "from");
+  assertIsoDate(to, "to");
+  if (getSchemaForClient(client).strategy === "multi-source") {
+    return queryGlobalComixCampaignProfile(client, campaignId, from, to);
+  }
+  // Gaming-vocab clients: minimal shape so the route response stays
+  // structurally valid. A future enhancement could populate `summary`
+  // + `trend` from the gaming-vocab campaigns query.
+  return {
+    summary: null,
+    trend: [],
+    adsets: [],
+    creatives: [],
+    geo: [],
+  };
+}
 
 // `client` is part of the cache key so each client gets its own dataAsOf;
 // when undefined (e.g. a generic freshness ping with no active client),

@@ -320,6 +320,8 @@ export const ANALYST_QUERY_IDS = {
   GEO: "geo",
   CREATIVES: "creatives",
   ATTRIBUTION_VALIDATION: "attribution-validation",
+  // Campaign profile (drill-down for /campaigns/[id])
+  CAMPAIGN_PROFILE: "campaign-profile",
 } as const;
 
 export type AnalystQueryId =

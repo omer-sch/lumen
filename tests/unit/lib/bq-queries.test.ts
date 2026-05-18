@@ -64,6 +64,36 @@ describe("bq-queries: date guard", () => {
   });
 });
 
+describe("bq-queries: queryCampaignProfile dispatch", () => {
+  it("returns an empty profile shape for gaming-vocab clients (playw3) without hitting BQ", async () => {
+    const { queryCampaignProfile } = await import("@/lib/bq-queries");
+    const data = await queryCampaignProfile(
+      "playw3",
+      "abc-123",
+      "2026-05-01",
+      "2026-05-14",
+    );
+    expect(data).toEqual({
+      summary: null,
+      trend: [],
+      adsets: [],
+      creatives: [],
+      geo: [],
+    });
+    expect(queryFn).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid `from` date before any SQL is sent", async () => {
+    const { queryCampaignProfile, InvalidDateError } = await import(
+      "@/lib/bq-queries"
+    );
+    await expect(
+      queryCampaignProfile("playw3", "abc-123", "not-a-date", "2026-05-14"),
+    ).rejects.toBeInstanceOf(InvalidDateError);
+    expect(queryFn).not.toHaveBeenCalled();
+  });
+});
+
 describe("bq-queries: client allowlist", () => {
   it("rejects an unknown client before any SQL is sent", async () => {
     const { queryDashboardKPIs } = await import("@/lib/bq-queries");
