@@ -322,6 +322,8 @@ export const ANALYST_QUERY_IDS = {
   ATTRIBUTION_VALIDATION: "attribution-validation",
   // Campaign profile (drill-down for /campaigns/[id])
   CAMPAIGN_PROFILE: "campaign-profile",
+  // Creative Breakdown — top-ad spend trend (current vs prior 30d).
+  TOP_AD_TREND: "top-ad-trend",
 } as const;
 
 export type AnalystQueryId =

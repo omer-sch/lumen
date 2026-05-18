@@ -899,6 +899,106 @@ describe("queryGlobalComixCreatives", () => {
   });
 });
 
+// ── Top Ad trend (current vs prior 30d) ────────────────────────────────────
+describe("queryGlobalComixTopAdTrend", () => {
+  it("returns top_ad=null + empty points when no ad clears the $100 spend threshold", async () => {
+    // First call (find top ad) returns empty rows -> no qualifying ad.
+    queryFn.mockResolvedValueOnce([[]]);
+    const { queryGlobalComixTopAdTrend } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    const out = await queryGlobalComixTopAdTrend("globalcomix", FROM, TO);
+    expect(out.top_ad).toBeNull();
+    expect(out.points).toEqual([]);
+  });
+
+  it("issues two queries: top-ad lookup then current+prior daily series", async () => {
+    queryFn
+      .mockResolvedValueOnce([
+        [
+          {
+            ad_id: "fb-1",
+            network: "Meta",
+            campaign_name: "YH_FB_APP_Sub",
+            spend: 2500,
+          },
+        ],
+      ])
+      .mockResolvedValueOnce([
+        [
+          { date: "2026-05-10", spend: 100, is_current: true },
+          { date: "2026-04-10", spend: 80, is_current: false },
+        ],
+      ]);
+    const { queryGlobalComixTopAdTrend } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    const out = await queryGlobalComixTopAdTrend("globalcomix", FROM, TO);
+    expect(queryFn).toHaveBeenCalledTimes(2);
+    const top = queryFn.mock.calls[0][0] as { query: string };
+    expect(top.query).toMatch(/HAVING SUM\(cost_usd\) >= 100/);
+    expect(top.query).toMatch(/ORDER BY SUM\(cost_usd\) DESC\s+LIMIT 1/);
+    const series = queryFn.mock.calls[1][0] as { query: string };
+    expect(series.query).toMatch(/WITH curr AS/);
+    expect(series.query).toMatch(/prev AS/);
+    expect(series.query).toMatch(
+      /DATE_SUB\(DATE\(@from\), INTERVAL DATE_DIFF\(DATE\(@to\), DATE\(@from\), DAY\) \+ 1 DAY\)/,
+    );
+    expect(series.query).toMatch(/ad_id = 'fb-1'/);
+    expect(out.top_ad).toEqual({
+      ad_id: "fb-1",
+      ad_name: "YH_FB_APP_Sub",
+      network: "Meta",
+    });
+    expect(out.points).toHaveLength(2);
+    expect(out.points[0].is_current).toBe(true);
+    expect(out.points[1].is_current).toBe(false);
+  });
+
+  it("falls back to ad_id for ad_name when campaign_name is null", async () => {
+    queryFn
+      .mockResolvedValueOnce([
+        [
+          {
+            ad_id: "tt-99",
+            network: "TikTok",
+            campaign_name: null,
+            spend: 300,
+          },
+        ],
+      ])
+      .mockResolvedValueOnce([[]]);
+    const { queryGlobalComixTopAdTrend } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    const out = await queryGlobalComixTopAdTrend("globalcomix", FROM, TO);
+    expect(out.top_ad?.ad_name).toBe("tt-99");
+  });
+
+  it("sanitizes the resolved ad_id before splicing into the series query", async () => {
+    queryFn
+      .mockResolvedValueOnce([
+        [
+          {
+            ad_id: "ad'; DROP TABLE--",
+            network: "Meta",
+            campaign_name: null,
+            spend: 500,
+          },
+        ],
+      ])
+      .mockResolvedValueOnce([[]]);
+    const { queryGlobalComixTopAdTrend } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixTopAdTrend("globalcomix", FROM, TO);
+    const series = queryFn.mock.calls[1][0] as { query: string };
+    // Quotes / semicolons / spaces stripped by sanitizeCampaignId.
+    expect(series.query).toMatch(/ad_id = 'adDROPTABLE--'/);
+    expect(series.query).not.toContain("'; DROP TABLE");
+  });
+});
+
 // ── WS5 — Attribution Validation ───────────────────────────────────────────
 describe("queryGlobalComixAttributionValidation", () => {
   it("unions per-network platform legs (Meta, Google, TikTok) and joins cohort iOS", async () => {

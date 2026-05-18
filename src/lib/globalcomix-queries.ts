@@ -1889,6 +1889,159 @@ async function _queryGlobalComixCreatives(
   });
 }
 
+// ── Creative Breakdown — Top-Ad trend (current vs prior 30 days) ───────────
+
+/**
+ * One point on the Top-Ad trend chart. `is_current` discriminates which
+ * series the point belongs to so the chart can draw two lines without
+ * a second fetch (current period = solid mint, prior 30d = dashed,
+ * lower opacity).
+ */
+export type TopAdTrendPoint = {
+  /** ISO date 'YYYY-MM-DD' — for the prior series this is the date
+   *  inside the prior window, not shifted forward. The chart aligns
+   *  the two series by day-index, not absolute date. */
+  date: string;
+  spend: number;
+  is_current: boolean;
+};
+
+export type TopAdTrendResponse = {
+  /** `null` when no ad in the active window cleared the spend threshold
+   *  (the trend chart renders an empty state in that case). */
+  top_ad: {
+    ad_id: string;
+    ad_name: string;
+    network: string;
+  } | null;
+  points: TopAdTrendPoint[];
+};
+
+/**
+ * Minimum total spend in the active window for an ad to qualify as
+ * "the top ad". Guards against showing a noise trend when the largest
+ * ad in the window only ran $20. Reasonable for GlobalComix scale
+ * (three of five networks have ad-level spend); adjustable per ad spend.
+ */
+const TOP_AD_MIN_SPEND_USD = 100;
+
+async function _queryGlobalComixTopAdTrend(
+  client: string,
+  from: string,
+  to: string,
+  filter: GlobalComixFilter = {},
+): Promise<TopAdTrendResponse> {
+  assertIsoDateOrThrow(from, "from");
+  assertIsoDateOrThrow(to, "to");
+  const spendCreativesSub = buildSpendCreativesSubquery(client, filter);
+  const bq = getBigQueryClient();
+
+  // Step 1: find the #1 ad by total spend in the current window. Use a
+  // small probe query so we don't pay BQ bytes on a per-day series for
+  // every ad just to discard everything but one. ANY_VALUE collapses
+  // the per-network/per-campaign metadata to a single row safely
+  // because the (network, ad_id) tuple is the unique key.
+  const topQuery = `
+    SELECT
+      ad_id,
+      ANY_VALUE(network)       AS network,
+      ANY_VALUE(campaign_name) AS campaign_name,
+      SUM(cost_usd)            AS spend
+    FROM ${spendCreativesSub}
+    WHERE date BETWEEN ${FROM} AND ${TO}
+      AND ad_id IS NOT NULL
+    GROUP BY ad_id
+    HAVING SUM(cost_usd) >= ${TOP_AD_MIN_SPEND_USD}
+    ORDER BY SUM(cost_usd) DESC
+    LIMIT 1
+  `;
+  const [topRows] = await bq.query({
+    query: topQuery,
+    params: { from, to },
+    location: BQ_LOCATION,
+  });
+  const top = topRows[0] as
+    | {
+        ad_id: unknown;
+        network: unknown;
+        campaign_name: unknown;
+        spend: unknown;
+      }
+    | undefined;
+  if (!top || !top.ad_id) {
+    return { top_ad: null, points: [] };
+  }
+
+  const adIdRaw = String(top.ad_id);
+  const adIdSafe = sanitizeCampaignId(adIdRaw); // same charset gate, fits ad ids fine
+  const adName =
+    top.campaign_name != null && String(top.campaign_name).length > 0
+      ? String(top.campaign_name)
+      : adIdRaw;
+
+  // Step 2: per-day spend for the chosen ad in the current window AND
+  // the equivalent prior 30-day window. Two CTEs UNION'd with an
+  // is_current discriminator so the chart receives a single tidy array.
+  const seriesQuery = `
+    WITH curr AS (
+      SELECT
+        date,
+        SUM(cost_usd) AS spend,
+        TRUE          AS is_current
+      FROM ${spendCreativesSub}
+      WHERE date BETWEEN ${FROM} AND ${TO}
+        AND ad_id = '${adIdSafe}'
+      GROUP BY date
+    ),
+    prev AS (
+      SELECT
+        date,
+        SUM(cost_usd) AS spend,
+        FALSE         AS is_current
+      FROM ${spendCreativesSub}
+      WHERE date BETWEEN
+        DATE_SUB(DATE(${FROM}), INTERVAL DATE_DIFF(DATE(${TO}), DATE(${FROM}), DAY) + 1 DAY)
+        AND DATE_SUB(DATE(${FROM}), INTERVAL 1 DAY)
+        AND ad_id = '${adIdSafe}'
+      GROUP BY date
+    )
+    SELECT * FROM curr
+    UNION ALL
+    SELECT * FROM prev
+    ORDER BY is_current DESC, date
+  `;
+  const [seriesRows] = await bq.query({
+    query: seriesQuery,
+    params: { from, to },
+    location: BQ_LOCATION,
+  });
+
+  const points: TopAdTrendPoint[] = seriesRows.map(
+    (r: Record<string, unknown>) => {
+      // BQ DATEs come back as either ISO string or { value: "YYYY-MM-DD" }.
+      const dRaw = r.date as unknown;
+      const date =
+        typeof dRaw === "object" && dRaw != null && "value" in dRaw
+          ? String((dRaw as { value: unknown }).value)
+          : String(dRaw ?? "");
+      return {
+        date,
+        spend: numberish(r.spend),
+        is_current: Boolean(r.is_current),
+      };
+    },
+  );
+
+  return {
+    top_ad: {
+      ad_id: adIdRaw,
+      ad_name: adName,
+      network: String(top.network ?? ""),
+    },
+    points,
+  };
+}
+
 // ── WS5 — Attribution Validation (platform vs Adjust, iOS only) ────────────
 
 export type AttributionValidationRow = {
@@ -2508,6 +2661,22 @@ export const queryGlobalComixCreatives = (
       ttlSeconds: DASHBOARD_TTL_S,
     },
     () => _queryGlobalComixCreatives(client, from, to, filter),
+  );
+
+export const queryGlobalComixTopAdTrend = (
+  client: string,
+  from: string,
+  to: string,
+  filter: GlobalComixFilter = {},
+) =>
+  withRedisCache(
+    {
+      client,
+      query: "top-ad-trend",
+      params: withFilterParams({ from, to }, filter),
+      ttlSeconds: DASHBOARD_TTL_S,
+    },
+    () => _queryGlobalComixTopAdTrend(client, from, to, filter),
   );
 
 /**
