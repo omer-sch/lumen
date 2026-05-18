@@ -1,12 +1,14 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense } from "react";
 import { Megaphone } from "lucide-react";
 import { GlassIcon } from "@/components/ui/GlassIcon";
 import { LivePulse } from "@/components/ui/LivePulse";
+import { SectionError } from "@/components/ui/SectionError";
+import { CampaignsTableSkeleton } from "@/components/ui/Skeleton";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
+import { useCampaignsData } from "@/lib/campaigns/use-campaigns-data";
 import { findClient } from "@/lib/mock/clients";
-import { getCampaigns } from "@/lib/mock/campaigns";
 import { CampaignsTable } from "./CampaignsTable";
 
 export function CampaignsView() {
@@ -18,13 +20,16 @@ export function CampaignsView() {
 }
 
 function CampaignsInner() {
-  const { from, to, client } = useGlobalFilters();
+  const { from, to, client, os, platforms } = useGlobalFilters();
   const days = Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
   const c = findClient(client);
-  const rows = useMemo(
-    () => getCampaigns({ from, to, client }),
-    [from, to, client],
-  );
+  const { rows, loading, error, refetch } = useCampaignsData({
+    from,
+    to,
+    client,
+    os,
+    platforms,
+  });
 
   return (
     <div className="flex flex-col gap-8 py-2 md:gap-10">
@@ -50,7 +55,7 @@ function CampaignsInner() {
           <p className="max-w-2xl font-body text-sm text-[color:var(--text-secondary)]">
             One row per campaign across the active window. Sort any column,
             scope to a single channel, and read each row&apos;s 7-day trend at a
-            glance — the same drill-down a UA analyst opens when a number on
+            glance, the same drill-down a UA analyst opens when a number on
             the dashboard moves.
           </p>
         </div>
@@ -74,7 +79,20 @@ function CampaignsInner() {
         </div>
       </header>
 
-      <CampaignsTable rows={rows} />
+      {/* Loading / error / data — the table renders itself when it has
+          rows, even mid-refetch, so filter changes don't flash blank. */}
+      {rows === null && loading ? (
+        <CampaignsTableSkeleton />
+      ) : error && rows === null ? (
+        <SectionError
+          section="the campaigns table"
+          shape="min-h-[14rem]"
+          onRetry={refetch}
+          data-testid="campaigns-error"
+        />
+      ) : (
+        <CampaignsTable rows={rows ?? []} />
+      )}
     </div>
   );
 }

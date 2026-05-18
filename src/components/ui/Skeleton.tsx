@@ -215,6 +215,38 @@ export function PaidVsOrganicSkeleton() {
   );
 }
 
+/** Skeleton matching the CampaignsTable shape (channel-chip strip + a
+ *  9-column table). Row count picks 8 — typical mid-range for a UA pilot
+ *  client across a 30-day window. */
+export function CampaignsTableSkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-5 rounded-lg p-5"
+      style={{
+        background: "var(--surface-glass)",
+        border: "1px solid var(--border-glass)",
+        WebkitBackdropFilter: "var(--blur-glass)",
+        backdropFilter: "var(--blur-glass)",
+        boxShadow: "var(--shadow-glass)",
+      }}
+      data-testid="campaigns-table-skeleton"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-6 w-20 rounded-full" />
+        ))}
+        <Skeleton className="ml-auto h-3 w-28 rounded-full" />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-3 w-full rounded-full" />
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+          <Skeleton key={i} className="h-5 w-full rounded-md" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Skeleton matching a feed row. */
 export function FeedRowSkeleton() {
   return (

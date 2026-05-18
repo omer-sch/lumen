@@ -6,68 +6,111 @@ import { useSearchParams } from "next/navigation";
 import { ArrowDown, ArrowDownRight, ArrowUp, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { RowSparkline } from "./RowSparkline";
-import type { CampaignRow } from "@/lib/mock/campaigns";
-import type { Channel } from "@/types/dashboard";
+import type { CampaignRow } from "@/types/dashboard";
 
 type SortKey =
-  | "name"
-  | "channel"
+  | "campaign_name"
+  | "network"
   | "spend"
   | "installs"
   | "cpi"
-  | "roas"
-  | "deltaRoas";
+  | "cpa_d7"
+  | "roi_d7"
+  | "spendDelta";
 
 type SortDir = "asc" | "desc";
 
-const COLUMNS: {
-  key: SortKey | "spark";
+type ColumnDef = {
+  key: SortKey;
   label: string;
-  align?: "left" | "right";
-  format?: (n: number) => string;
-}[] = [
-  { key: "name",       label: "Campaign", align: "left" },
-  { key: "channel",    label: "Channel",  align: "left" },
-  { key: "spend",      label: "Spend",    align: "right", format: (n) => `$${n.toLocaleString()}` },
-  { key: "installs",   label: "Installs", align: "right", format: (n) => n.toLocaleString() },
-  { key: "cpi",        label: "CPI",      align: "right", format: (n) => `$${n.toFixed(2)}` },
-  { key: "roas",       label: "ROAS",     align: "right", format: (n) => `${n.toFixed(2)}x` },
-  { key: "deltaRoas",  label: "Δ ROAS",   align: "right" },
-  { key: "spark",      label: "7d trend", align: "right" },
+  align: "left" | "right";
+};
+
+const COLUMNS: ColumnDef[] = [
+  { key: "campaign_name", label: "Campaign", align: "left" },
+  { key: "network",       label: "Network",  align: "left" },
+  { key: "spend",         label: "Spend",    align: "right" },
+  { key: "installs",      label: "Installs", align: "right" },
+  { key: "cpi",           label: "CPI",      align: "right" },
+  { key: "cpa_d7",        label: "CPA D7",   align: "right" },
+  { key: "roi_d7",        label: "ROI D7",   align: "right" },
+  { key: "spendDelta",    label: "Δ Spend",  align: "right" },
 ];
 
-const CHANNEL_FILTERS: ("all" | Channel)[] = [
-  "all",
-  "Meta",
-  "TikTok",
-  "Google",
-  "AppsFlyer",
-];
-
-const channelStyle = (c: Channel) => {
-  // Mint is the UA brand accent — use it for the dominant share, but tag
-  // each row with a stable per-channel hue so the table still scans by
-  // source at a glance. All within UA family + the legacy team palette.
-  const map: Record<Channel, { bg: string; fg: string }> = {
-    Meta:      { bg: "var(--tint-ua-soft)",       fg: "var(--color-ua)" },
-    TikTok:    { bg: "var(--tint-creative-soft)", fg: "var(--color-creative)" },
-    Google:    { bg: "var(--tint-yellow-soft)",   fg: "var(--color-yellow)" },
-    AppsFlyer: { bg: "var(--tint-organic-soft)",  fg: "var(--color-organic)" },
+/**
+ * Network → on-row chip colors. Real-data networks come back as
+ * free-form strings — anything that doesn't match a known label gets
+ * the neutral fallback so a new network appearing in the warehouse
+ * doesn't crash the renderer.
+ */
+function networkStyle(n: string): { bg: string; fg: string } {
+  const map: Record<string, { bg: string; fg: string }> = {
+    Meta:           { bg: "var(--tint-ua-soft)",       fg: "var(--color-ua)" },
+    Facebook:       { bg: "var(--tint-ua-soft)",       fg: "var(--color-ua)" },
+    TikTok:         { bg: "var(--tint-creative-soft)", fg: "var(--color-creative)" },
+    "Google Ads":   { bg: "var(--tint-yellow-soft)",   fg: "var(--color-yellow)" },
+    Google:         { bg: "var(--tint-yellow-soft)",   fg: "var(--color-yellow)" },
+    Apple:          { bg: "var(--tint-organic-soft)",  fg: "var(--color-organic)" },
+    "Apple Search Ads": { bg: "var(--tint-organic-soft)", fg: "var(--color-organic)" },
+    AppLovin:       { bg: "var(--tint-creative-soft)", fg: "var(--color-creative)" },
   };
-  return map[c];
+  return (
+    map[n] ?? {
+      bg: "var(--surface-hover)",
+      fg: "var(--text-secondary)",
+    }
+  );
+}
+
+const NETWORK_FILTERS = ["all", "Meta", "TikTok", "Google", "Apple", "AppLovin"] as const;
+
+type NetworkFilter = (typeof NETWORK_FILTERS)[number];
+
+const matchesNetwork = (rowNetwork: string, f: NetworkFilter): boolean => {
+  if (f === "all") return true;
+  const n = rowNetwork.toLowerCase();
+  switch (f) {
+    case "Meta":     return n === "meta" || n === "facebook";
+    case "Google":   return n.startsWith("google");
+    case "Apple":    return n.startsWith("apple");
+    case "TikTok":   return n.includes("tiktok");
+    case "AppLovin": return n.includes("applovin");
+  }
+};
+
+const fmtMoney = (n: number) =>
+  `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+
+const fmtCount = (n: number) => n.toLocaleString();
+
+const fmtCpi = (n: number) => `$${n.toFixed(2)}`;
+
+const fmtRoi = (n: number) => `${n.toFixed(2)}x`;
+
+const fmtDeltaPct = (frac: number | null): string => {
+  if (frac == null) return "—";
+  return `${(frac * 100).toFixed(1)}%`;
 };
 
 type CampaignsTableProps = {
   rows: CampaignRow[];
 };
 
+/**
+ * Index table. Columns map 1:1 to `CampaignRow` from the BQ wire shape;
+ * sort by any column, narrow to a single network without touching the
+ * global filter.
+ *
+ * CPA D7 / Sub D7 fields are optional on `CampaignRow` (gaming-vocab
+ * clients don't populate them); their cells print "—" rather than a
+ * misleading zero.
+ */
 export function CampaignsTable({ rows }: CampaignsTableProps) {
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
     key: "spend",
     dir: "desc",
   });
-  const [channel, setChannel] = useState<"all" | Channel>("all");
+  const [network, setNetwork] = useState<NetworkFilter>("all");
 
   // Carry the global filter into the deep-link so the campaign profile
   // opens with the same window + client the user is browsing.
@@ -75,15 +118,20 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
   const profileQuery = params.toString();
 
   const filtered = useMemo(
-    () => (channel === "all" ? rows : rows.filter((r) => r.channel === channel)),
-    [rows, channel],
+    () => rows.filter((r) => matchesNetwork(r.network, network)),
+    [rows, network],
   );
 
   const sorted = useMemo(() => {
     const out = [...filtered];
     out.sort((a, b) => {
-      const va = a[sort.key];
-      const vb = b[sort.key];
+      const va = sortValue(a, sort.key);
+      const vb = sortValue(b, sort.key);
+      // Nulls always sort last regardless of direction so unmatured
+      // cohort rows don't cluster at the top under desc.
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
       if (typeof va === "number" && typeof vb === "number") {
         return sort.dir === "asc" ? va - vb : vb - va;
       }
@@ -98,24 +146,24 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
     setSort((cur) =>
       cur.key === key
         ? { key, dir: cur.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: key === "name" || key === "channel" ? "asc" : "desc" },
+        : {
+            key,
+            dir: key === "campaign_name" || key === "network" ? "asc" : "desc",
+          },
     );
   };
 
   return (
     <GlassCard glow="ua" enterIndex={1} className="flex flex-col gap-5 p-5">
-      {/* On-page channel filter — narrows the view without touching the
-          global filter. Mirrors the per-page detail controls Looker users
-          rely on every day. */}
       <div className="flex flex-wrap items-center gap-1.5">
-        {CHANNEL_FILTERS.map((c) => {
-          const active = channel === c;
+        {NETWORK_FILTERS.map((c) => {
+          const active = network === c;
           return (
             <button
               key={c}
               type="button"
               data-testid={`campaigns-channel-${c}`}
-              onClick={() => setChannel(c)}
+              onClick={() => setNetwork(c)}
               aria-pressed={active}
               className={cn(
                 "rounded-full border px-3 py-1 font-body text-xs font-semibold uppercase tracking-wider transition-[transform,background-color,color,border-color] duration-280 ease-out-quart hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
@@ -130,7 +178,7 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
                   : "var(--border-subtle)",
               }}
             >
-              {c === "all" ? "All channels" : c}
+              {c === "all" ? "All networks" : c}
             </button>
           );
         })}
@@ -139,14 +187,12 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
         </span>
       </div>
 
-      {/* Scrollable on narrow viewports — Looker tables wrap, ours doesn't. */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm" data-testid="campaigns-table">
           <thead>
             <tr className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
               {COLUMNS.map((c) => {
-                const isSortable = c.key !== "spark";
-                const isActive = sort.key === (c.key as SortKey);
+                const isActive = sort.key === c.key;
                 return (
                   <th
                     key={c.key}
@@ -156,27 +202,23 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
                       c.align === "right" ? "text-right" : "text-left",
                     )}
                   >
-                    {isSortable ? (
-                      <button
-                        type="button"
-                        data-testid={`sort-${c.key}`}
-                        onClick={() => toggleSort(c.key as SortKey)}
-                        className={cn(
-                          "inline-flex items-center gap-1 transition-colors duration-280 ease-out-quart hover:text-cloud-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
-                          isActive && "text-ua",
-                        )}
-                      >
-                        {c.label}
-                        {isActive &&
-                          (sort.dir === "asc" ? (
-                            <ArrowUp className="h-3 w-3" strokeWidth={2.5} />
-                          ) : (
-                            <ArrowDown className="h-3 w-3" strokeWidth={2.5} />
-                          ))}
-                      </button>
-                    ) : (
-                      <span>{c.label}</span>
-                    )}
+                    <button
+                      type="button"
+                      data-testid={`sort-${c.key}`}
+                      onClick={() => toggleSort(c.key)}
+                      className={cn(
+                        "inline-flex items-center gap-1 transition-colors duration-280 ease-out-quart hover:text-cloud-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
+                        isActive && "text-ua",
+                      )}
+                    >
+                      {c.label}
+                      {isActive &&
+                        (sort.dir === "asc" ? (
+                          <ArrowUp className="h-3 w-3" strokeWidth={2.5} />
+                        ) : (
+                          <ArrowDown className="h-3 w-3" strokeWidth={2.5} />
+                        ))}
+                    </button>
                   </th>
                 );
               })}
@@ -184,29 +226,37 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
           </thead>
           <tbody>
             {sorted.map((row, i) => {
-              const ch = channelStyle(row.channel);
-              const roasTone =
-                row.deltaRoas > 0 ? "good" : row.deltaRoas < 0 ? "bad" : "neutral";
-              const RoasArrow = row.deltaRoas >= 0 ? ArrowUpRight : ArrowDownRight;
+              const ch = networkStyle(row.network);
+              const spendDelta = row.spendDelta;
+              const deltaTone =
+                spendDelta == null
+                  ? "neutral"
+                  : spendDelta > 0
+                    ? "good"
+                    : spendDelta < 0
+                      ? "bad"
+                      : "neutral";
+              const DeltaArrow =
+                spendDelta != null && spendDelta >= 0 ? ArrowUpRight : ArrowDownRight;
               const href = profileQuery
-                ? `/campaigns/${row.id}?${profileQuery}`
-                : `/campaigns/${row.id}`;
+                ? `/campaigns/${row.campaign_id}?${profileQuery}`
+                : `/campaigns/${row.campaign_id}`;
               return (
                 <tr
-                  key={row.id}
-                  data-testid={`campaign-row-${row.id}`}
+                  key={row.campaign_id}
+                  data-testid={`campaign-row-${row.campaign_id}`}
                   className="group border-t border-[color:var(--border-subtle)] transition-colors duration-280 ease-out-quart hover:bg-[color:var(--surface-hover)]"
                 >
                   <td className="whitespace-nowrap px-3 py-3">
                     <Link
                       href={href}
-                      aria-label={`Open ${row.name}`}
+                      aria-label={`Open ${row.campaign_name}`}
                       className={cn(
                         "font-medium transition-colors duration-280 ease-out-quart focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
                         i === 0 ? "text-ua" : "text-cloud-white hover:text-ua",
                       )}
                     >
-                      {row.name}
+                      {row.campaign_name || row.campaign_id}
                     </Link>
                   </td>
                   <td className="whitespace-nowrap px-3 py-3">
@@ -214,63 +264,87 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
                       className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
                       style={{ background: ch.bg, color: ch.fg }}
                     >
-                      {row.channel}
+                      {row.network || "—"}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums text-[color:var(--text-secondary)]">
-                    ${row.spend.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    {fmtMoney(row.spend)}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums text-[color:var(--text-secondary)]">
-                    {row.installs.toLocaleString()}
+                    {fmtCount(row.installs)}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums text-[color:var(--text-secondary)]">
-                    ${row.cpi.toFixed(2)}
+                    {row.installs > 0 ? fmtCpi(row.cpi) : "—"}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums text-cloud-white">
-                    {row.roas.toFixed(2)}x
+                    {row.cpa_d7 != null ? fmtCpi(row.cpa_d7) : "—"}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums text-cloud-white">
+                    {fmtRoi(row.roi_d7)}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-right">
-                    <span
-                      className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums"
-                      style={{
-                        background:
-                          roasTone === "good"
-                            ? "var(--tint-success-soft)"
-                            : roasTone === "bad"
-                              ? "var(--tint-danger-soft)"
-                              : "var(--surface-hover)",
-                        color:
-                          roasTone === "good"
-                            ? "var(--color-ua)"
-                            : roasTone === "bad"
-                              ? "var(--color-creative)"
-                              : "var(--text-muted)",
-                      }}
-                    >
-                      <RoasArrow className="h-3 w-3" strokeWidth={2.5} />
-                      {Math.abs(row.deltaRoas).toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-right">
-                    <div className="ml-auto inline-block">
-                      <RowSparkline
-                        data={row.sparkline}
-                        tone={
-                          row.deltaSpend > 0
-                            ? "good"
-                            : row.deltaSpend < 0
-                              ? "bad"
-                              : "neutral"
-                        }
-                      />
-                    </div>
+                    {spendDelta == null ? (
+                      <span className="text-[color:var(--text-muted)]">—</span>
+                    ) : (
+                      <span
+                        className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums"
+                        style={{
+                          background:
+                            deltaTone === "good"
+                              ? "var(--tint-success-soft)"
+                              : deltaTone === "bad"
+                                ? "var(--tint-danger-soft)"
+                                : "var(--surface-hover)",
+                          color:
+                            deltaTone === "good"
+                              ? "var(--color-ua)"
+                              : deltaTone === "bad"
+                                ? "var(--color-creative)"
+                                : "var(--text-muted)",
+                        }}
+                      >
+                        <DeltaArrow className="h-3 w-3" strokeWidth={2.5} />
+                        {fmtDeltaPct(Math.abs(spendDelta))}
+                      </span>
+                    )}
                   </td>
                 </tr>
               );
             })}
+            {sorted.length === 0 && (
+              <tr>
+                <td
+                  colSpan={COLUMNS.length}
+                  className="px-3 py-10 text-center font-body text-sm text-[color:var(--text-muted)]"
+                >
+                  No campaigns match this filter in the active window.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
     </GlassCard>
   );
+}
+
+function sortValue(row: CampaignRow, key: SortKey): string | number | null {
+  switch (key) {
+    case "campaign_name":
+      return row.campaign_name || row.campaign_id;
+    case "network":
+      return row.network;
+    case "spend":
+      return row.spend;
+    case "installs":
+      return row.installs;
+    case "cpi":
+      return row.cpi;
+    case "cpa_d7":
+      return row.cpa_d7 ?? null;
+    case "roi_d7":
+      return row.roi_d7;
+    case "spendDelta":
+      return row.spendDelta ?? null;
+  }
 }
