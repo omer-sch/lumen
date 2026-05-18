@@ -36,7 +36,7 @@ export const CLIENTS: Client[] = [
     slug: "globalcomix",
     name: "GlobalComix",
     vertical: "Gaming",
-    networks: ["Meta", "TikTok", "Google", "AppsFlyer"],
+    networks: ["Meta", "TikTok", "Google", "Apple Search Ads", "AppLovin"],
     hasRealData: true,
   },
   {

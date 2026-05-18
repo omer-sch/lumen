@@ -78,6 +78,9 @@ const CAMPAIGN_NAME_COLUMN_BY_TABLE: Record<string, string> = {
   dwh_apple_globalcomix_adjust: "campaign_name",
   dwh_google_ads_globalcomix_adjust: "campaign_name",
   dwh_tik_tok_globalcomix_adjust: "campaign_name",
+  // AppLovin: column verified present + non-null on the No Breakdown slice
+  // by the 2026-05-17 BQ investigation.
+  dwh_applovin_globalcomix_adjust: "campaign_name",
   // The trailing "AS campaign_name" alias normalises the column name
   // out of the typoed Meta column.
   dwh_fb2_globalcomix_adjust: "campagin_name AS campaign_name",

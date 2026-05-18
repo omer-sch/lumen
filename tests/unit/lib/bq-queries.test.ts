@@ -91,11 +91,12 @@ describe("bq-queries: SQL shape (queryDashboardKPIs)", () => {
     await queryDashboardKPIs("globalcomix", "2026-05-01", "2026-05-12");
     expect(queryFn).toHaveBeenCalledTimes(1);
     const opts = queryFn.mock.calls[0][0] as { query: string; params: object };
-    // All four per-network warehouse tables are present in the UNION
+    // All five per-network warehouse tables are present in the UNION
     expect(opts.query).toContain("dwh_fb2_globalcomix_adjust");
     expect(opts.query).toContain("dwh_google_ads_globalcomix_adjust");
     expect(opts.query).toContain("dwh_tik_tok_globalcomix_adjust");
     expect(opts.query).toContain("dwh_apple_globalcomix_adjust");
+    expect(opts.query).toContain("dwh_applovin_globalcomix_adjust");
     // No legacy agent view
     expect(opts.query).not.toContain("v_agent_globalcomix");
     // Spend aggregation reads from cost_usd

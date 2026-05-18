@@ -38,7 +38,7 @@ const CLIENT_TO_TABLE: Record<string, string> = {
  * (e.g. coverage warning on Playw3) — NOT used as an enforcement filter.
  */
 export const CLIENT_NETWORK_COVERAGE: Record<string, string[]> = {
-  globalcomix: ["Meta", "TikTok", "Google", "Apple Search Ads"],
+  globalcomix: ["Meta", "TikTok", "Google", "Apple Search Ads", "AppLovin"],
   playw3: ["Meta", "Twitter"],
   "100play": ["Meta"],
 };
@@ -188,8 +188,11 @@ const CLIENT_SCHEMA: Record<string, ClientSchema> = {
         { table: "dwh_tik_tok_globalcomix_adjust", network: "TikTok", osStrategy: "campaign_name" },
         // Apple Search Ads: iOS-only by product definition.
         { table: "dwh_apple_globalcomix_adjust", network: "Apple Search Ads", osStrategy: "implicit_ios" },
-        // AppLovin is added in WS2 (separate commit) — same shape but
-        // with osStrategy: "column" + coverageStart: "2026-05-05".
+        // AppLovin: Adjust populates `os` reliably (verified
+        // 2026-05-17). coverageStart guards windows that begin before
+        // the table started landing so a young source does not silently
+        // read as zero spend on the dashboard.
+        { table: "dwh_applovin_globalcomix_adjust", network: "AppLovin", osStrategy: "column", coverageStart: "2026-05-05" },
       ],
       cohortTable: "uni_adjust_cohort_report_globalcomix",
       // Every dwh_*_adjust table fans rows out across `breakdown_type` —

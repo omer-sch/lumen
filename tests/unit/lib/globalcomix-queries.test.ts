@@ -65,7 +65,7 @@ const FROM = "2026-04-15";
 const TO = "2026-05-14";
 
 describe("queryGlobalComixKPIs: UNION shape + cohort join", () => {
-  it("UNION ALL'd spend over four per-network tables", async () => {
+  it("UNION ALL'd spend over the five per-network tables", async () => {
     queryFn.mockResolvedValue([[{}]]);
     const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
     await queryGlobalComixKPIs("globalcomix", FROM, TO);
@@ -74,6 +74,7 @@ describe("queryGlobalComixKPIs: UNION shape + cohort join", () => {
     expect(query).toContain("dwh_google_ads_globalcomix_adjust");
     expect(query).toContain("dwh_tik_tok_globalcomix_adjust");
     expect(query).toContain("dwh_apple_globalcomix_adjust");
+    expect(query).toContain("dwh_applovin_globalcomix_adjust");
     // The legs are unioned, not joined.
     expect(query).toContain("UNION ALL");
   });
@@ -83,9 +84,9 @@ describe("queryGlobalComixKPIs: UNION shape + cohort join", () => {
     const { queryGlobalComixKPIs } = await import("@/lib/globalcomix-queries");
     await queryGlobalComixKPIs("globalcomix", FROM, TO);
     const { query } = queryFn.mock.calls[0][0] as { query: string };
-    // Four spend legs * (currr + prev) = predicate appears 8 times.
+    // Five spend legs * (curr + prev) = predicate appears 10 times.
     const occurrences = query.match(/breakdown_type = 'No Breakdown'/g) ?? [];
-    expect(occurrences.length).toBeGreaterThanOrEqual(8);
+    expect(occurrences.length).toBeGreaterThanOrEqual(10);
   });
 
   it("joins the cohort table for D7 revenue", async () => {
@@ -272,8 +273,8 @@ describe("queryGlobalComixDataBounds / DataAsOf", () => {
     expect(out).toBe("2026-05-14");
     const { query } = queryFn.mock.calls[0][0] as { query: string };
     expect(query).toContain("GREATEST");
-    // One subquery per per-network spend table (4).
-    expect((query.match(/MAX\(date\)/g) ?? []).length).toBe(4);
+    // One subquery per per-network spend table (5 after AppLovin wire-in).
+    expect((query.match(/MAX\(date\)/g) ?? []).length).toBe(5);
   });
 
   it("queryGlobalComixDataAsOf unwraps the BQ { value: string } object shape", async () => {
