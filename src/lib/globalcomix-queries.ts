@@ -1148,6 +1148,372 @@ async function _queryGlobalComixDataAsOf(
   return null;
 }
 
+// ── WS5 — Weekends vs Weekdays ─────────────────────────────────────────────
+
+export type WeekendsRow = {
+  /** "weekday" or "weekend". */
+  bucket: "weekday" | "weekend";
+  spend: number;
+  installs: number;
+  sub_d7: number;
+  sub_start_d7: number;
+  cpa_d7: number;
+  cp_sub_start: number;
+  roi_d7: number;
+  install_cvr: number;
+  sub_cvr: number;
+};
+
+async function _queryGlobalComixWeekends(
+  client: string,
+  from: string,
+  to: string,
+): Promise<WeekendsRow[]> {
+  const spendSub = buildSpendSubquery(client);
+  const cohortSub = buildCohortSubquery(client);
+  const bq = getBigQueryClient();
+
+  // EXTRACT(DAYOFWEEK FROM ...) returns 1=Sunday, 7=Saturday in BQ.
+  // Bucket those as 'weekend', everything else 'weekday'. Rate metrics
+  // are recomputed from the bucket totals so we never average daily
+  // rates (which would weight every day equally regardless of spend
+  // volume).
+  const query = `
+    WITH spend_bucket AS (
+      SELECT
+        CASE WHEN EXTRACT(DAYOFWEEK FROM date) IN (1, 7) THEN 'weekend' ELSE 'weekday' END AS bucket,
+        SUM(cost_usd) AS spend,
+        SUM(installs) AS installs
+      FROM ${spendSub}
+      WHERE date BETWEEN ${FROM} AND ${TO}
+      GROUP BY 1
+    ),
+    cohort_bucket AS (
+      SELECT
+        CASE WHEN EXTRACT(DAYOFWEEK FROM date) IN (1, 7) THEN 'weekend' ELSE 'weekday' END AS bucket,
+        SUM(sub_d7)       AS sub_d7,
+        SUM(sub_start_d7) AS sub_start_d7,
+        SUM(rev_d7)       AS rev_d7
+      FROM ${cohortSub}
+      WHERE date BETWEEN ${FROM} AND ${TO}
+        AND network IS NOT NULL
+      GROUP BY 1
+    )
+    SELECT
+      s.bucket                                              AS bucket,
+      s.spend                                               AS spend,
+      s.installs                                            AS installs,
+      COALESCE(c.sub_d7, 0)                                 AS sub_d7,
+      COALESCE(c.sub_start_d7, 0)                           AS sub_start_d7,
+      SAFE_DIVIDE(s.spend, NULLIF(c.sub_d7, 0))             AS cpa_d7,
+      SAFE_DIVIDE(s.spend, NULLIF(c.sub_start_d7, 0))       AS cp_sub_start,
+      SAFE_DIVIDE(c.rev_d7, NULLIF(s.spend, 0))             AS roi_d7,
+      SAFE_DIVIDE(s.installs, NULLIF(s.spend, 0))           AS install_cvr,
+      SAFE_DIVIDE(c.sub_d7, NULLIF(s.installs, 0))          AS sub_cvr
+    FROM spend_bucket s
+    LEFT JOIN cohort_bucket c USING (bucket)
+    ORDER BY bucket
+  `;
+
+  const [rows] = await bq.query({
+    query,
+    params: { from, to },
+    location: BQ_LOCATION,
+  });
+
+  return rows.map((r: Record<string, unknown>) => ({
+    bucket: String(r.bucket) as WeekendsRow["bucket"],
+    spend: numberish(r.spend),
+    installs: numberish(r.installs),
+    sub_d7: numberish(r.sub_d7),
+    sub_start_d7: numberish(r.sub_start_d7),
+    cpa_d7: numberish(r.cpa_d7),
+    cp_sub_start: numberish(r.cp_sub_start),
+    roi_d7: numberish(r.roi_d7),
+    install_cvr: numberish(r.install_cvr),
+    sub_cvr: numberish(r.sub_cvr),
+  }));
+}
+
+// ── WS5 — Geo (per-country slice) ──────────────────────────────────────────
+
+export type GeoRow = {
+  /** ISO-2 code where resolvable, otherwise the raw cohort name. */
+  country_code: string;
+  country_name: string;
+  spend: number;
+  installs: number;
+  sub_d7: number;
+  rev_d7: number;
+  cpa_d7: number;
+  roi_d7: number;
+  sub_paid: number;
+  sub_organic: number;
+};
+
+async function _queryGlobalComixGeo(
+  client: string,
+  from: string,
+  to: string,
+): Promise<GeoRow[]> {
+  const cohortSub = buildCohortSubquery(client, {
+    groupBy: ["country", "network"],
+    includeOrganic: true,
+  });
+  const bq = getBigQueryClient();
+
+  // Geo lives on the cohort side. Spend per-country joins via the
+  // breakdown_value Country slice on each per-network spend table —
+  // omitted here in Phase 1 (the spend tables' Country slice fans rows
+  // differently than No Breakdown; a clean join is non-trivial).
+  // Phase 1 reports cohort-only Geo: subs, revenue, paid vs organic
+  // split. Phase 2 will join spend once the country slice is validated.
+  const query = `
+    SELECT
+      country                                                AS country_name,
+      SUM(CASE WHEN network = 'Organic' THEN 0 ELSE sub_d7 END) AS sub_paid,
+      SUM(CASE WHEN network = 'Organic' THEN sub_d7 ELSE 0 END) AS sub_organic,
+      SUM(sub_d7)  AS sub_d7,
+      SUM(rev_d7)  AS rev_d7
+    FROM ${cohortSub}
+    WHERE _Day_Date BETWEEN ${FROM} AND ${TO}
+      AND country IS NOT NULL
+    GROUP BY country
+    ORDER BY sub_d7 DESC
+    LIMIT 100
+  `;
+
+  const [rows] = await bq.query({
+    query,
+    params: { from, to },
+    location: BQ_LOCATION,
+  });
+
+  const { isoCodeFromName } = await import("@/lib/iso-country-codes");
+
+  return rows.map((r: Record<string, unknown>) => {
+    const name = String(r.country_name ?? "");
+    const code = isoCodeFromName(name) ?? name;
+    return {
+      country_code: code,
+      country_name: name,
+      // Phase 1: no spend joined — populate 0 so the type stays narrow.
+      spend: 0,
+      installs: 0,
+      sub_d7: numberish(r.sub_d7),
+      rev_d7: numberish(r.rev_d7),
+      cpa_d7: 0,
+      roi_d7: 0,
+      sub_paid: numberish(r.sub_paid),
+      sub_organic: numberish(r.sub_organic),
+    };
+  });
+}
+
+// ── WS5 — Creatives (per-ad slice, Meta thumbnails) ────────────────────────
+
+export type CreativeRow = {
+  ad_id: string;
+  ad_name: string;
+  creative_name: string;
+  network: string;
+  thumbnail_url: string | null;
+  spend: number;
+  installs: number;
+  sub_start_d7: number;
+  sub_d7: number;
+  cpa_d7: number;
+  roi_d7: number;
+};
+
+async function _queryGlobalComixCreatives(
+  client: string,
+  from: string,
+  to: string,
+): Promise<CreativeRow[]> {
+  const cohortSub = buildCohortSubquery(client, {
+    groupBy: ["ad_id", "creative", "network"],
+  });
+  const bq = getBigQueryClient();
+
+  // Per-ad cohort + optional Meta-thumbnail LEFT JOIN. Spend per-ad
+  // would require joining the breakdown_value Creatives slice on the
+  // spend side (Meta only — TikTok creative spend flows via
+  // No Breakdown). Phase 1: cohort-only metrics so the table renders
+  // ranked-by-sub_d7 even before spend joins. Phase 2: per-network
+  // creative spend.
+  const query = `
+    SELECT
+      c.ad_id                                                AS ad_id,
+      COALESCE(c.creative_name, c.ad_id)                     AS ad_name,
+      COALESCE(c.creative_name, '')                          AS creative_name,
+      c.network                                              AS network,
+      f.thumbnail_url                                        AS thumbnail_url,
+      SUM(c.sub_start_d7)                                    AS sub_start_d7,
+      SUM(c.sub_d7)                                          AS sub_d7,
+      SUM(c.rev_d7)                                          AS rev_d7
+    FROM ${cohortSub} c
+    LEFT JOIN ${qualifyTable("ods_fb2_creatives_globalcomix")} f
+      ON c.ad_id = CAST(f._creative_id AS STRING)
+    WHERE c._Day_Date BETWEEN ${FROM} AND ${TO}
+      AND c.ad_id IS NOT NULL
+      AND c.network IS NOT NULL
+    GROUP BY c.ad_id, c.creative_name, c.network, f.thumbnail_url
+    ORDER BY SUM(c.sub_d7) DESC
+    LIMIT 100
+  `;
+
+  const [rows] = await bq.query({
+    query,
+    params: { from, to },
+    location: BQ_LOCATION,
+  });
+
+  return rows.map((r: Record<string, unknown>) => {
+    const sub_d7 = numberish(r.sub_d7);
+    const rev_d7 = numberish(r.rev_d7);
+    return {
+      ad_id: String(r.ad_id ?? ""),
+      ad_name: String(r.ad_name ?? ""),
+      creative_name: String(r.creative_name ?? ""),
+      network: String(r.network ?? ""),
+      thumbnail_url: r.thumbnail_url == null ? null : String(r.thumbnail_url),
+      // Phase 1: spend not joined yet — populate 0 so consumers can render
+      // the table; CPA / ROI surfaces as 0 until Phase 2 wires per-ad spend.
+      spend: 0,
+      installs: 0,
+      sub_start_d7: numberish(r.sub_start_d7),
+      sub_d7,
+      cpa_d7: 0,
+      roi_d7: rev_d7,
+    };
+  });
+}
+
+// ── WS5 — Attribution Validation (platform vs Adjust, iOS only) ────────────
+
+export type AttributionValidationRow = {
+  network: string;
+  /** ISO week, "YYYY-Www". */
+  week_iso: string;
+  platform_installs: number;
+  adjust_installs: number;
+  platform_subs: number;
+  adjust_subs: number;
+  /** (platform - adjust) / adjust. */
+  delta_pct: number | null;
+};
+
+async function _queryGlobalComixAttributionValidation(
+  client: string,
+  from: string,
+  to: string,
+): Promise<AttributionValidationRow[]> {
+  void client;
+  const cohortSub = buildCohortSubquery(client, {
+    groupBy: ["date", "network", "os"],
+  });
+  const bq = getBigQueryClient();
+
+  // Attribution Validation: side-by-side platform-self-reported vs
+  // Adjust-attributed numbers for each paid network, iOS only (matches
+  // the Looker page scope). The platform-side columns are best-effort
+  // per the BQ investigation report; TODO comments call out columns
+  // the data team still needs to validate before the dashboard reads
+  // them as truth.
+  //
+  // Per-network leg shape: SELECT a per-week aggregate of installs +
+  // subs from the spend table, then aggregate the cohort the same way.
+  // UNION the legs and emit one row per (network, week).
+  //
+  // Note: this query exposes ground-truth drift; it should NEVER be
+  // used as a headline KPI. The dashboard surfaces this as a debug /
+  // QA view, not as a metric.
+  const query = `
+    WITH meta AS (
+      SELECT
+        'Meta'                                          AS network,
+        FORMAT_DATE('%G-W%V', date)                     AS week_iso,
+        SUM(installs)                                   AS platform_installs,
+        -- TODO(open-q-attribution): verify fb_subscribe_total is the
+        -- right Meta platform-side sub-count column on No Breakdown.
+        SUM(COALESCE(fb_subscribe_total, 0))            AS platform_subs
+      FROM ${qualifyTable("dwh_fb2_globalcomix_adjust")}
+      WHERE date BETWEEN ${FROM} AND ${TO}
+        AND breakdown_type = 'No Breakdown'
+      GROUP BY 1, 2
+    ),
+    google AS (
+      SELECT
+        'Google'                                        AS network,
+        FORMAT_DATE('%G-W%V', date)                     AS week_iso,
+        SUM(installs)                                   AS platform_installs,
+        -- TODO(open-q-attribution): Google's platform-side sub column
+        -- on No Breakdown — verify with the data team.
+        SUM(COALESCE(subscription_purchase, 0))         AS platform_subs
+      FROM ${qualifyTable("dwh_google_ads_globalcomix_adjust")}
+      WHERE date BETWEEN ${FROM} AND ${TO}
+        AND breakdown_type = 'No Breakdown'
+      GROUP BY 1, 2
+    ),
+    tiktok AS (
+      SELECT
+        'TikTok'                                        AS network,
+        FORMAT_DATE('%G-W%V', date)                     AS week_iso,
+        SUM(installs)                                   AS platform_installs,
+        SUM(COALESCE(tiktok_purchase, 0))               AS platform_subs
+      FROM ${qualifyTable("dwh_tik_tok_globalcomix_adjust")}
+      WHERE date BETWEEN ${FROM} AND ${TO}
+        AND breakdown_type = 'No Breakdown'
+      GROUP BY 1, 2
+    ),
+    platform AS (
+      SELECT * FROM meta
+      UNION ALL SELECT * FROM google
+      UNION ALL SELECT * FROM tiktok
+    ),
+    adjust AS (
+      SELECT
+        network                                         AS network,
+        FORMAT_DATE('%G-W%V', date)                     AS week_iso,
+        SUM(sub_d7)                                     AS adjust_subs,
+        SUM(sub_d7)                                     AS adjust_installs_proxy
+      FROM ${cohortSub}
+      WHERE date BETWEEN ${FROM} AND ${TO}
+        AND network IN ('Meta', 'Google', 'TikTok')
+        AND os = 'ios'
+      GROUP BY 1, 2
+    )
+    SELECT
+      p.network,
+      p.week_iso,
+      p.platform_installs,
+      COALESCE(a.adjust_installs_proxy, 0)              AS adjust_installs,
+      p.platform_subs,
+      COALESCE(a.adjust_subs, 0)                        AS adjust_subs,
+      SAFE_DIVIDE(p.platform_subs - COALESCE(a.adjust_subs, 0), NULLIF(a.adjust_subs, 0)) AS delta_pct
+    FROM platform p
+    LEFT JOIN adjust a USING (network, week_iso)
+    ORDER BY p.network, p.week_iso
+  `;
+
+  const [rows] = await bq.query({
+    query,
+    params: { from, to },
+    location: BQ_LOCATION,
+  });
+
+  return rows.map((r: Record<string, unknown>) => ({
+    network: String(r.network ?? ""),
+    week_iso: String(r.week_iso ?? ""),
+    platform_installs: numberish(r.platform_installs),
+    adjust_installs: numberish(r.adjust_installs),
+    platform_subs: numberish(r.platform_subs),
+    adjust_subs: numberish(r.adjust_subs),
+    delta_pct: numberOrNull(r.delta_pct),
+  }));
+}
+
 // ── Cached exports (Upstash Redis, per-client keys) ────────────────────────
 //
 // TTL choices:
@@ -1273,6 +1639,75 @@ export const queryGlobalComixDataBounds = (client: string) =>
       ttlSeconds: BOUNDS_TTL_S,
     },
     () => _queryGlobalComixDataBounds(client),
+  );
+
+// WS5 — Four new analytical exports.
+//
+// Each follows the same cache contract as the headline dashboard queries:
+// 12h TTL, per-(client, query, paramHash) key. OS / platforms params are
+// accepted by signature but threaded through SQL in WS6's filter spine
+// pass; today they're documented and the params land in the cache key
+// so the wrap-and-warm path can pre-key the (os, platforms) combos WS8
+// will warm.
+
+export const queryGlobalComixWeekends = (
+  client: string,
+  from: string,
+  to: string,
+) =>
+  withRedisCache(
+    {
+      client,
+      query: "weekends",
+      params: { from, to },
+      ttlSeconds: DASHBOARD_TTL_S,
+    },
+    () => _queryGlobalComixWeekends(client, from, to),
+  );
+
+export const queryGlobalComixGeo = (
+  client: string,
+  from: string,
+  to: string,
+) =>
+  withRedisCache(
+    {
+      client,
+      query: "geo",
+      params: { from, to },
+      ttlSeconds: DASHBOARD_TTL_S,
+    },
+    () => _queryGlobalComixGeo(client, from, to),
+  );
+
+export const queryGlobalComixCreatives = (
+  client: string,
+  from: string,
+  to: string,
+) =>
+  withRedisCache(
+    {
+      client,
+      query: "creatives",
+      params: { from, to },
+      ttlSeconds: DASHBOARD_TTL_S,
+    },
+    () => _queryGlobalComixCreatives(client, from, to),
+  );
+
+export const queryGlobalComixAttributionValidation = (
+  client: string,
+  from: string,
+  to: string,
+) =>
+  withRedisCache(
+    {
+      client,
+      query: "attribution-validation",
+      params: { from, to },
+      ttlSeconds: DASHBOARD_TTL_S,
+    },
+    () => _queryGlobalComixAttributionValidation(client, from, to),
   );
 
 // Not Redis-cached on purpose — see the header comment above. The outer

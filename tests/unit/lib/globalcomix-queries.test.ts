@@ -627,3 +627,158 @@ describe("queryGlobalComixCampaigns: cohort _Campaign_ID join", () => {
     expect(query).toMatch(/NOT \(_Network_Attribution LIKE 'Google Ads%' AND _OS_name = 'ios'\)/);
   });
 });
+
+// ── WS5 — Weekends ─────────────────────────────────────────────────────────
+describe("queryGlobalComixWeekends", () => {
+  it("buckets by EXTRACT(DAYOFWEEK FROM date) IN (1, 7)", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixWeekends } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixWeekends("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toMatch(/EXTRACT\(DAYOFWEEK FROM date\)/);
+    expect(query).toMatch(/IN \(1, 7\)/);
+    expect(query).toMatch(/'weekend'/);
+    expect(query).toMatch(/'weekday'/);
+  });
+
+  it("recomputes rate metrics from bucket sums (not averages of daily rates)", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixWeekends } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixWeekends("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // CPA D7, install CVR, ROI D7 etc. are SAFE_DIVIDE of bucket SUMs.
+    expect(query).toMatch(/SAFE_DIVIDE\(s\.spend, NULLIF\(c\.sub_d7, 0\)\)\s+AS cpa_d7/);
+    expect(query).toMatch(/SAFE_DIVIDE\(c\.rev_d7, NULLIF\(s\.spend, 0\)\)\s+AS roi_d7/);
+  });
+
+  it("registers query id 'weekends' for cache + provenance", async () => {
+    const mod = await import("@/lib/globalcomix-queries");
+    queryFn.mockResolvedValue([[]]);
+    await mod.queryGlobalComixWeekends("globalcomix", FROM, TO);
+    const call = cacheCalls.find((c) => c.query === "weekends");
+    expect(call).toBeDefined();
+    expect(call!.ttlSeconds).toBe(60 * 60 * 12);
+  });
+});
+
+// ── WS5 — Geo ──────────────────────────────────────────────────────────────
+describe("queryGlobalComixGeo", () => {
+  it("groups by country and includes the Organic bucket via buildCohortSubquery", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixGeo } = await import("@/lib/globalcomix-queries");
+    await queryGlobalComixGeo("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toMatch(/_Country AS country/);
+    // Organic branch should ship since the geo query opts in for the
+    // paid-vs-organic per-country split.
+    expect(query).toMatch(/THEN 'Organic'/);
+    expect(query).toMatch(/GROUP BY country/);
+  });
+
+  it("translates cohort full names into ISO-2 country_code via the static map", async () => {
+    queryFn.mockResolvedValue([
+      [
+        {
+          country_name: "United States",
+          sub_d7: 100,
+          rev_d7: 1000,
+          sub_paid: 60,
+          sub_organic: 40,
+        },
+        {
+          country_name: "Atlantis", // unknown — code falls back to name
+          sub_d7: 5,
+          rev_d7: 50,
+          sub_paid: 5,
+          sub_organic: 0,
+        },
+      ],
+    ]);
+    const { queryGlobalComixGeo } = await import("@/lib/globalcomix-queries");
+    const rows = await queryGlobalComixGeo("globalcomix", FROM, TO);
+    expect(rows[0].country_code).toBe("US");
+    expect(rows[1].country_code).toBe("Atlantis"); // unknown ↦ raw name
+  });
+});
+
+// ── WS5 — Creatives ────────────────────────────────────────────────────────
+describe("queryGlobalComixCreatives", () => {
+  it("joins ods_fb2_creatives_globalcomix on _Ad_ID = _creative_id", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixCreatives } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixCreatives("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toContain("ods_fb2_creatives_globalcomix");
+    expect(query).toMatch(/LEFT JOIN/);
+    expect(query).toMatch(/c\.ad_id = CAST\(f\._creative_id AS STRING\)/);
+  });
+
+  it("orders by sub_d7 desc and limits to 100", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixCreatives } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixCreatives("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toMatch(/ORDER BY SUM\(c\.sub_d7\) DESC/);
+    expect(query).toMatch(/LIMIT 100/);
+  });
+});
+
+// ── WS5 — Attribution Validation ───────────────────────────────────────────
+describe("queryGlobalComixAttributionValidation", () => {
+  it("unions per-network platform legs (Meta, Google, TikTok) and joins cohort iOS", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixAttributionValidation } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixAttributionValidation("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    // Three per-network legs.
+    expect(query).toMatch(/'Meta'\s+AS network/);
+    expect(query).toMatch(/'Google'\s+AS network/);
+    expect(query).toMatch(/'TikTok'\s+AS network/);
+    // Cohort side filters to iOS only (matches Looker page scope).
+    expect(query).toMatch(/os = 'ios'/);
+    // ISO week format token shows up so the per-(network, week_iso)
+    // shape is correct.
+    expect(query).toMatch(/%G-W%V/);
+  });
+
+  it("computes delta_pct as SAFE_DIVIDE so a zero adjust side reads NULL", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixAttributionValidation } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixAttributionValidation("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toMatch(/SAFE_DIVIDE\(p\.platform_subs - COALESCE\(a\.adjust_subs, 0\), NULLIF\(a\.adjust_subs, 0\)\)\s+AS delta_pct/);
+  });
+
+  it("leaves an open-q-attribution TODO so unverified columns are visible to readers", async () => {
+    queryFn.mockResolvedValue([[]]);
+    const { queryGlobalComixAttributionValidation } = await import(
+      "@/lib/globalcomix-queries"
+    );
+    await queryGlobalComixAttributionValidation("globalcomix", FROM, TO);
+    const { query } = queryFn.mock.calls[0][0] as { query: string };
+    expect(query).toContain("TODO(open-q-attribution)");
+  });
+});
+
+// ── WS5 — ANALYST_QUERY_IDS registrations ──────────────────────────────────
+describe("WS5 ANALYST_QUERY_IDS registrations", () => {
+  it("registers weekends / geo / creatives / attribution-validation", async () => {
+    const { ANALYST_QUERY_IDS } = await import("@/lib/analyst/types");
+    expect(ANALYST_QUERY_IDS.WEEKENDS).toBe("weekends");
+    expect(ANALYST_QUERY_IDS.GEO).toBe("geo");
+    expect(ANALYST_QUERY_IDS.CREATIVES).toBe("creatives");
+    expect(ANALYST_QUERY_IDS.ATTRIBUTION_VALIDATION).toBe("attribution-validation");
+  });
+});
