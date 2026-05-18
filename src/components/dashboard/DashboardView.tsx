@@ -89,9 +89,24 @@ function DashboardInner() {
   // the chart never spills past the bottom of the page. The
   // min-h-[40rem] floor stops the layout collapsing into illegibility
   // on very short viewports -- body scroll engages below that.
+  //
+  // Additional sections (Paid-vs-Organic, Cadence, Weekends, Lifecycle)
+  // render at THIS level, OUTSIDE MyDashboard. Each fetches its own data
+  // independently of useDashboardData's KPI payload - so when the KPI
+  // fetch fails and MyDashboard short-circuits to a section-error tile,
+  // the additional sections still render whatever they can. Each is a
+  // no-op render when its own data path is empty, so they degrade
+  // gracefully and never leave a broken-looking empty card.
+  const showAdditionalSections = mode !== "ai";
   return (
     <div className="flex min-h-[calc(100dvh-6.5rem)] flex-col gap-3 md:min-h-[calc(100dvh-7rem)] md:gap-4">
       <DashboardHeader />
+
+      {/* Paid vs Organic / BCAC strip - above MyDashboard so the blended
+          cost is the first signal a CSM reads. Renders only when My
+          Dashboard mode is active. */}
+      {showAdditionalSections && <PaidVsOrganic />}
+
       {mode === "ai" ? (
         <AIModeView />
       ) : (
@@ -104,6 +119,21 @@ function DashboardInner() {
           onRetry={refetch}
         />
       )}
+
+      {showAdditionalSections && (
+        <>
+          <CadenceTable
+            trend={data?.trendByNetwork.flatMap((r) =>
+              r.points.map((p) => ({ ...p, network: r.network })),
+            )}
+          />
+          <WeekendsVsWeekdays />
+          {/* SubscriberLifecycle intentionally ignores the global OS
+              chip - lifecycle is its own scope (see component comment). */}
+          <SubscriberLifecycle />
+        </>
+      )}
+
       <PinnedSection />
     </div>
   );
@@ -456,15 +486,15 @@ function MyDashboard({
       className="flex flex-1 min-h-0 flex-col gap-3 md:gap-4"
       data-live
     >
-      {/* WS7.E - Paid vs Organic + BCAC headline strip. Above the KPI
-          strip so the blended cost is the first signal a CSM reads. */}
-      <PaidVsOrganic />
-
       {/* KPI strip — equal tiles in a row on lg+, each with its own
           sparkline. Column count adapts to coverage so missing metrics
           don't leave empty slots. The hero (yellow glow) follows the
           first slot wherever it lands so the brand "yellow is
-          intentional" rule still holds. */}
+          intentional" rule still holds.
+          Note: Paid-vs-Organic, Cadence, Weekends, and Lifecycle render
+          at the DashboardInner level (parent), not here, so they
+          survive a KPI fetch failure without taking the rest of the
+          page down. */}
       <section
         className={`grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 ${gridCols}`}
       >
@@ -556,19 +586,6 @@ function MyDashboard({
           )}
         </div>
       </section>
-
-      {/* WS7.A - Cadence aggregation (Daily / Weekly / Monthly toggle).
-          Consumes the same trend data the chart already fetched, so no
-          extra round-trip. */}
-      <CadenceTable trend={data.trendByNetwork.flatMap((r) => r.points.map((p) => ({ ...p, network: r.network })))} />
-
-      {/* WS7.B - Weekends vs Weekdays bucket comparison. */}
-      <WeekendsVsWeekdays />
-
-      {/* WS7.D - Subscriber Lifecycle (Sub / Churn / Net Sub).
-          Intentionally NOT filtered by the global OS chip - lifecycle
-          is its own scope. */}
-      <SubscriberLifecycle />
     </div>
   );
 }
