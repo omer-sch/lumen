@@ -311,6 +311,15 @@ export const ANALYST_QUERY_IDS = {
   TREND: "trend",
   DATA_AS_OF: "data-as-of",
   KPIS: "kpis",
+  // WS4 — Subscriber lifecycle (dwh_total_subs_globalcomix)
+  TOTAL_SUBS_DAILY: "total-subs-daily",
+  TOTAL_SUBS_OS_MIX: "total-subs-os-mix",
+  NET_SUB_TREND: "net-sub-trend",
+  // WS5 — New analytical views
+  WEEKENDS: "weekends",
+  GEO: "geo",
+  CREATIVES: "creatives",
+  ATTRIBUTION_VALIDATION: "attribution-validation",
 } as const;
 
 export type AnalystQueryId =
