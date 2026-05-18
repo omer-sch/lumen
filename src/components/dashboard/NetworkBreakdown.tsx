@@ -10,7 +10,29 @@ import {
   statusFromCpaD7,
   type CpaStatus,
 } from "@/lib/dashboard/status";
+import {
+  cellTone,
+  toneTooltip,
+  type CellTone,
+} from "@/lib/dashboard/cell-tone";
 import type { NetworkRow } from "@/types/dashboard";
+
+/** Soft cell-tone tint for the Metric chip background. Neutral renders
+ *  transparent (no tint). Same shape as the helper in CadenceTable +
+ *  WeekendsVsWeekdays - kept local because Metric's chip is much smaller
+ *  than a table cell and may want different tint strengths over time. */
+function toneBackground(tone: CellTone): string {
+  switch (tone) {
+    case "good":
+      return "color-mix(in oklab, var(--color-ua) 14%, transparent)";
+    case "bad":
+      return "color-mix(in oklab, var(--color-creative) 14%, transparent)";
+    case "warn":
+      return "color-mix(in oklab, var(--color-yellow) 12%, transparent)";
+    default:
+      return "transparent";
+  }
+}
 
 type Props = {
   rows: NetworkRow[];
@@ -129,10 +151,31 @@ export function NetworkBreakdown({ rows, enterIndex }: Props) {
 
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 font-body text-[11px]">
                   <Metric label="Spend" value={formatKpi.money(r.spend)} />
+                  {/* CPA D7 is the hero column - tint it against this
+                      network's own previous-period baseline so a viewer
+                      scanning the list sees which networks are drifting.
+                      cellTone returns "neutral" when either side is
+                      missing / zero, so the tint silently disappears for
+                      networks without a baseline. */}
                   <Metric
                     label="CPA D7"
                     value={formatKpi.cpi(r.cpaD7)}
                     accent
+                    tone={cellTone(
+                      r.cpaD7,
+                      r.trailingCpaD7Avg,
+                      "lower-better",
+                    )}
+                    title={
+                      r.trailingCpaD7Avg > 0
+                        ? toneTooltip(
+                            r.cpaD7,
+                            r.trailingCpaD7Avg,
+                            "lower-better",
+                            "CPA D7",
+                          ) ?? undefined
+                        : undefined
+                    }
                   />
                   <Metric label="Installs" value={formatKpi.count(r.installs)} />
                 </div>
@@ -169,14 +212,30 @@ function Metric({
   label,
   value,
   accent,
+  tone,
+  title,
 }: {
   label: string;
   value: string;
   /** Accent applies brand mint — used for the hero column (CPA D7). */
   accent?: boolean;
+  /** Optional tone derived from cellTone() against a baseline. When
+   *  set to anything other than "neutral", the chip gains a soft
+   *  cell-tone tint. */
+  tone?: CellTone;
+  /** Optional native tooltip — used by callers passing tone so a hover
+   *  surfaces the explanation in plain words. */
+  title?: string;
 }) {
+  const tinted = tone && tone !== "neutral";
   return (
-    <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
+    <span
+      className="inline-flex items-baseline gap-1 whitespace-nowrap rounded-sm px-1 py-0.5 transition-colors"
+      style={{
+        background: tinted ? toneBackground(tone!) : "transparent",
+      }}
+      title={title}
+    >
       <span className="text-[9.5px] font-semibold uppercase tracking-[0.1em] text-[color:var(--text-muted)]">
         {label}
       </span>
