@@ -1,9 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowDownRight, ArrowUp, ArrowUpRight } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowDownRight,
+  ArrowUp,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { LivePulse } from "@/components/ui/LivePulse";
@@ -64,19 +71,28 @@ function networkStyle(n: string): { bg: string; fg: string } {
   );
 }
 
-const NETWORK_FILTERS = ["all", "Meta", "TikTok", "Google", "Apple", "AppLovin"] as const;
-type NetworkFilter = (typeof NETWORK_FILTERS)[number];
+const NETWORK_OPTIONS = ["Meta", "TikTok", "Google", "Apple", "AppLovin"] as const;
+type NetworkOption = (typeof NETWORK_OPTIONS)[number];
 
-const matchesNetwork = (rowNetwork: string, f: NetworkFilter): boolean => {
-  if (f === "all") return true;
+/**
+ * True when the row's raw network matches any of the selected network
+ * options. Empty selection is treated as "all" by the caller — this
+ * helper is only invoked when at least one network is selected.
+ */
+const matchesAnyNetwork = (
+  rowNetwork: string,
+  selected: NetworkOption[],
+): boolean => {
   const n = rowNetwork.toLowerCase();
-  switch (f) {
-    case "Meta":     return n === "meta" || n === "facebook";
-    case "Google":   return n.startsWith("google");
-    case "Apple":    return n.startsWith("apple");
-    case "TikTok":   return n.includes("tiktok");
-    case "AppLovin": return n.includes("applovin");
-  }
+  return selected.some((f) => {
+    switch (f) {
+      case "Meta":     return n === "meta" || n === "facebook";
+      case "Google":   return n.startsWith("google");
+      case "Apple":    return n.startsWith("apple");
+      case "TikTok":   return n.includes("tiktok");
+      case "AppLovin": return n.includes("applovin");
+    }
+  });
 };
 
 /**
@@ -127,9 +143,12 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
     key: "spend",
     dir: "desc",
   });
-  const [network, setNetwork] = useState<NetworkFilter>("all");
-  const [family, setFamily] = useState<string>("all");
-  const [geo, setGeo] = useState<string>("all");
+  // Multi-select state: empty array = "all" so no filter applies. The
+  // dropdown-chip UX naturally collapses to a no-op selection, which
+  // reads more honestly than a synthetic "all" sentinel in the array.
+  const [networks, setNetworks] = useState<NetworkOption[]>([]);
+  const [families, setFamilies] = useState<string[]>([]);
+  const [geos, setGeos] = useState<string[]>([]);
   const [status, setStatus] = useState<StatusFilter>("all");
   const [showMore, setShowMore] = useState(false);
 
@@ -158,16 +177,18 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
 
   const filtered = useMemo(() => {
     return enriched.filter((r) => {
-      if (!matchesNetwork(r.network, network)) return false;
-      if (family !== "all" && r.family !== family) return false;
-      if (geo !== "all" && r.geo !== geo) return false;
+      if (networks.length > 0 && !matchesAnyNetwork(r.network, networks)) {
+        return false;
+      }
+      if (families.length > 0 && !families.includes(r.family)) return false;
+      if (geos.length > 0 && !geos.includes(r.geo)) return false;
       if (status !== "all") {
         const s = normalizeStatus(r.campaign_status);
         if (s !== status) return false;
       }
       return true;
     });
-  }, [enriched, network, family, geo, status]);
+  }, [enriched, networks, families, geos, status]);
 
   const sorted = useMemo(() => {
     const out = [...filtered];
@@ -202,101 +223,63 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
 
   return (
     <GlassCard glow="ua" enterIndex={1} className="flex flex-col gap-5 p-5">
-      <div className="flex flex-col gap-2">
-        {/* Row 1: networks + the Show More toggle on the right. */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {NETWORK_FILTERS.map((c) => (
-            <ChipButton
-              key={c}
-              testId={`campaigns-channel-${c}`}
-              active={network === c}
-              label={c === "all" ? "All networks" : c}
-              onClick={() => setNetwork(c)}
-            />
-          ))}
-          <span className="ml-auto inline-flex items-center gap-2 text-[11px] uppercase tracking-wider text-[color:var(--text-muted)]">
-            {sorted.length} campaigns
-            <button
-              type="button"
-              data-testid="campaigns-show-more"
-              onClick={() => setShowMore((s) => !s)}
-              aria-expanded={showMore}
-              className="shrink-0 rounded-sm px-2 py-1 font-body text-[10px] font-semibold uppercase tracking-wider text-[color:var(--text-muted)] transition-colors hover:text-cloud-white"
-              style={{
-                border: "1px solid var(--border-subtle)",
-                background: "var(--surface-input)",
-              }}
-            >
-              {showMore ? "Less" : "More"}
-            </button>
-          </span>
-        </div>
-
-        {/* Row 2: family. Hidden when only one family is present (the
-            chip group would be a no-op). */}
+      {/* One compact row of dropdown chips. Each opens a popover with
+          its options; empty selection = no filter applied. Replaces
+          the prior four stacked chip rows so the table area dominates
+          the viewport. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterDropdown
+          testIdPrefix="campaigns-filter-network"
+          label="Network"
+          options={NETWORK_OPTIONS as readonly string[] as string[]}
+          selected={networks}
+          onChange={(next) => setNetworks(next as NetworkOption[])}
+        />
         {familyOptions.length > 1 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 font-body text-[10px] font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-              Family
-            </span>
-            <ChipButton
-              testId="campaigns-family-all"
-              active={family === "all"}
-              label="All"
-              onClick={() => setFamily("all")}
-            />
-            {familyOptions.map((f) => (
-              <ChipButton
-                key={f}
-                testId={`campaigns-family-${slug(f)}`}
-                active={family === f}
-                label={f}
-                onClick={() => setFamily(f)}
-              />
-            ))}
-          </div>
+          <FilterDropdown
+            testIdPrefix="campaigns-filter-family"
+            label="Family"
+            options={familyOptions}
+            selected={families}
+            onChange={setFamilies}
+          />
         )}
-
-        {/* Row 3: geo. Same hide-when-degenerate guard. */}
         {geoOptions.length > 1 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 font-body text-[10px] font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-              Geo
-            </span>
-            <ChipButton
-              testId="campaigns-geo-all"
-              active={geo === "all"}
-              label="All"
-              onClick={() => setGeo("all")}
-            />
-            {geoOptions.map((g) => (
-              <ChipButton
-                key={g}
-                testId={`campaigns-geo-${slug(g)}`}
-                active={geo === g}
-                label={g}
-                onClick={() => setGeo(g)}
-              />
-            ))}
-          </div>
+          <FilterDropdown
+            testIdPrefix="campaigns-filter-geo"
+            label="Geo"
+            options={geoOptions}
+            selected={geos}
+            onChange={setGeos}
+          />
         )}
-
-        {/* Row 4: status. Always render — the column is dichotomous so
-            "All / Running / Paused" is always a meaningful split. */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 font-body text-[10px] font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-            Status
-          </span>
-          {STATUS_FILTERS.map((s) => (
-            <ChipButton
-              key={s}
-              testId={`campaigns-status-${s}`}
-              active={status === s}
-              label={s === "all" ? "All" : s === "running" ? "Running" : "Paused"}
-              onClick={() => setStatus(s)}
-            />
-          ))}
-        </div>
+        <SingleSelectDropdown
+          testIdPrefix="campaigns-filter-status"
+          label="Status"
+          options={[
+            { value: "all", label: "All" },
+            { value: "running", label: "Running" },
+            { value: "paused", label: "Paused" },
+          ]}
+          selected={status}
+          onChange={(v) => setStatus(v as StatusFilter)}
+        />
+        <span className="ml-auto inline-flex items-center gap-2 text-[11px] uppercase tracking-wider text-[color:var(--text-muted)]">
+          {sorted.length} campaigns
+          <button
+            type="button"
+            data-testid="campaigns-show-more"
+            onClick={() => setShowMore((s) => !s)}
+            aria-expanded={showMore}
+            className="shrink-0 rounded-sm px-2 py-1 font-body text-[10px] font-semibold uppercase tracking-wider text-[color:var(--text-muted)] transition-colors hover:text-cloud-white"
+            style={{
+              border: "1px solid var(--border-subtle)",
+              background: "var(--surface-input)",
+            }}
+          >
+            {showMore ? "Fewer cols" : "More cols"}
+          </button>
+        </span>
       </div>
 
       <div className="overflow-x-auto">
@@ -554,4 +537,248 @@ function distinctSorted<T>(rows: T[], picker: (row: T) => string): string[] {
 /** Lower-kebab a label so it's safe inside a `data-testid`. */
 function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+// ── Dropdown filter chips ─────────────────────────────────────────────────
+
+/**
+ * Multi-select dropdown chip. Renders a pill toggle that opens a popover
+ * with a checklist of options. Empty selection reads as "All". The
+ * outside-click handler closes the popover so the chip behaves like a
+ * native <select> from a keyboard / mouse user's perspective.
+ */
+function FilterDropdown({
+  testIdPrefix,
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  testIdPrefix: string;
+  label: string;
+  options: string[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const active = selected.length > 0;
+  const summary = active
+    ? selected.length === 1
+      ? truncate(selected[0], 18)
+      : `${selected.length} selected`
+    : "All";
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const toggle = (opt: string) => {
+    onChange(
+      selected.includes(opt)
+        ? selected.filter((s) => s !== opt)
+        : [...selected, opt],
+    );
+  };
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <button
+        type="button"
+        data-testid={`${testIdPrefix}-toggle`}
+        aria-pressed={active}
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-body text-xs font-semibold transition-[transform,background-color,color,border-color] duration-280 ease-out-quart hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
+          active
+            ? "text-ua"
+            : "text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)]",
+        )}
+        style={{
+          background: active ? "var(--color-ua-dim)" : "transparent",
+          borderColor: active
+            ? "color-mix(in oklab, var(--color-ua) 35%, transparent)"
+            : "var(--border-subtle)",
+        }}
+      >
+        <span className="uppercase tracking-wider">{label}:</span>
+        <span className="normal-case tracking-normal">{summary}</span>
+        <ChevronDown className="h-3 w-3" strokeWidth={2.5} />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-multiselectable="true"
+          data-testid={`${testIdPrefix}-menu`}
+          className="absolute left-0 top-full z-30 mt-1 max-h-72 w-64 overflow-auto rounded-md p-1 font-body text-xs shadow-lg"
+          style={{
+            background: "var(--surface-glass-solid, var(--surface-base))",
+            border: "1px solid var(--border-glass)",
+          }}
+        >
+          {options.length === 0 && (
+            <p className="px-2 py-1.5 text-[color:var(--text-muted)]">
+              No options in the current window.
+            </p>
+          )}
+          {active && (
+            <button
+              type="button"
+              data-testid={`${testIdPrefix}-clear`}
+              onClick={() => onChange([])}
+              className="mb-1 w-full rounded-sm px-2 py-1 text-left text-[color:var(--text-muted)] hover:bg-[color:var(--surface-hover)] hover:text-cloud-white"
+            >
+              Clear selection
+            </button>
+          )}
+          {options.map((opt) => {
+            const isOn = selected.includes(opt);
+            return (
+              <button
+                key={opt}
+                type="button"
+                role="option"
+                aria-selected={isOn}
+                data-testid={`${testIdPrefix}-opt-${slug(opt)}`}
+                onClick={() => toggle(opt)}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left hover:bg-[color:var(--surface-hover)]",
+                  isOn && "text-ua",
+                )}
+              >
+                <span className="truncate" title={opt}>
+                  {opt}
+                </span>
+                {isOn && <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Single-select dropdown chip. Same shape as FilterDropdown but the
+ * options are tri-state radio-style: only one active at a time, and
+ * the "all" sentinel resets the filter. Used for Status where
+ * Running / Paused are mutually exclusive.
+ */
+function SingleSelectDropdown({
+  testIdPrefix,
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  testIdPrefix: string;
+  label: string;
+  options: { value: string; label: string }[];
+  selected: string;
+  onChange: (next: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const current = options.find((o) => o.value === selected);
+  const active = selected !== "all";
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <button
+        type="button"
+        data-testid={`${testIdPrefix}-toggle`}
+        aria-pressed={active}
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-body text-xs font-semibold transition-[transform,background-color,color,border-color] duration-280 ease-out-quart hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ua focus-visible:ring-offset-2 focus-visible:ring-offset-navy",
+          active
+            ? "text-ua"
+            : "text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)]",
+        )}
+        style={{
+          background: active ? "var(--color-ua-dim)" : "transparent",
+          borderColor: active
+            ? "color-mix(in oklab, var(--color-ua) 35%, transparent)"
+            : "var(--border-subtle)",
+        }}
+      >
+        <span className="uppercase tracking-wider">{label}:</span>
+        <span className="normal-case tracking-normal">
+          {current?.label ?? "All"}
+        </span>
+        <ChevronDown className="h-3 w-3" strokeWidth={2.5} />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          data-testid={`${testIdPrefix}-menu`}
+          className="absolute left-0 top-full z-30 mt-1 w-48 rounded-md p-1 font-body text-xs shadow-lg"
+          style={{
+            background: "var(--surface-glass-solid, var(--surface-base))",
+            border: "1px solid var(--border-glass)",
+          }}
+        >
+          {options.map((opt) => {
+            const isOn = opt.value === selected;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="option"
+                aria-selected={isOn}
+                data-testid={`${testIdPrefix}-opt-${opt.value}`}
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left hover:bg-[color:var(--surface-hover)]",
+                  isOn && "text-ua",
+                )}
+              >
+                <span>{opt.label}</span>
+                {isOn && <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, max - 1)}…`;
 }

@@ -59,7 +59,8 @@ describe("CampaignsTable - WS2 enrichment + chip filters", () => {
   it("Status=Running filters to only running campaigns", async () => {
     const user = userEvent.setup();
     render(<CampaignsTable rows={FIXTURE} />);
-    await user.click(screen.getByTestId("campaigns-status-running"));
+    await user.click(screen.getByTestId("campaigns-filter-status-toggle"));
+    await user.click(screen.getByTestId("campaigns-filter-status-opt-running"));
     const table = screen.getByTestId("campaigns-table");
     // c1, c2, c5 are running.
     expect(within(table).getByTestId("campaign-row-c1")).toBeTruthy();
@@ -72,7 +73,8 @@ describe("CampaignsTable - WS2 enrichment + chip filters", () => {
   it("Status=Paused filters to only paused campaigns", async () => {
     const user = userEvent.setup();
     render(<CampaignsTable rows={FIXTURE} />);
-    await user.click(screen.getByTestId("campaigns-status-paused"));
+    await user.click(screen.getByTestId("campaigns-filter-status-toggle"));
+    await user.click(screen.getByTestId("campaigns-filter-status-opt-paused"));
     const table = screen.getByTestId("campaigns-table");
     expect(within(table).getByTestId("campaign-row-c3")).toBeTruthy();
     expect(within(table).queryByTestId("campaign-row-c1")).toBeNull();
@@ -81,7 +83,8 @@ describe("CampaignsTable - WS2 enrichment + chip filters", () => {
   it("network=Meta filters to only Meta campaigns", async () => {
     const user = userEvent.setup();
     render(<CampaignsTable rows={FIXTURE} />);
-    await user.click(screen.getByTestId("campaigns-channel-Meta"));
+    await user.click(screen.getByTestId("campaigns-filter-network-toggle"));
+    await user.click(screen.getByTestId("campaigns-filter-network-opt-meta"));
     const table = screen.getByTestId("campaigns-table");
     expect(within(table).getByTestId("campaign-row-c1")).toBeTruthy();
     expect(within(table).getByTestId("campaign-row-c2")).toBeTruthy();

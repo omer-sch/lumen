@@ -1,17 +1,25 @@
 "use client";
 
 import { BcacHeadline } from "@/components/dashboard/BcacHeadline";
-import { PaidVsOrganic } from "@/components/dashboard/PaidVsOrganic";
+import {
+  PaidVsOrganic,
+  PaidVsOrganicMix,
+} from "@/components/dashboard/PaidVsOrganic";
 import { DataFreshnessBar } from "@/components/dashboard/DataFreshnessBar";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { AlertTriangle } from "lucide-react";
 
 /**
- * Attribution tab - the trust story. BCAC leads as the hero KpiCard
- * (promoted out of PaidVsOrganic in WS3.D so the tab's headline metric
- * is the first thing a CSM reads). PaidVsOrganic now sticks to the
- * Sub Total / Sub Paid / Sub Organic split + share bar. Coverage
- * warnings + data freshness debug close out the tab.
+ * Attribution tab - the trust story. Layout:
+ *
+ *   Row 1 (2-col on md+): BCAC hero KpiCard | Paid vs Organic mix donut
+ *   Row 2 (full-width):   Paid vs Organic KPI strip (Sub Total / Paid / Organic)
+ *   Row 3 (full-width):   Coverage warnings
+ *   Row 4 (full-width):   Data freshness
+ *
+ * The top row pairs the headline metric (BCAC) with the share-of-cohort
+ * visual so a CSM gets "what it costs" and "where it came from" in one
+ * glance. The KPI strip lives below as the supporting absolute counts.
  *
  * Filters relevant on this tab: Date, OS, Platform, Client (all four).
  * The TopBar shows the OS + Platform chips the same way Performance
@@ -31,7 +39,10 @@ export function AttributionTab() {
       role="tabpanel"
       aria-labelledby="dashboard-tab-attribution"
     >
-      <BcacHeadline />
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
+        <BcacHeadline />
+        <PaidVsOrganicMix />
+      </div>
       <PaidVsOrganic />
       <CoverageWarnings />
       <DataFreshnessBar />

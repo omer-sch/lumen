@@ -8,6 +8,7 @@ import {
   Megaphone,
   MessagesSquare,
   FileText,
+  Film,
   Sparkles,
   Bot,
   BookOpen,
@@ -25,13 +26,14 @@ type NavItem = {
 };
 
 const NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/campaigns", label: "Campaigns", icon: Megaphone },
-  { href: "/queries",   label: "Ask",       icon: MessagesSquare, badge: "new" },
-  { href: "/reports",   label: "Reports",   icon: FileText },
-  { href: "/feed",      label: "Feed",      icon: Sparkles },
-  { href: "/agents",    label: "Agents",    icon: Bot },
-  { href: "/knowledge", label: "Knowledge", icon: BookOpen },
+  { href: "/dashboard",          label: "Dashboard", icon: LayoutDashboard },
+  { href: "/campaigns",          label: "Campaigns", icon: Megaphone },
+  { href: "/campaigns/creatives", label: "Creatives", icon: Film },
+  { href: "/queries",            label: "Ask",       icon: MessagesSquare, badge: "new" },
+  { href: "/reports",            label: "Reports",   icon: FileText },
+  { href: "/feed",               label: "Feed",      icon: Sparkles },
+  { href: "/agents",             label: "Agents",    icon: Bot },
+  { href: "/knowledge",          label: "Knowledge", icon: BookOpen },
 ];
 
 export function Sidebar() {
@@ -100,10 +102,24 @@ export function Sidebar() {
         {/* Nav */}
         <nav className="mt-2 flex flex-1 flex-col gap-1 px-3">
           {NAV.map((item) => {
-            const active =
-              item.href === "/dashboard"
+            // Longest-prefix match: a path under /campaigns/creatives
+            // matches both /campaigns and /campaigns/creatives by
+            // prefix; the deeper href wins so only Creatives lights up,
+            // not Campaigns AND Creatives both. /dashboard is exact-
+            // matched (no sibling sub-routes today).
+            const matchesPrefix = (href: string) =>
+              href === "/dashboard"
                 ? pathname === "/dashboard"
-                : pathname.startsWith(item.href);
+                : pathname === href || pathname.startsWith(`${href}/`);
+            const longestMatchHref = NAV.reduce<string | null>(
+              (acc, it) =>
+                matchesPrefix(it.href) &&
+                (acc == null || it.href.length > acc.length)
+                  ? it.href
+                  : acc,
+              null,
+            );
+            const active = item.href === longestMatchHref;
             const Icon = item.icon;
             return (
               <Link

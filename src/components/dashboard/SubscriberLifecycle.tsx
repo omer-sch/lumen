@@ -1,14 +1,49 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { SubscriberLifecycleSkeleton } from "@/components/ui/Skeleton";
+import { formatKpi } from "@/lib/format";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 
 const fmtCount = (n: number) => Math.round(n).toLocaleString();
+
+// Parse a "YYYY-MM-DD" ISO date as a local-time Date (avoiding the
+// UTC shift that `new Date("YYYY-MM-DD")` applies, which can roll the
+// day backward in negative-UTC zones).
+function parseIsoLocal(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+}
+
+function fmtAxisDate(iso: string): string {
+  const d = parseIsoLocal(iso);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function fmtTooltipDate(iso: string): string {
+  const d = parseIsoLocal(iso);
+  return d.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 type DailyRow = {
   date: string;
@@ -229,31 +264,109 @@ function NetSubBars({ rows }: { rows: NetSubPoint[] }) {
       </p>
     );
   }
-  const max = Math.max(...rows.map((r) => Math.abs(r.netSub)), 1);
+
+  // Sparse-tick logic: with up to ~90 bars, native auto-ticks overlap
+  // and become unreadable. Pick first / last and ~3 evenly spaced in
+  // between so the axis stays legible at any window length.
+  const tickIdxs = (() => {
+    if (rows.length <= 6) return rows.map((_, i) => i);
+    const out = new Set<number>([0, rows.length - 1]);
+    const step = Math.floor(rows.length / 4);
+    for (let i = step; i < rows.length - 1; i += step) out.add(i);
+    return [...out].sort((a, b) => a - b);
+  })();
+  const tickDates = new Set(tickIdxs.map((i) => rows[i].date));
+
   return (
     <div className="flex flex-col gap-2">
       <span className="font-body text-xs uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
         Net Sub ({rows.length === 1 ? "1 day" : `${rows.length} days`})
       </span>
-      <div className="flex h-24 items-end gap-0.5">
-        {rows.map((r) => {
-          const h = (Math.abs(r.netSub) / max) * 100;
-          const positive = r.netSub >= 0;
-          return (
-            <div
-              key={r.date}
-              title={`${r.date}: ${r.netSub.toLocaleString()}`}
-              className="w-full rounded-t-sm"
-              style={{
-                height: `${Math.max(h, 4)}%`,
-                background: positive
-                  ? "var(--color-ua)"
-                  : "var(--color-creative)",
-                opacity: 0.85,
+      <div className="h-32 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={rows}
+            margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+          >
+            <CartesianGrid
+              stroke="var(--chart-grid)"
+              strokeDasharray="3 3"
+              vertical={false}
+            />
+            <XAxis
+              dataKey="date"
+              tick={{ fill: "var(--text-muted)", fontSize: 10 }}
+              tickLine={false}
+              axisLine={false}
+              interval="preserveStartEnd"
+              tickFormatter={(iso: string) =>
+                tickDates.has(iso) ? fmtAxisDate(iso) : ""
+              }
+              minTickGap={16}
+            />
+            <YAxis
+              tick={{ fill: "var(--text-muted)", fontSize: 10 }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v: number) => formatKpi.count(v)}
+              width={36}
+            />
+            <ReferenceLine
+              y={0}
+              stroke="var(--border-subtle)"
+              strokeOpacity={0.6}
+            />
+            <Tooltip
+              cursor={{ fill: "var(--color-ua)", fillOpacity: 0.08 }}
+              contentStyle={{
+                background: "rgba(10, 20, 40, 0.96)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid var(--border-strong, rgba(255,255,255,0.18))",
+                borderRadius: 10,
+                color: "#FFFFFF",
+                fontSize: 13,
+                fontWeight: 600,
+                padding: "8px 12px",
+                boxShadow: "var(--shadow-elevated)",
+              }}
+              labelStyle={{
+                color: "#FFFFFF",
+                fontSize: 12,
+                fontWeight: 700,
+                marginBottom: 4,
+                opacity: 0.95,
+              }}
+              itemStyle={{
+                color: "#FFFFFF",
+                fontSize: 13,
+                fontWeight: 600,
+                padding: 0,
+              }}
+              labelFormatter={(label) =>
+                fmtTooltipDate(typeof label === "string" ? label : String(label ?? ""))
+              }
+              formatter={(value) => {
+                const n = typeof value === "number" ? value : Number(value);
+                const safe = Number.isFinite(n) ? n : 0;
+                const sign = safe > 0 ? "+" : "";
+                return [`${sign}${safe.toLocaleString()}`, "Net Sub"];
               }}
             />
-          );
-        })}
+            <Bar dataKey="netSub" radius={[2, 2, 0, 0]} isAnimationActive={false}>
+              {rows.map((r) => (
+                <Cell
+                  key={r.date}
+                  fill={
+                    r.netSub >= 0
+                      ? "var(--color-ua)"
+                      : "var(--color-creative)"
+                  }
+                  fillOpacity={0.85}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );

@@ -86,10 +86,13 @@ test.describe("/campaigns table", () => {
     await expect.poll(firstRowName).not.toBe(before);
   });
 
-  test("channel filter narrows the rows to a single channel", async ({ page }) => {
+  test("network filter narrows the rows to a single network", async ({ page }) => {
     await page.goto("/campaigns");
 
-    await page.getByTestId("campaigns-channel-Meta").click();
+    // Open the Network dropdown and pick Meta. Empty selection = all,
+    // so toggling Meta in/out is the clear/restore round-trip.
+    await page.getByTestId("campaigns-filter-network-toggle").click();
+    await page.getByTestId("campaigns-filter-network-opt-meta").click();
 
     const rows = page.getByTestId("campaigns-table").locator("tbody tr");
     // Four Meta seeds in SEEDS — anything different means the filter is
@@ -102,8 +105,9 @@ test.describe("/campaigns table", () => {
       await expect(rows.nth(i)).toContainText("Meta");
     }
 
-    // Clearing the on-page filter restores the full set.
-    await page.getByTestId("campaigns-channel-all").click();
+    // "Clear selection" inside the dropdown empties the multi-select
+    // → no network filter → full set returns.
+    await page.getByTestId("campaigns-filter-network-clear").click();
     await expect(rows).toHaveCount(12);
   });
 

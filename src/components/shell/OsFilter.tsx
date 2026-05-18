@@ -1,17 +1,50 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Smartphone } from "lucide-react";
+import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
+import { Check, ChevronDown, Globe, Smartphone } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import type { OsFilter as OsFilterValue } from "@/lib/filters/types";
 
-const OPTIONS: { value: OsFilterValue; label: string }[] = [
-  { value: "total", label: "All OS" },
-  { value: "ios", label: "iOS" },
-  { value: "android", label: "Android" },
-  { value: "web", label: "Web" },
+type OsIcon = ComponentType<SVGProps<SVGSVGElement>>;
+
+// Inline brand silhouettes (CC0 simple-icons paths). Lucide doesn't ship
+// the Apple bitten-apple or the Android droid head — these are the
+// universally-recognized OS marks, so we inline them as filled SVGs
+// instead of substituting a generic icon. Sized to match lucide's
+// h-4 w-4 default at the call site.
+function AppleMark(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+    </svg>
+  );
+}
+
+function AndroidMark(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M17.523 15.34a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm-11.046 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm11.404-6.158 1.997-3.458a.416.416 0 0 0-.152-.566.416.416 0 0 0-.566.152l-2.022 3.503a12.418 12.418 0 0 0-10.272 0L4.844 5.31a.415.415 0 0 0-.566-.152.415.415 0 0 0-.152.566l1.997 3.458C2.674 11.137.501 14.581 0 18.625h24c-.501-4.044-2.674-7.488-6.119-9.442z" />
+    </svg>
+  );
+}
+
+const OPTIONS: { value: OsFilterValue; label: string; icon: OsIcon }[] = [
+  { value: "total",   label: "All OS",  icon: Smartphone },
+  { value: "ios",     label: "iOS",     icon: AppleMark },
+  { value: "android", label: "Android", icon: AndroidMark },
+  { value: "web",     label: "Web",     icon: Globe },
 ];
 
 const SHORT_LABEL: Record<OsFilterValue, string> = {
@@ -55,6 +88,8 @@ export function OsFilter() {
   }, [open]);
 
   const narrowed = os !== "total";
+  const ActiveIcon =
+    OPTIONS.find((o) => o.value === os)?.icon ?? Smartphone;
 
   return (
     <div ref={ref} className="relative">
@@ -83,10 +118,11 @@ export function OsFilter() {
             : "1px solid var(--border-default)",
         }}
       >
-        {/* Icon strokeWidth left at lucide's default so it reads at the
-            same weight as ClientSelector's <Users>. Prefix label "OS · "
-            dropped per the design review - icon + value is enough. */}
-        <Smartphone className="h-3.5 w-3.5" />
+        {/* Trigger icon swaps to the active OS mark — Apple silhouette
+            for iOS, Android droid for Android, Globe for Web, generic
+            Smartphone at "All". Reads as a real brand affordance, not a
+            generic placeholder. */}
+        <ActiveIcon className="h-3.5 w-3.5" />
         <span>{SHORT_LABEL[os]}</span>
         <ChevronDown
           className={cn(
@@ -110,6 +146,7 @@ export function OsFilter() {
         >
           {OPTIONS.map((opt) => {
             const selected = os === opt.value;
+            const OptIcon = opt.icon;
             return (
               <li key={opt.value}>
                 <button
@@ -126,8 +163,11 @@ export function OsFilter() {
                     selected ? "text-ua" : "text-[color:var(--text-secondary)]",
                   )}
                 >
-                  <span className="font-body text-sm font-semibold leading-none">
-                    {opt.label}
+                  <span className="flex items-center gap-2.5">
+                    <OptIcon className="h-4 w-4 shrink-0" />
+                    <span className="font-body text-sm font-semibold leading-none">
+                      {opt.label}
+                    </span>
                   </span>
                   {selected && (
                     <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />

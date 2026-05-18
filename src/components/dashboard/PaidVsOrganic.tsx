@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -17,30 +18,22 @@ type GeoRow = {
   sub_organic: number;
 };
 
+type GeoTotals = { subD7: number; paid: number; organic: number };
+
 const fmtCount = (n: number) => Math.round(n).toLocaleString();
 
 /**
- * Paid vs Organic (WS3.D reshape - BCAC moved out).
- *
- * After the three-tab IA shipped, BCAC graduated into its own hero
- * KpiCard on the Attribution tab (BcacHeadline). PaidVsOrganic now
- * sticks to its core question: of all the subscribers that arrived in
- * this window, how many came via paid spend and how many came organic?
- *
- * Layout:
- *   - Three compact KpiCards: Sub Total / Sub Paid / Sub Organic
- *   - A horizontal share bar below that visualizes the same split
- *
- * The Organic bucket is opted in on the /api/bq/geo cohort - this is
- * one of the few queries that includes Organic in totals. Everywhere
- * else the dashboard stays paid-only.
+ * Shared fetch for the geo-cohort endpoint that powers both the
+ * Paid vs Organic KPI card and the Mix donut card. Each instance
+ * triggers its own request; the /api/bq/geo route is warmed by the
+ * dashboard prefetch so duplicate calls hit the cache cheaply.
  */
-export function PaidVsOrganic() {
+function useGeoTotals(): { loading: boolean; totals: GeoTotals | null } {
   const { from, to, client } = useGlobalFilters();
   const fromIso = from.toISOString().slice(0, 10);
   const toIso = to.toISOString().slice(0, 10);
 
-  const [rows, setRows] = useState<GeoRow[]>([]);
+  const [rows, setRows] = useState<GeoRow[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -62,8 +55,33 @@ export function PaidVsOrganic() {
     };
   }, [client, fromIso, toIso]);
 
+  if (rows === null) return { loading, totals: null };
+  const totals = rows.reduce<GeoTotals>(
+    (acc, r) => {
+      acc.subD7 += r.sub_d7 ?? 0;
+      acc.paid += r.sub_paid ?? 0;
+      acc.organic += r.sub_organic ?? 0;
+      return acc;
+    },
+    { subD7: 0, paid: 0, organic: 0 },
+  );
+  return { loading, totals };
+}
+
+/**
+ * Paid vs Organic — KPI card.
+ *
+ * Three compact KpiCards (Sub Total / Sub Paid / Sub Organic) for the
+ * cohort window. The donut visualization lives in a separate card
+ * (`PaidVsOrganicMix`) so each visual gets its own breathing room and
+ * the share-of-total reads as a standalone moment instead of being
+ * crowded under the KPI strip.
+ */
+export function PaidVsOrganic() {
+  const { loading, totals } = useGeoTotals();
+
   if (loading) return <PaidVsOrganicSkeleton />;
-  if (rows.length === 0) {
+  if (!totals || (totals.paid === 0 && totals.organic === 0)) {
     return (
       <GlassCard className="flex flex-col gap-3 p-4">
         <header className="flex items-baseline justify-between gap-2">
@@ -82,19 +100,6 @@ export function PaidVsOrganic() {
       </GlassCard>
     );
   }
-
-  const totals = rows.reduce(
-    (acc, r) => {
-      acc.subD7 += r.sub_d7 ?? 0;
-      acc.paid += r.sub_paid ?? 0;
-      acc.organic += r.sub_organic ?? 0;
-      return acc;
-    },
-    { subD7: 0, paid: 0, organic: 0 },
-  );
-  const total = totals.paid + totals.organic;
-  const paidPct = total > 0 ? totals.paid / total : 0;
-  const organicPct = total > 0 ? totals.organic / total : 0;
 
   return (
     <GlassCard className="flex flex-col gap-4 p-5" enterIndex={3}>
@@ -136,70 +141,151 @@ export function PaidVsOrganic() {
           enterIndex={3}
         />
       </div>
-
-      <SplitBar paidPct={paidPct} organicPct={organicPct} />
     </GlassCard>
   );
 }
 
 /**
- * Two-tone share bar showing paid vs organic ratio at a glance. The
- * KPI tiles above carry the absolute counts; this carries the shape.
+ * Paid vs Organic — Mix donut card.
+ *
+ * Standalone GlassCard so the donut isn't crammed under the KPI strip.
+ * Mint = paid (var(--color-ua)), violet = organic (var(--color-organic))
+ * per the brand skill. Center hole carries the cohort total.
  */
-function SplitBar({
-  paidPct,
-  organicPct,
-}: {
-  paidPct: number;
-  organicPct: number;
-}) {
-  if (paidPct === 0 && organicPct === 0) return null;
+export function PaidVsOrganicMix() {
+  const { loading, totals } = useGeoTotals();
+  if (loading || !totals) return null;
+  if (totals.paid === 0 && totals.organic === 0) return null;
+
+  const total = totals.paid + totals.organic;
+  const paidPct = total > 0 ? totals.paid / total : 0;
+  const organicPct = total > 0 ? totals.organic / total : 0;
+
+  const data = [
+    {
+      name: "Paid",
+      value: totals.paid,
+      pct: paidPct,
+      fill: "var(--color-ua)",
+    },
+    {
+      name: "Organic",
+      value: totals.organic,
+      pct: organicPct,
+      fill: "var(--color-organic)",
+    },
+  ];
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex justify-between font-body text-[11px] uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
-        <span className="inline-flex items-center gap-1.5">
-          <span
-            aria-hidden
-            className="inline-block h-2 w-2 rounded-full"
-            style={{
-              background: "var(--color-ua)",
-              boxShadow: "0 0 6px var(--color-ua)",
-            }}
-          />
-          Paid · {(paidPct * 100).toFixed(0)}%
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          Organic · {(organicPct * 100).toFixed(0)}%
-          <span
-            aria-hidden
-            className="inline-block h-2 w-2 rounded-full"
-            style={{
-              background: "var(--color-organic)",
-              boxShadow: "0 0 6px var(--color-organic)",
-            }}
-          />
-        </span>
-      </div>
+    <GlassCard className="flex items-center justify-center p-4" enterIndex={4}>
       <div
-        className="flex h-2 w-full overflow-hidden rounded-full"
+        className="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:justify-center"
         role="img"
         aria-label={`Paid ${(paidPct * 100).toFixed(0)}%, Organic ${(organicPct * 100).toFixed(0)}%`}
       >
-        <div
-          className="h-full transition-[width] duration-700 ease-out-quart"
-          style={{
-            width: `${paidPct * 100}%`,
-            background: "var(--color-ua)",
-          }}
-        />
-        <div
-          className="h-full transition-[width] duration-700 ease-out-quart"
-          style={{
-            width: `${organicPct * 100}%`,
-            background: "var(--color-organic)",
-          }}
-        />
+        <div className="relative h-32 w-32 shrink-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Tooltip
+                cursor={{ fill: "var(--color-ua)", fillOpacity: 0.06 }}
+                contentStyle={{
+                  background: "rgba(10, 20, 40, 0.96)",
+                  backdropFilter: "blur(12px)",
+                  border: "1px solid var(--border-strong, rgba(255,255,255,0.18))",
+                  borderRadius: 10,
+                  color: "#FFFFFF",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  padding: "8px 12px",
+                  boxShadow: "var(--shadow-elevated)",
+                }}
+                itemStyle={{
+                  color: "#FFFFFF",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  padding: 0,
+                }}
+                labelStyle={{
+                  color: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  marginBottom: 4,
+                }}
+                formatter={(value, _name, item) => {
+                  const n = typeof value === "number" ? value : Number(value);
+                  const safe = Number.isFinite(n) ? n : 0;
+                  const payload = (item as { payload?: { pct?: number } })
+                    ?.payload;
+                  const pct = payload?.pct ?? 0;
+                  return [
+                    `${safe.toLocaleString()} (${(pct * 100).toFixed(1)}%)`,
+                    String(_name),
+                  ];
+                }}
+              />
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius="62%"
+                outerRadius="92%"
+                paddingAngle={2}
+                stroke="var(--surface-base)"
+                strokeWidth={2}
+                isAnimationActive={false}
+              >
+                {data.map((d) => (
+                  <Cell key={d.name} fill={d.fill} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <span className="font-body text-[9px] uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
+              Total
+            </span>
+            <span className="font-display text-base font-bold text-cloud-white tabular-nums">
+              {total.toLocaleString()}
+            </span>
+          </div>
+        </div>
+        <ul className="flex flex-col gap-2 font-body text-sm">
+          <li className="flex items-center gap-2.5">
+            <span
+              aria-hidden
+              className="inline-block h-2.5 w-2.5 rounded-full"
+              style={{
+                background: "var(--color-ua)",
+                boxShadow: "0 0 6px var(--color-ua)",
+              }}
+            />
+            <span className="min-w-[58px] text-[color:var(--text-secondary)]">
+              Paid
+            </span>
+            <span className="tabular-nums text-cloud-white">
+              {(paidPct * 100).toFixed(1)}%
+            </span>
+          </li>
+          <li className="flex items-center gap-2.5">
+            <span
+              aria-hidden
+              className="inline-block h-2.5 w-2.5 rounded-full"
+              style={{
+                background: "var(--color-organic)",
+                boxShadow: "0 0 6px var(--color-organic)",
+              }}
+            />
+            <span className="min-w-[58px] text-[color:var(--text-secondary)]">
+              Organic
+            </span>
+            <span className="tabular-nums text-cloud-white">
+              {(organicPct * 100).toFixed(1)}%
+            </span>
+          </li>
+        </ul>
       </div>
-    </div>
+    </GlassCard>
   );
 }

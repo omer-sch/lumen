@@ -324,7 +324,12 @@
       "Bash(sips -g pixelWidth -g pixelHeight /tmp/lumen-icon/icon-64.png)",
       "Bash(npx --yes -p to-ico@1.1.5 node /tmp/lumen-icon/to-ico.mjs src/app/favicon.ico)",
       "Bash(sips -s format png src/app/favicon.ico --out /tmp/lumen-icon/check.png)",
-      "Bash(sips -g pixelWidth -g pixelHeight /tmp/lumen-icon/check.png)"
+      "Bash(sips -g pixelWidth -g pixelHeight /tmp/lumen-icon/check.png)",
+      "Bash(BASE_URL=http://localhost:3000 PORT=3000 npx playwright test _tmp-lifecycle-tooltip.spec.ts --project=chromium --reporter=list)",
+      "Bash(BASE_URL=http://localhost:3000 PORT=3000 npx playwright test _tmp-paid-vs-organic.spec.ts --project=chromium --reporter=list)",
+      "Bash(BASE_URL=http://localhost:3000 PORT=3000 npx playwright test _tmp-paid-organic-hero.spec.ts --project=chromium --reporter=list)",
+      "Bash(BASE_URL=http://localhost:3000 PORT=3000 npx playwright test _tmp-attribution-split.spec.ts --project=chromium --reporter=list)",
+      "Bash(BASE_URL=http://localhost:3000 PORT=3000 npx playwright test _tmp-attribution-arranged.spec.ts --project=chromium --reporter=list)"
     ]
   },
   "enableAllProjectMcpServers": true,

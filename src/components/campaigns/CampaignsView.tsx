@@ -1,9 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { ArrowRight, Megaphone } from "lucide-react";
+import { Megaphone } from "lucide-react";
 import { GlassIcon } from "@/components/ui/GlassIcon";
 import { LivePulse } from "@/components/ui/LivePulse";
 import { SectionError } from "@/components/ui/SectionError";
@@ -32,11 +30,6 @@ function CampaignsInner() {
     os,
     platforms,
   });
-  const params = useSearchParams();
-  const creativesQuery = params.toString();
-  const creativesHref = creativesQuery
-    ? `/campaigns/creatives?${creativesQuery}`
-    : "/campaigns/creatives";
 
   return (
     <div className="flex flex-col gap-8 py-2 md:gap-10">
@@ -65,14 +58,6 @@ function CampaignsInner() {
             glance, the same drill-down a UA analyst opens when a number on
             the dashboard moves.
           </p>
-          <Link
-            href={creativesHref}
-            data-testid="campaigns-creatives-link"
-            className="inline-flex items-center gap-1.5 self-start font-body text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)] transition-[color,transform] duration-280 ease-out-quart hover:translate-x-0.5 hover:text-cloud-white"
-          >
-            Creative Breakdown
-            <ArrowRight className="h-3 w-3" strokeWidth={2.5} />
-          </Link>
         </div>
 
         <div
