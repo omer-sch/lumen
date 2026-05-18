@@ -20,6 +20,10 @@ import { TrendChart } from "@/components/dashboard/TrendChart";
 import { ChannelMix } from "@/components/dashboard/ChannelMix";
 import { NetworkBreakdown } from "@/components/dashboard/NetworkBreakdown";
 import { PinnedSection } from "@/components/dashboard/PinnedSection";
+import { CadenceTable } from "@/components/dashboard/CadenceTable";
+import { WeekendsVsWeekdays } from "@/components/dashboard/WeekendsVsWeekdays";
+import { SubscriberLifecycle } from "@/components/dashboard/SubscriberLifecycle";
+import { PaidVsOrganic } from "@/components/dashboard/PaidVsOrganic";
 import { AIModeView } from "@/components/dashboard/AIModeView";
 import { SyncNowButton } from "@/components/dashboard/SyncNowButton";
 import { InfoCallout } from "@/components/ui/InfoCallout";
@@ -452,6 +456,10 @@ function MyDashboard({
       className="flex flex-1 min-h-0 flex-col gap-3 md:gap-4"
       data-live
     >
+      {/* WS7.E - Paid vs Organic + BCAC headline strip. Above the KPI
+          strip so the blended cost is the first signal a CSM reads. */}
+      <PaidVsOrganic />
+
       {/* KPI strip — equal tiles in a row on lg+, each with its own
           sparkline. Column count adapts to coverage so missing metrics
           don't leave empty slots. The hero (yellow glow) follows the
@@ -548,6 +556,19 @@ function MyDashboard({
           )}
         </div>
       </section>
+
+      {/* WS7.A - Cadence aggregation (Daily / Weekly / Monthly toggle).
+          Consumes the same trend data the chart already fetched, so no
+          extra round-trip. */}
+      <CadenceTable trend={data.trendByNetwork.flatMap((r) => r.points.map((p) => ({ ...p, network: r.network })))} />
+
+      {/* WS7.B - Weekends vs Weekdays bucket comparison. */}
+      <WeekendsVsWeekdays />
+
+      {/* WS7.D - Subscriber Lifecycle (Sub / Churn / Net Sub).
+          Intentionally NOT filtered by the global OS chip - lifecycle
+          is its own scope. */}
+      <SubscriberLifecycle />
     </div>
   );
 }

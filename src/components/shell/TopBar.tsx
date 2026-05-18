@@ -7,6 +7,8 @@ import { MobileNavToggle } from "./MobileNavToggle";
 import { NotificationBell } from "./NotificationBell";
 import { DateRangePicker } from "./DateRangePicker";
 import { ClientSelector } from "./ClientSelector";
+import { OsFilter } from "./OsFilter";
+import { PlatformFilter } from "./PlatformFilter";
 
 type RouteMeta = { title: string; subtitle: string; showFilters: boolean };
 
@@ -59,6 +61,8 @@ export function TopBar() {
               search params, which suspend during route transitions. */}
           <Suspense fallback={null}>
             <DateRangePicker />
+            <OsFilter />
+            <PlatformFilter />
             <ClientSelector />
           </Suspense>
         </div>
