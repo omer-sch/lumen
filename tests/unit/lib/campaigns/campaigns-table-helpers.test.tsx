@@ -80,18 +80,6 @@ describe("CampaignsTable - WS2 enrichment + chip filters", () => {
     expect(within(table).queryByTestId("campaign-row-c1")).toBeNull();
   });
 
-  it("network=Meta filters to only Meta campaigns", async () => {
-    const user = userEvent.setup();
-    render(<CampaignsTable rows={FIXTURE} />);
-    await user.click(screen.getByTestId("campaigns-filter-network-toggle"));
-    await user.click(screen.getByTestId("campaigns-filter-network-opt-meta"));
-    const table = screen.getByTestId("campaigns-table");
-    expect(within(table).getByTestId("campaign-row-c1")).toBeTruthy();
-    expect(within(table).getByTestId("campaign-row-c2")).toBeTruthy();
-    expect(within(table).queryByTestId("campaign-row-c3")).toBeNull();
-    expect(within(table).queryByTestId("campaign-row-c4")).toBeNull();
-  });
-
   it("More toggle reveals Sub Start D7 / Sub D7 columns", async () => {
     const user = userEvent.setup();
     render(<CampaignsTable rows={FIXTURE} />);

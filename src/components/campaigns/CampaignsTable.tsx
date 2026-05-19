@@ -71,30 +71,6 @@ function networkStyle(n: string): { bg: string; fg: string } {
   );
 }
 
-const NETWORK_OPTIONS = ["Meta", "TikTok", "Google", "Apple", "AppLovin"] as const;
-type NetworkOption = (typeof NETWORK_OPTIONS)[number];
-
-/**
- * True when the row's raw network matches any of the selected network
- * options. Empty selection is treated as "all" by the caller — this
- * helper is only invoked when at least one network is selected.
- */
-const matchesAnyNetwork = (
-  rowNetwork: string,
-  selected: NetworkOption[],
-): boolean => {
-  const n = rowNetwork.toLowerCase();
-  return selected.some((f) => {
-    switch (f) {
-      case "Meta":     return n === "meta" || n === "facebook";
-      case "Google":   return n.startsWith("google");
-      case "Apple":    return n.startsWith("apple");
-      case "TikTok":   return n.includes("tiktok");
-      case "AppLovin": return n.includes("applovin");
-    }
-  });
-};
-
 /**
  * Normalize an Adjust `campaign_status` string to one of the three
  * states the row pill can render. Adjust emits "running" / "paused"
@@ -131,8 +107,11 @@ type CampaignsTableProps = {
 
 /**
  * Index table. Columns map 1:1 to `CampaignRow` from the BQ wire shape;
- * sort by any column, narrow to a single network / family / geo / status
- * without touching the global filter.
+ * sort by any column, narrow to a single family / geo / status without
+ * touching the global filter. Network scoping lives on the TopBar
+ * Channels chip strip — `platforms` is the single source of truth for
+ * that dimension and is threaded through `useCampaignsData` into the
+ * BQ query.
  *
  * Chip filters live in component-local state — they are scratch filters
  * for investigation, not deep-linkable. The global filter (date / OS /
@@ -146,7 +125,6 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
   // Multi-select state: empty array = "all" so no filter applies. The
   // dropdown-chip UX naturally collapses to a no-op selection, which
   // reads more honestly than a synthetic "all" sentinel in the array.
-  const [networks, setNetworks] = useState<NetworkOption[]>([]);
   const [families, setFamilies] = useState<string[]>([]);
   const [geos, setGeos] = useState<string[]>([]);
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -177,9 +155,6 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
 
   const filtered = useMemo(() => {
     return enriched.filter((r) => {
-      if (networks.length > 0 && !matchesAnyNetwork(r.network, networks)) {
-        return false;
-      }
       if (families.length > 0 && !families.includes(r.family)) return false;
       if (geos.length > 0 && !geos.includes(r.geo)) return false;
       if (status !== "all") {
@@ -188,7 +163,7 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
       }
       return true;
     });
-  }, [enriched, networks, families, geos, status]);
+  }, [enriched, families, geos, status]);
 
   const sorted = useMemo(() => {
     const out = [...filtered];
@@ -228,13 +203,6 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
           the prior four stacked chip rows so the table area dominates
           the viewport. */}
       <div className="flex flex-wrap items-center gap-2">
-        <FilterDropdown
-          testIdPrefix="campaigns-filter-network"
-          label="Network"
-          options={NETWORK_OPTIONS as readonly string[] as string[]}
-          selected={networks}
-          onChange={(next) => setNetworks(next as NetworkOption[])}
-        />
         {familyOptions.length > 1 && (
           <FilterDropdown
             testIdPrefix="campaigns-filter-family"

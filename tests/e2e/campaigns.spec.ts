@@ -86,31 +86,6 @@ test.describe("/campaigns table", () => {
     await expect.poll(firstRowName).not.toBe(before);
   });
 
-  test("network filter narrows the rows to a single network", async ({ page }) => {
-    await page.goto("/campaigns");
-
-    // Open the Network dropdown and pick Meta. Empty selection = all,
-    // so toggling Meta in/out is the clear/restore round-trip.
-    await page.getByTestId("campaigns-filter-network-toggle").click();
-    await page.getByTestId("campaigns-filter-network-opt-meta").click();
-
-    const rows = page.getByTestId("campaigns-table").locator("tbody tr");
-    // Four Meta seeds in SEEDS — anything different means the filter is
-    // either broken or a seed was added/removed.
-    await expect(rows).toHaveCount(4);
-
-    // Every visible row must carry the Meta channel pill.
-    const count = await rows.count();
-    for (let i = 0; i < count; i++) {
-      await expect(rows.nth(i)).toContainText("Meta");
-    }
-
-    // "Clear selection" inside the dropdown empties the multi-select
-    // → no network filter → full set returns.
-    await page.getByTestId("campaigns-filter-network-clear").click();
-    await expect(rows).toHaveCount(12);
-  });
-
   test("global filter (date range + client) from the topbar carries through to the page", async ({
     page,
   }) => {

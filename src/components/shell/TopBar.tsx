@@ -10,7 +10,6 @@ import { ClientSelector } from "./ClientSelector";
 import { OsFilter } from "./OsFilter";
 import { PlatformFilter } from "./PlatformFilter";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
-import type { DashboardTab } from "@/lib/filters/types";
 
 type RouteMeta = { title: string; subtitle: string; showFilters: boolean };
 
@@ -136,36 +135,16 @@ function StandardFilterChips() {
  * ?os=ios&platforms=meta on Performance, hops to Lifecycle, then back
  * to Performance still sees those chips active and the URL unchanged.
  * Per-tab relevance is purely about visibility, not state.
- *
- * Date subtitle: a small per-tab hint that disambiguates what "this
- * window" means across the three scopes.
  */
 function DashboardFilterChips() {
   const { tab } = useGlobalFilters();
   const showOsAndPlatform = tab !== "lifecycle";
   return (
     <>
-      <div className="flex flex-col items-end gap-0.5">
-        <DateRangePicker />
-        <DateSubtitle tab={tab} />
-      </div>
+      <DateRangePicker />
       {showOsAndPlatform && <OsFilter />}
       {showOsAndPlatform && <PlatformFilter />}
       <ClientSelector />
     </>
-  );
-}
-
-const DATE_SUBTITLE: Record<DashboardTab, string> = {
-  performance: "Install cohorts opening in this window",
-  lifecycle: "Subscription events in this window",
-  attribution: "Attribution data reported in this window",
-};
-
-function DateSubtitle({ tab }: { tab: DashboardTab }) {
-  return (
-    <p className="hidden font-body text-[10px] tracking-normal text-[color:var(--text-muted)] sm:block">
-      {DATE_SUBTITLE[tab]}
-    </p>
   );
 }
