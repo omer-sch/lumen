@@ -334,7 +334,11 @@
       "Bash(kill 69157)",
       "Bash(GIT_TRACE=1 git stash push -u -m \"test\")",
       "Bash(kill 44700)",
-      "Bash(lsof -i :3000 -sTCP:LISTEN)"
+      "Bash(lsof -i :3000 -sTCP:LISTEN)",
+      "Bash(npm --prefix /Users/omer/Desktop/Lumen run test:unit)",
+      "Bash(npm --prefix /Users/omer/Desktop/Lumen run build)",
+      "Bash(kill 97138)",
+      "Bash(npm --prefix /Users/omer/Desktop/Lumen run dev)"
     ]
   },
   "enableAllProjectMcpServers": true,

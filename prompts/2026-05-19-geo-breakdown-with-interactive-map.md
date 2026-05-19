@@ -2,6 +2,12 @@
 
 Owner: Omer. Single PR on a new branch off `main` named `campaigns-geo-route`. Five workstreams. New client-wide route mirroring the pattern of `/campaigns/creatives`.
 
+## Ordering
+
+**Ship after `prompts/2026-05-19-campaigns-area-tab-strip-nav-restructure.md`.** That PR introduces a `CampaignsAreaTabs` strip that this PR plugs into. If the nav-restructure PR has not landed, this PR cannot integrate cleanly — the tab strip component would not exist.
+
+This prompt has been updated from its first draft: WS5 no longer adds a Sidebar `Geo` entry. Reachability for the Geo page comes from the new tab strip inside the Campaigns area, not from the top-level Sidebar.
+
 ## Why
 
 Looker Studio's GlobalComix UA dashboard has a dedicated GEO page per network section (TikTok / AppLovin / etc.) with the same structural elements: top-5-countries donut, world choropleth, country detail table. Lumen's existing `GeoBreakdown` component lives only inside the per-campaign profile and renders the table without a map; the queued campaigns prompt explicitly deferred the choropleth as "future polish."
@@ -35,7 +41,7 @@ Five workstreams, single PR.
 2. **WS2 — Map library + TopoJSON.** Add `react-simple-maps` and `world-atlas` to package.json. Build `ChoroplethMap.tsx` rendering a hover-tooltip world map colored by spend intensity.
 3. **WS3 — Top-5 donut.** `TopCountriesDonut.tsx` mirroring `ChannelMix.tsx` visual treatment. Top 5 countries by spend plus an "Others" segment.
 4. **WS4 — Country detail table.** `GeoCountryTable.tsx` with 12 columns. Mirror `CreativeTable.tsx` treatment (sortable, cell tinting on rate columns, thousands-comma formatting). Inline-flag iOS attribution gap on Google rows (existing data quality issue per Status.md).
-5. **WS5 — Layout, color scale, sidebar nav.** `GeoBreakdownView.tsx` orchestrator with the 1/3-plus-2/3 split row at the top and the full-width table below. `GeoColorScale.tsx` legend bar. Add a `Geo` entry to `src/components/shell/Sidebar.tsx`.
+5. **WS5 — Layout, color scale, tab integration.** `GeoBreakdownView.tsx` orchestrator with the 1/3-plus-2/3 split row at the top and the full-width table below. `GeoColorScale.tsx` legend bar. Render `<CampaignsAreaTabs activeTab="geo" />` at the top of the view (component lands via the nav-restructure PR; see the Ordering note at the top of this file). Do NOT add a Sidebar entry.
 
 Estimated PR size: 10 to 14 files added, 1 to 2 modified. ~700 to 1,000 lines added. Two new npm dependencies. Test budget: +30 to +50 unit tests, +1 E2E.
 
@@ -197,16 +203,17 @@ Row count limit: render the top 100 by Spend descending. Append a single "Others
 
 ---
 
-## WS5 — Orchestrator, color scale, sidebar nav
+## WS5 — Orchestrator, color scale, tab integration
 
 ### File touchpoints
 
 ```
 src/components/campaigns/geo/GeoBreakdownView.tsx      // new
 src/components/campaigns/geo/GeoColorScale.tsx         // new
-src/components/shell/Sidebar.tsx                       // add Geo nav entry
 src/components/ui/Skeleton.tsx                         // add GeoBreakdownSkeleton if not factored
 ```
+
+Sidebar.tsx is NOT touched. The Geo page is reached via the `CampaignsAreaTabs` strip introduced by the nav-restructure PR. If for any reason the nav-restructure PR has not shipped when this PR is built, STOP and surface the ordering conflict in the PR description rather than adding a Sidebar entry as a fallback.
 
 ### Layout
 
@@ -232,15 +239,17 @@ Section spacing: same `gap-6 md:gap-8` rhythm as Performance and the queued Life
 
 Threshold labels: format the quantile cutoffs as money (`$X,XXX` truncated to ~4 chars wide). If the highest bucket maxes out at $32,798 (per the screenshot), the right-end label reads `$32.8k`.
 
-### Sidebar nav
+### Tab strip integration
 
-`src/components/shell/Sidebar.tsx` line 31 already has `{ href: "/campaigns/creatives", label: "Creatives", icon: Film }`. Add a sibling entry directly below:
+The Geo view renders the `CampaignsAreaTabs` strip (shipped by the nav-restructure PR) at the top, below the page header:
 
 ```tsx
-{ href: "/campaigns/geo", label: "Geo", icon: Globe },
+<CampaignsAreaTabs activeTab="geo" />
 ```
 
-Import `Globe` from `lucide-react`. The longest-prefix routing logic the file already documents handles the active-state highlight correctly.
+Import from `@/components/campaigns/CampaignsAreaTabs`. The strip handles its own active-state styling and navigation to `/campaigns` and `/campaigns/creatives`.
+
+The Sidebar `Creatives` entry was removed in the nav-restructure PR; no Sidebar changes are made in this PR.
 
 ### Loading / empty / error states
 
@@ -272,7 +281,7 @@ Manual:
 4. Resize to md and sm breakpoints. Donut and map stack vertically. Table remains horizontally scrollable.
 5. Change TopBar Channels chip from "All" to "TikTok" — the map, donut, and table all update to show TikTok-only geo distribution. Same for OS chip and Date range.
 6. Sort any column in the table. Rows reorder.
-7. The Sidebar shows a new "Geo" entry below "Creatives", active when on `/campaigns/geo`.
+7. The Campaigns area tab strip shows "Geo" as the active tab when on `/campaigns/geo`. Sidebar is unchanged (single `Campaigns` entry, no separate Geo or Creatives entries).
 
 Automated:
 
