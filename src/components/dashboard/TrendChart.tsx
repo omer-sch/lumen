@@ -16,10 +16,7 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
-import {
-  networkColor,
-  networkLineDashed,
-} from "@/lib/dashboard/network-colors";
+import { networkColor } from "@/lib/dashboard/network-colors";
 import type { KpiId, TrendPoint } from "@/types/dashboard";
 
 type TrendByNetwork = { network: string; points: TrendPoint[] };
@@ -367,7 +364,6 @@ export function TrendChart({
               const stroke = isAll
                 ? "var(--color-ua)"
                 : networkColor(series.network);
-              const dashed = !isAll && networkLineDashed(series.network);
               return (
                 <Line
                   key={series.network}
@@ -376,8 +372,6 @@ export function TrendChart({
                   name={series.network}
                   stroke={stroke}
                   strokeWidth={2.5}
-                  strokeDasharray={dashed ? "5 3" : undefined}
-                  strokeOpacity={dashed ? 0.85 : 1}
                   dot={false}
                   activeDot={{ r: 4, fill: stroke, strokeWidth: 0 }}
                   isAnimationActive={idx === 0}

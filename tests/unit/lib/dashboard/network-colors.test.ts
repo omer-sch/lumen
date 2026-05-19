@@ -13,7 +13,6 @@ import {
   CANONICAL_NETWORKS,
   networkColor,
   networkForeground,
-  networkLineDashed,
   networkTint,
 } from "@/lib/dashboard/network-colors";
 
@@ -136,24 +135,6 @@ describe("unknown networks fall through to the AppLovin-equivalent neutral", () 
   it("networkForeground falls back to text-secondary", () => {
     expect(networkForeground("MystereNet")).toBe("var(--text-secondary)");
     expect(networkForeground("MystereNet")).toBe(networkForeground("AppLovin"));
-  });
-});
-
-describe("networkLineDashed", () => {
-  it("returns true for Apple Search Ads (and its alias)", () => {
-    expect(networkLineDashed("Apple Search Ads")).toBe(true);
-    expect(networkLineDashed("Apple")).toBe(true);
-  });
-
-  it("returns false for every other canonical network", () => {
-    expect(networkLineDashed("Google")).toBe(false);
-    expect(networkLineDashed("Meta")).toBe(false);
-    expect(networkLineDashed("TikTok")).toBe(false);
-    expect(networkLineDashed("AppLovin")).toBe(false);
-  });
-
-  it("returns false for unknown networks", () => {
-    expect(networkLineDashed("MystereNet")).toBe(false);
   });
 });
 

@@ -7,13 +7,8 @@
  *   Google           → mint (UA token)
  *   Meta             → violet (Organic token)
  *   TikTok           → coral (Creative token)
- *   Apple Search Ads → yellow (brand accent) + dashed line
+ *   Apple Search Ads → yellow (brand accent)
  *   AppLovin         → neutral gray
- *
- * Apple Search Ads keeps the dashed stroke convention from before
- * the AppLovin↔Apple color swap — its volume on GlobalComix is
- * structurally lower than the other channels and the dashed line
- * signals "support cast" without making the series invisible.
  *
  * Three helpers cover the two render shapes downstream needs:
  *   networkColor      → solid (line, dot, accent stripe)
@@ -90,11 +85,4 @@ export function networkTint(network: string): string {
 /** Foreground on the tint: pill text, on-tint label color. */
 export function networkForeground(network: string): string {
   return lookup(network).foreground;
-}
-
-/** Whether this network's line should render dashed. Apple Search Ads
- *  alone today; centralized so a future treatment change is one edit. */
-export function networkLineDashed(network: string): boolean {
-  if (network === "Apple Search Ads") return true;
-  return NETWORK_ALIASES[network] === "Apple Search Ads";
 }
