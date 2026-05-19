@@ -50,8 +50,7 @@ export type LifecycleData = {
   deltas: LifecycleDeltas;
   /** Per-day series rolled up across OS — used for the KPI sparklines. */
   sparklines: LifecycleSparklines;
-  /** Inclusive length of the active window in days. Drives the
-   *  line-vs-bar decision in NetSubTrend. */
+  /** Inclusive length of the active window in days. */
   windowDays: number;
   loading: boolean;
   error: boolean;
