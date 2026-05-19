@@ -332,6 +332,8 @@
       "Bash(BASE_URL=http://localhost:3000 PORT=3000 npx playwright test _tmp-attribution-arranged.spec.ts --project=chromium --reporter=list)",
       "Bash(lsof -nP -p 69157 -iTCP -sTCP:LISTEN)",
       "Bash(kill 69157)",
+      "Bash(GIT_TRACE=1 git stash push -u -m \"test\")",
+      "Bash(kill 44700)",
       "Bash(lsof -i :3000 -sTCP:LISTEN)"
     ]
   },
