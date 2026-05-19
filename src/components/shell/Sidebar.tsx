@@ -8,8 +8,6 @@ import {
   Megaphone,
   MessagesSquare,
   FileText,
-  Film,
-  Globe,
   Sparkles,
   Bot,
   BookOpen,
@@ -26,11 +24,13 @@ type NavItem = {
   badge?: string;
 };
 
+// Campaigns is the umbrella for the drill-down lenses (Creatives, Geo,
+// plus future lenses like Adsets / Audiences). They're surfaced as a
+// lateral tab strip inside the /campaigns route, not as top-level nav.
+// Longest-prefix matching below keeps `Campaigns` lit on any subpath.
 const NAV: NavItem[] = [
   { href: "/dashboard",          label: "Dashboard", icon: LayoutDashboard },
   { href: "/campaigns",          label: "Campaigns", icon: Megaphone },
-  { href: "/campaigns/creatives", label: "Creatives", icon: Film },
-  { href: "/campaigns/geo",      label: "Geo",       icon: Globe },
   { href: "/queries",            label: "Ask",       icon: MessagesSquare, badge: "new" },
   { href: "/reports",            label: "Reports",   icon: FileText },
   { href: "/feed",               label: "Feed",      icon: Sparkles },
