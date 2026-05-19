@@ -79,7 +79,7 @@ Cover these areas. The starred items are the highest-leverage:
 
 ## What's already been found (verify, don't just rediscover)
 
-A prior report is at `security-scan-2026-05-12.md` in the repo root. Read it first. Your job is to:
+A prior report is at `docs/security/security-scan-2026-05-12.md`. Read it first. Your job is to:
 - **Verify** each finding it lists. Confirm whether each is still accurate, and add a line saying so.
 - **Push back** on anything you disagree with. If a "looks good" item is actually broken, say so.
 - **Find what it missed.** That report was time-constrained. Be more thorough on dependency CVEs, on the Supabase RLS posture, on every API route's input validation, and on Sentry/PostHog config details.

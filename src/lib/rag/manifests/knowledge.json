@@ -20,16 +20,16 @@
     },
     {
       "source": "repo",
-      "path": "BRANCH_PLAN.md",
-      "source_path": "lumen/BRANCH_PLAN.md",
+      "path": "docs/BRANCH_PLAN.md",
+      "source_path": "lumen/docs/BRANCH_PLAN.md",
       "metadata": {
         "tags": ["product", "plan", "hermes"]
       }
     },
     {
       "source": "repo",
-      "path": "FOLLOWUPS.md",
-      "source_path": "lumen/FOLLOWUPS.md",
+      "path": "docs/FOLLOWUPS.md",
+      "source_path": "lumen/docs/FOLLOWUPS.md",
       "metadata": {
         "tags": ["product", "followups"]
       }

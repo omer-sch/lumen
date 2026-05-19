@@ -329,7 +329,10 @@
       "Bash(BASE_URL=http://localhost:3000 PORT=3000 npx playwright test _tmp-paid-vs-organic.spec.ts --project=chromium --reporter=list)",
       "Bash(BASE_URL=http://localhost:3000 PORT=3000 npx playwright test _tmp-paid-organic-hero.spec.ts --project=chromium --reporter=list)",
       "Bash(BASE_URL=http://localhost:3000 PORT=3000 npx playwright test _tmp-attribution-split.spec.ts --project=chromium --reporter=list)",
-      "Bash(BASE_URL=http://localhost:3000 PORT=3000 npx playwright test _tmp-attribution-arranged.spec.ts --project=chromium --reporter=list)"
+      "Bash(BASE_URL=http://localhost:3000 PORT=3000 npx playwright test _tmp-attribution-arranged.spec.ts --project=chromium --reporter=list)",
+      "Bash(GIT_TRACE=1 git stash push -u -m \"test\")",
+      "Bash(kill 44700)",
+      "Bash(lsof -i :3000 -sTCP:LISTEN)"
     ]
   },
   "enableAllProjectMcpServers": true,
