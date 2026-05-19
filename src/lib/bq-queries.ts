@@ -6,7 +6,11 @@ import { toBounds } from "@/lib/bq-coerce";
 // Re-export so `@/lib/bq-queries` remains the canonical surface for the
 // helper — `bq-queries-100play.ts` and the unit tests import it from here.
 export { toBounds } from "@/lib/bq-coerce";
-import { getSchemaForClient, getTableForClient } from "@/lib/bq-security";
+import {
+  getFreshnessTableIds,
+  getSchemaForClient,
+  getTableForClient,
+} from "@/lib/bq-security";
 import { serverEnv } from "@/lib/env.server";
 import type { GlobalComixFilter } from "@/lib/globalcomix-queries";
 import {
@@ -398,23 +402,27 @@ async function _queryDataBounds(client: string): Promise<DataBounds> {
   return toBounds(rows[0]);
 }
 
-// ── Data freshness from Rivery telemetry ────────────────────────────────────
+// ── Data freshness from BigQuery's own __TABLES__ metadata ─────────────────
 async function _queryFreshness(client?: string): Promise<FreshnessData> {
   const bq = getBigQueryClient();
 
-  // Note the dataset is literally `rivery_activity_anlytics` (typo upstream
-  // — confirmed in BQ). The view exposes one row per river/date; the
-  // freshest `date` is the closest signal we have to "data last landed".
+  // Read MAX(last_modified_time) across this client's spend tables.
+  // __TABLES__ exposes BQ's authoritative "table last written" timestamp
+  // — the right signal for "is data fresh?". The previous Rivery activity
+  // view path was a DATE column anchored at midnight UTC, which added up
+  // to 24h of slack on its own.
+  const tableIds = getFreshnessTableIds(client);
+  const tableList = tableIds.map((id) => `'${id}'`).join(", ");
   const query = `
-    SELECT MAX(date) AS last_updated
-    FROM \`${serverEnv.BQ_PROJECT}.rivery_activity_anlytics.v_rivery_activity_check\`
-    WHERE date IS NOT NULL
+    SELECT MAX(TIMESTAMP_MILLIS(last_modified_time)) AS last_updated
+    FROM \`${serverEnv.BQ_PROJECT}.${serverEnv.BQ_DATASET}.__TABLES__\`
+    WHERE table_id IN (${tableList})
   `;
 
   // Per-client `dataAsOf`: MAX(date) across the warehouse tables that back
-  // this client. Runs in parallel with the Rivery query. Errors are
+  // this client. Runs in parallel with the freshness query. Errors are
   // swallowed and surface as `null` in the response — the UI degrades to
-  // hiding the date label, the dot still shows the Rivery signal.
+  // hiding the date label, the dot still shows the freshness signal.
   const dataAsOfPromise: Promise<string | null> =
     client && getSchemaForClient(client).strategy === "multi-source"
       ? queryGlobalComixDataAsOf(client).catch((err) => {
@@ -432,15 +440,16 @@ async function _queryFreshness(client?: string): Promise<FreshnessData> {
       dataAsOfPromise,
     ]);
     const raw = rows[0]?.last_updated;
-    // BQ DATE columns come back as `{ value: "YYYY-MM-DD" }`.
-    const dateStr =
+    // BQ TIMESTAMP columns come back as `{ value: "ISO8601" }` from the
+    // legacy client, or as a BigQueryTimestamp instance whose `.value` is
+    // the same ISO string. Both paths funnel through `.value`.
+    const tsStr =
       raw && typeof raw === "object" && "value" in raw
         ? (raw as { value: string }).value
         : (raw as string | null | undefined);
-    if (!dateStr) throw new Error("no timestamp");
-    // Treat the BQ DATE as UTC midnight to anchor the "hours ago" math.
-    const ts = new Date(`${dateStr}T00:00:00Z`).getTime();
-    if (!Number.isFinite(ts)) throw new Error("invalid date");
+    if (!tsStr) throw new Error("no timestamp");
+    const ts = new Date(tsStr).getTime();
+    if (!Number.isFinite(ts)) throw new Error("invalid timestamp");
     const lastUpdated = new Date(ts).toISOString();
     const hoursAgo = Math.max(0, Math.round((Date.now() - ts) / 3_600_000));
     return { lastUpdated, hoursAgo, dataAsOf };

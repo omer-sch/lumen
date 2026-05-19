@@ -91,6 +91,19 @@ test.describe("Sync now (admin-only cache refresh)", () => {
     await expect(page.getByTestId("sync-now-success")).toContainText(
       /Synced\. Data current as of/,
     );
+
+    // The freshness bar must remain readable after sync. The server-side
+    // `revalidateTag("bq:freshness")` wired into the refresh route is what
+    // makes the bar's NEXT fetch hit fresh data rather than the 10-minute
+    // unstable_cache hold. We don't assert the bar's text changed (the
+    // client hook doesn't auto-refetch today), but the label must still
+    // render — a missing label here would mean the refresh path broke the
+    // header's freshness subtree.
+    await expect(page.getByTestId("data-freshness-label")).toBeVisible();
+    const label = (
+      await page.getByTestId("data-freshness-label").textContent()
+    )?.trim();
+    expect(label && label.length > 0).toBeTruthy();
   });
 
   test("unauthenticated POST to /api/cache/refresh is rejected by Clerk", async ({
