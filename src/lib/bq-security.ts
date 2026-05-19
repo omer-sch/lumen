@@ -308,6 +308,34 @@ export function getMultiSourceConfig(client: string): MultiSourceConfig {
   return schema.multiSource;
 }
 
+/**
+ * Raw (unqualified) warehouse table ids whose `last_modified_time` answers
+ * "when did this client's data last land?". Used by the freshness query to
+ * read BQ's own `__TABLES__.last_modified_time` — the canonical signal
+ * for table writes — instead of the Rivery activity view, which only
+ * exposes a DATE column and anchors at midnight UTC (24h slack).
+ *
+ * Multi-source clients return their per-network spend tables. Other
+ * strategies fall back to GlobalComix's spend tables because (a)
+ * GlobalComix is the only dashboard-live client today and (b) every
+ * client lands on the same Rivery sync cadence, so GlobalComix's tables
+ * are a reasonable cross-client heartbeat until per-client freshness is
+ * needed elsewhere.
+ */
+export function getFreshnessTableIds(client?: string): string[] {
+  const normalized = client?.toLowerCase().trim();
+  if (normalized) {
+    const schema = CLIENT_SCHEMA[normalized];
+    if (schema?.strategy === "multi-source" && schema.multiSource) {
+      return schema.multiSource.spendSources.map((s) => s.table);
+    }
+  }
+  // Default heartbeat: globalcomix spend tables.
+  return CLIENT_SCHEMA.globalcomix.multiSource!.spendSources.map(
+    (s) => s.table,
+  );
+}
+
 export class ClientNotPermittedError extends Error {
   constructor(client: string) {
     super(`Client not permitted: ${client}`);
