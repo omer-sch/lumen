@@ -1,6 +1,7 @@
 import "server-only";
 
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { getAdminUserId } from "@/lib/auth/admin";
 import { invalidateClientCache } from "@/lib/cache/invalidate";
@@ -54,6 +55,12 @@ export async function POST(req: NextRequest) {
 
   const start = Date.now();
   const invalidatedKeys = await invalidateClientCache(client);
+  // queryFreshness is wrapped in unstable_cache with a 10-min revalidate
+  // and the `bq:freshness` tag. Without this, the freshness bar holds the
+  // pre-sync value for up to 10 minutes after the user clicks Sync Now,
+  // even though Redis is fresh. Tag invalidation is in-process; this is
+  // the right primitive for the Next cache layer.
+  revalidateTag("bq:freshness");
   const warmed = await warmClientCache(client);
 
   // `dataAsOf` is uncached on purpose (see globalcomix-queries header
