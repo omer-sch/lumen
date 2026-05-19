@@ -15,6 +15,7 @@ import {
   toneTooltip,
   type CellTone,
 } from "@/lib/dashboard/cell-tone";
+import { networkColor } from "@/lib/dashboard/network-colors";
 import type { NetworkRow } from "@/types/dashboard";
 
 /** Soft cell-tone tint for the Metric chip background. Neutral renders
@@ -92,7 +93,7 @@ export function NetworkBreakdown({ rows, enterIndex }: Props) {
         {sorted.map((r) => {
           const status: CpaStatus = statusFromCpaD7(r.cpaD7, r.trailingCpaD7Avg);
           const sharePct = Math.max(0, Math.min(1, r.share)) * 100;
-          const dot = networkDot(r.network);
+          const dot = networkColor(r.network);
           return (
             <li
               key={r.network}
@@ -273,14 +274,3 @@ function StatusPill({ status }: { status: CpaStatus }) {
   );
 }
 
-/** Color dot next to the network name — matches the trend chart's line
- *  color so the same visual identity carries between chart and table. */
-function networkDot(network: string): string {
-  const map: Record<string, string> = {
-    Google: "#54F0A3",
-    Meta: "#926FDE",
-    TikTok: "#F88673",
-    "Apple Search Ads": "#9CA9C5",
-  };
-  return map[network] ?? "#9CA9C5";
-}

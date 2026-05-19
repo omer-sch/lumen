@@ -1,35 +1,88 @@
 /**
- * Canonical color per ad network, used wherever the chart, the table,
- * or a pin draws a line / pill for a network. The four colors map onto
- * the brand's mint / violet / coral / neutral palette so each network
- * carries a consistent visual identity across the dashboard.
+ * Canonical color per ad network. Every surface that paints a network
+ * (TrendChart line, PlatformFilter chip, Campaigns table pill) reads
+ * from this file so the same network reads the same color everywhere.
  *
- * Apple Search Ads gets the neutral gray + a dashed stroke convention
- * because (a) Apple's brand color clashes with the dark canvas and
- * (b) its volume on GlobalComix is structurally lower than the other
- * three; the dashed treatment signals "support cast" without making
- * the line invisible.
+ * The mapping is grounded in the brand palette:
+ *   Google           → mint (UA token)
+ *   Meta             → violet (Organic token)
+ *   TikTok           → coral (Creative token)
+ *   Apple Search Ads → yellow (brand accent)
+ *   AppLovin         → neutral gray
+ *
+ * Three helpers cover the two render shapes downstream needs:
+ *   networkColor      → solid (line, dot, accent stripe)
+ *   networkTint       → soft background (pill, row tint)
+ *   networkForeground → on-tint foreground (pill text)
+ *
+ * No raw hex in this file. Tokens defined in src/app/globals.css are
+ * the single source of truth; this file just maps networks onto them.
  */
-export const NETWORK_COLORS = {
-  Google: "#54F0A3",
-  Meta: "#926FDE",
-  TikTok: "#F88673",
-  "Apple Search Ads": "#9CA9C5",
-} as const;
 
-export type CanonicalNetwork = keyof typeof NETWORK_COLORS;
+export const CANONICAL_NETWORKS = [
+  "Google",
+  "Meta",
+  "TikTok",
+  "AppLovin",
+  "Apple Search Ads",
+] as const;
 
-/** Fallback for unrecognized network names (defensive — the SQL
- *  layer only emits one of the four). */
-const FALLBACK = "#9CA9C5";
+export type CanonicalNetwork = (typeof CANONICAL_NETWORKS)[number];
 
-export function networkColor(network: string): string {
-  return (NETWORK_COLORS as Record<string, string>)[network] ?? FALLBACK;
+type NetworkTokens = {
+  color: string;
+  tint: string;
+  foreground: string;
+};
+
+const NETWORK_TOKENS: Record<CanonicalNetwork, NetworkTokens> = {
+  Google:             { color: "var(--color-ua)",       tint: "var(--tint-ua-soft)",       foreground: "var(--color-ua)" },
+  Meta:               { color: "var(--color-organic)",  tint: "var(--tint-organic-soft)",  foreground: "var(--color-organic)" },
+  TikTok:             { color: "var(--color-creative)", tint: "var(--tint-creative-soft)", foreground: "var(--color-creative)" },
+  "Apple Search Ads": { color: "var(--color-yellow)",   tint: "var(--tint-yellow-soft)",   foreground: "var(--color-yellow)" },
+  AppLovin:           { color: "var(--text-muted)",     tint: "var(--surface-hover)",     foreground: "var(--text-secondary)" },
+};
+
+/**
+ * Aliases the warehouse / classifier surface in addition to the
+ * canonical labels. Normalized before lookup so "Facebook" and
+ * "Meta" can never resolve to different colors.
+ */
+const NETWORK_ALIASES: Record<string, CanonicalNetwork> = {
+  Facebook: "Meta",
+  "Google Ads": "Google",
+  Apple: "Apple Search Ads",
+};
+
+/** Neutral fallback for unrecognized network names. Same treatment
+ *  as AppLovin on purpose: the unknown network reads as "support
+ *  cast" rather than competing for attention. */
+const FALLBACK: NetworkTokens = {
+  color: "var(--text-muted)",
+  tint: "var(--surface-hover)",
+  foreground: "var(--text-secondary)",
+};
+
+function lookup(network: string): NetworkTokens {
+  if (network in NETWORK_TOKENS) {
+    return NETWORK_TOKENS[network as CanonicalNetwork];
+  }
+  const aliased = NETWORK_ALIASES[network];
+  if (aliased) return NETWORK_TOKENS[aliased];
+  return FALLBACK;
 }
 
-/** Whether this network's line should render dashed. Apple Search Ads
- *  alone, today; centralized here so a future treatment change is
- *  one edit. */
-export function networkLineDashed(network: string): boolean {
-  return network === "Apple Search Ads";
+/** Solid color: lines, dots, accent stripes, dot legends. */
+export function networkColor(network: string): string {
+  return lookup(network).color;
+}
+
+/** Soft tint: pill backgrounds, row tints, hover fills. */
+export function networkTint(network: string): string {
+  return lookup(network).tint;
+}
+
+/** Foreground on the tint: pill text, on-tint label color. */
+export function networkForeground(network: string): string {
+  return lookup(network).foreground;
 }

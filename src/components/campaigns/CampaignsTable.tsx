@@ -15,6 +15,10 @@ import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { LivePulse } from "@/components/ui/LivePulse";
 import { enrichCampaignRow } from "@/lib/analyst/campaign-classifier";
+import {
+  networkForeground,
+  networkTint,
+} from "@/lib/dashboard/network-colors";
 import type { CampaignRow } from "@/types/dashboard";
 
 type SortKey =
@@ -51,25 +55,6 @@ const COLUMNS: ColumnDef[] = [
   { key: "sub_start_d7",  label: "Sub Start D7", align: "right", extended: true },
   { key: "sub_d7",        label: "Sub D7",       align: "right", extended: true },
 ];
-
-function networkStyle(n: string): { bg: string; fg: string } {
-  const map: Record<string, { bg: string; fg: string }> = {
-    Meta:           { bg: "var(--tint-ua-soft)",       fg: "var(--color-ua)" },
-    Facebook:       { bg: "var(--tint-ua-soft)",       fg: "var(--color-ua)" },
-    TikTok:         { bg: "var(--tint-creative-soft)", fg: "var(--color-creative)" },
-    "Google Ads":   { bg: "var(--tint-yellow-soft)",   fg: "var(--color-yellow)" },
-    Google:         { bg: "var(--tint-yellow-soft)",   fg: "var(--color-yellow)" },
-    Apple:          { bg: "var(--tint-organic-soft)",  fg: "var(--color-organic)" },
-    "Apple Search Ads": { bg: "var(--tint-organic-soft)", fg: "var(--color-organic)" },
-    AppLovin:       { bg: "var(--tint-creative-soft)", fg: "var(--color-creative)" },
-  };
-  return (
-    map[n] ?? {
-      bg: "var(--surface-hover)",
-      fg: "var(--text-secondary)",
-    }
-  );
-}
 
 /**
  * Normalize an Adjust `campaign_status` string to one of the three
@@ -289,7 +274,8 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
           </thead>
           <tbody>
             {sorted.map((row, i) => {
-              const ch = networkStyle(row.network);
+              const bg = networkTint(row.network);
+              const fg = networkForeground(row.network);
               const spendDelta = row.spendDelta;
               const deltaTone =
                 spendDelta == null
@@ -329,7 +315,7 @@ export function CampaignsTable({ rows }: CampaignsTableProps) {
                   <td className="whitespace-nowrap px-3 py-3">
                     <span
                       className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
-                      style={{ background: ch.bg, color: ch.fg }}
+                      style={{ background: bg, color: fg }}
                     >
                       {row.network || "—"}
                     </span>
