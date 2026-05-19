@@ -11,14 +11,15 @@ import { useAttributionData } from "@/lib/attribution/use-attribution-data";
 /**
  * Attribution tab — the trust story. Layout reads top-down:
  *
- *   Row 1 (hero):       BCAC headline KpiCard
- *   Row 2 (mix + meta): PaidVsOrganicCard (2/3) | DataFreshnessBar (1/3, compact)
- *   Row 3 (warnings):   3-column grid of CoverageWarningCards
+ *   Row 1 — BCAC hero (full width)              "what does each sub cost?"
+ *   Row 2 — Paid vs Organic donut card           "where did those subs come from?"
+ *   Row 3 — Data freshness (compact card)        "is the data we're reading current?"
+ *   Row 4 — Coverage warnings                    "what reasons might these numbers be partial?"
  *
- * The visual hierarchy matches the question the page answers: "Can I
- * trust the cohort numbers I'm reporting on?" — BCAC first (at what
- * cost), the paid/organic split that BCAC depends on, then every reason
- * the numbers might be partial.
+ * The pie chart is the visual centerpiece of the page — the question
+ * "how much of this is paid vs the organic halo" answers in one glance.
+ * BCAC anchors the cost, the donut shows the source mix, the freshness
+ * + coverage strip at the bottom guards trust.
  *
  * Filters relevant on this tab: Date, OS, Platform, Client (all four).
  * The OS + Platform chips mount on the TopBar the same way Performance
@@ -68,18 +69,16 @@ export function AttributionTab() {
     >
       <BcacHero bcac={bcac} delta={bcacDelta} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <PaidVsOrganicCard
-          data={{
-            subTotal: totals.subTotal,
-            paid: totals.paid,
-            organic: totals.organic,
-          }}
-          enterIndex={2}
-          className="lg:col-span-2"
-        />
-        <DataFreshnessBar compact />
-      </div>
+      <PaidVsOrganicCard
+        data={{
+          subTotal: totals.subTotal,
+          paid: totals.paid,
+          organic: totals.organic,
+        }}
+        enterIndex={2}
+      />
+
+      <DataFreshnessBar compact />
 
       <CoverageWarningsRow />
     </div>

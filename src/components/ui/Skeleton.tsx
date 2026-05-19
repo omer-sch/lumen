@@ -179,10 +179,9 @@ export function LifecycleSkeleton() {
   );
 }
 
-/** Skeleton matching the decomposed AttributionTab shape: BCAC hero row,
- *  PaidVsOrganic + DataFreshness row, then a 3-column coverage warnings
- *  row. Section boxes hold their shape during fetch so the tab IA stays
- *  visible while data streams in. */
+/** Skeleton matching the redesigned AttributionTab shape: BCAC hero,
+ *  donut-led PaidVsOrganic card, then the data-freshness compact card,
+ *  then a 3-column coverage warnings row. */
 export function AttributionSkeleton() {
   const card = {
     background: "var(--surface-glass)",
@@ -193,37 +192,39 @@ export function AttributionSkeleton() {
   } as const;
   return (
     <div className="flex flex-col gap-6 md:gap-8" data-testid="attribution-skeleton">
-      {/* Hero — single full-width BCAC tile */}
+      {/* Row 1 — BCAC hero (full width) */}
       <div className="flex flex-col gap-4 rounded-lg p-6" style={card}>
         <Skeleton className="h-4 w-32 rounded-md" />
         <Skeleton className="h-12 w-48 rounded-md" />
         <Skeleton className="h-3 w-3/4 rounded-full" />
       </div>
 
-      {/* Row 2 — PaidVsOrganic (2/3) + DataFreshness (1/3) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="flex flex-col gap-3 rounded-lg p-5 lg:col-span-2" style={card}>
-          <Skeleton className="h-4 w-32 rounded-md" />
-          <Skeleton className="h-3 w-60 rounded-full" />
-          <div className="grid grid-cols-3 gap-3 pt-2">
+      {/* Row 2 — Paid vs Organic donut + stat rows on the right */}
+      <div className="flex flex-col gap-5 rounded-lg p-6" style={card}>
+        <Skeleton className="h-4 w-36 rounded-md" />
+        <Skeleton className="h-3 w-72 rounded-full" />
+        <div className="grid grid-cols-1 items-center gap-6 md:grid-cols-[auto_1fr] md:gap-10">
+          <Skeleton className="mx-auto h-48 w-48 rounded-full md:mx-0 md:h-56 md:w-56" />
+          <div className="flex flex-col gap-3">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="flex flex-col gap-1.5">
-                <Skeleton className="h-3 w-16 rounded-full" />
-                <Skeleton className="h-7 w-20 rounded-md" />
-                <Skeleton className="h-3 w-10 rounded-full" />
+              <div key={i} className="flex items-baseline justify-between gap-3 pb-2">
+                <Skeleton className="h-3 w-20 rounded-full" />
+                <Skeleton className="h-7 w-28 rounded-md" />
               </div>
             ))}
           </div>
-          <Skeleton className="h-2.5 w-full rounded-full" />
         </div>
-        <div className="flex flex-col gap-3 rounded-lg p-5 lg:col-span-1" style={card}>
-          <Skeleton className="h-4 w-32 rounded-md" />
-          <Skeleton className="h-3 w-48 rounded-full" />
-          <Skeleton className="h-3 w-2/3 rounded-full" />
-        </div>
+        <Skeleton className="h-3 w-2/3 rounded-full" />
       </div>
 
-      {/* Row 3 — coverage warnings */}
+      {/* Row 3 — DataFreshness compact card */}
+      <div className="flex flex-col gap-3 rounded-lg p-5" style={card}>
+        <Skeleton className="h-4 w-32 rounded-md" />
+        <Skeleton className="h-3 w-48 rounded-full" />
+        <Skeleton className="h-3 w-2/3 rounded-full" />
+      </div>
+
+      {/* Row 4 — coverage warnings (last) */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {[0, 1, 2].map((i) => (
           <div key={i} className="flex flex-col gap-3 rounded-lg p-5" style={card}>
