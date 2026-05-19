@@ -98,20 +98,20 @@ export function LifecycleTab() {
         sparklines={sparklines}
       />
 
-      <NetSubTrend trend={trend} daily={daily} enterIndex={4} />
-
+      {/* Asymmetric pair: the chart takes ~2/3 (the trend is the story),
+          the donut takes ~1/3 (composition glance). Reads as one row at
+          lg+ and stacks on smaller widths. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <OsMixCard
-          osMix={osMix}
-          enterIndex={5}
-          className="lg:col-span-1"
-        />
-        <DailySubsTable
+        <NetSubTrend
+          trend={trend}
           daily={daily}
-          enterIndex={6}
+          enterIndex={4}
           className="lg:col-span-2"
         />
+        <OsMixCard osMix={osMix} enterIndex={5} className="lg:col-span-1" />
       </div>
+
+      <DailySubsTable daily={daily} enterIndex={6} />
     </div>
   );
 }

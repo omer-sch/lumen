@@ -73,9 +73,12 @@ export function OsMixCard({ osMix, enterIndex, className }: Props) {
     >
       <SectionHeader />
 
-      <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:justify-center">
+      {/* Vertical-first composition when slotted alongside NetSubTrend: the
+          donut leads, legend stacks below. Falls back to side-by-side on
+          very wide single-column renders so the empty space doesn't grow. */}
+      <div className="flex flex-1 flex-col items-center justify-center gap-5">
         <div
-          className="relative h-36 w-36 shrink-0"
+          className="relative h-40 w-40 shrink-0 sm:h-44 sm:w-44"
           role="img"
           aria-label={
             "OS mix: " +
@@ -136,11 +139,11 @@ export function OsMixCard({ osMix, enterIndex, className }: Props) {
           </div>
         </div>
 
-        <ul className="flex flex-col gap-2 font-body text-sm">
+        <ul className="flex w-full flex-col gap-2 font-body text-sm">
           {data.map((d) => (
             <li
               key={d.name}
-              className="flex items-center gap-2.5"
+              className="grid grid-cols-[10px_1fr_auto_auto] items-center gap-2.5"
               data-testid={`lifecycle-os-mix-row-${d.name.toLowerCase()}`}
             >
               <span
@@ -148,7 +151,7 @@ export function OsMixCard({ osMix, enterIndex, className }: Props) {
                 className="inline-block h-2.5 w-2.5 rounded-full"
                 style={{ background: d.fill, boxShadow: `0 0 6px ${d.fill}` }}
               />
-              <span className="min-w-[64px] text-[color:var(--text-secondary)]">
+              <span className="text-[color:var(--text-secondary)]">
                 {d.name}
               </span>
               <span className="tabular-nums text-cloud-white">

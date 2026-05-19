@@ -16,6 +16,7 @@ import {
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { formatKpi } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type {
   LifecycleDailyRow,
   LifecycleNetSubPoint,
@@ -32,6 +33,9 @@ type Props = {
    *  churn alongside net sub. Trend alone only carries net sub. */
   daily: LifecycleDailyRow[];
   enterIndex?: number;
+  /** Optional grid-positioning class — used by LifecycleTab to span
+   *  2/3 width in the asymmetric pair with OsMixCard. */
+  className?: string;
 };
 
 function parseIsoLocal(iso: string): Date {
@@ -75,11 +79,11 @@ const TOOLTIP_STYLE = {
  * Hover tooltip surfaces date, subs, churn, net sub — same hover
  * pattern Performance's TrendChart uses.
  */
-export function NetSubTrend({ trend, daily, enterIndex }: Props) {
+export function NetSubTrend({ trend, daily, enterIndex, className }: Props) {
   if (trend.length === 0) {
     return (
       <GlassCard
-        className="flex flex-col gap-3 p-5"
+        className={cn("flex flex-col gap-3 p-5", className)}
         enterIndex={enterIndex}
         data-testid="lifecycle-net-sub-trend"
       >
@@ -127,7 +131,7 @@ export function NetSubTrend({ trend, daily, enterIndex }: Props) {
     <GlassCard
       glow="ua"
       enterIndex={enterIndex}
-      className="flex flex-col gap-3 p-5"
+      className={cn("flex flex-col gap-3 p-5", className)}
       data-testid="lifecycle-net-sub-trend"
       data-mode={renderAsLine ? "line" : "bar"}
     >

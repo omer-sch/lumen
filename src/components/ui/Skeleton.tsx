@@ -126,10 +126,16 @@ export function WeekendsVsWeekdaysSkeleton() {
 }
 
 /** Skeleton matching the decomposed LifecycleTab shape: 3-tile KPI strip,
- *  a tall Net Sub trend chart, then a side-by-side row with OS Mix donut
- *  and the daily detail table. Section boxes keep their shape so the
- *  layout stays visible while the per-section data resolves. */
+ *  then an asymmetric pair (Net Sub trend on 2/3, OS Mix donut on 1/3),
+ *  then a full-width daily detail table. */
 export function LifecycleSkeleton() {
+  const card = {
+    background: "var(--surface-glass)",
+    border: "1px solid var(--border-glass)",
+    WebkitBackdropFilter: "var(--blur-glass)",
+    backdropFilter: "var(--blur-glass)",
+    boxShadow: "var(--shadow-glass)",
+  } as const;
   return (
     <div className="flex flex-col gap-6 md:gap-8" data-testid="lifecycle-skeleton">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
@@ -138,31 +144,18 @@ export function LifecycleSkeleton() {
         ))}
       </div>
 
-      <div
-        className="flex flex-col gap-3 rounded-lg p-5"
-        style={{
-          background: "var(--surface-glass)",
-          border: "1px solid var(--border-glass)",
-          WebkitBackdropFilter: "var(--blur-glass)",
-          backdropFilter: "var(--blur-glass)",
-          boxShadow: "var(--shadow-glass)",
-        }}
-      >
-        <Skeleton className="h-4 w-40 rounded-md" />
-        <Skeleton className="h-3 w-72 rounded-full" />
-        <Skeleton className="h-48 w-full rounded-md" />
-      </div>
-
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div
+          className="flex flex-col gap-3 rounded-lg p-5 lg:col-span-2"
+          style={card}
+        >
+          <Skeleton className="h-4 w-40 rounded-md" />
+          <Skeleton className="h-3 w-72 rounded-full" />
+          <Skeleton className="h-48 w-full rounded-md" />
+        </div>
+        <div
           className="flex flex-col gap-3 rounded-lg p-5 lg:col-span-1"
-          style={{
-            background: "var(--surface-glass)",
-            border: "1px solid var(--border-glass)",
-            WebkitBackdropFilter: "var(--blur-glass)",
-            backdropFilter: "var(--blur-glass)",
-            boxShadow: "var(--shadow-glass)",
-          }}
+          style={card}
         >
           <Skeleton className="h-4 w-24 rounded-md" />
           <Skeleton className="h-3 w-56 rounded-full" />
@@ -171,23 +164,15 @@ export function LifecycleSkeleton() {
             <Skeleton className="h-3 w-40 rounded-full" />
           </div>
         </div>
-        <div
-          className="flex flex-col gap-3 rounded-lg p-5 lg:col-span-2"
-          style={{
-            background: "var(--surface-glass)",
-            border: "1px solid var(--border-glass)",
-            WebkitBackdropFilter: "var(--blur-glass)",
-            backdropFilter: "var(--blur-glass)",
-            boxShadow: "var(--shadow-glass)",
-          }}
-        >
-          <Skeleton className="h-4 w-32 rounded-md" />
-          <Skeleton className="h-3 w-72 rounded-full" />
-          <div className="flex flex-col gap-2">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-6 w-full rounded-md" />
-            ))}
-          </div>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-lg p-5" style={card}>
+        <Skeleton className="h-4 w-32 rounded-md" />
+        <Skeleton className="h-3 w-72 rounded-full" />
+        <div className="flex flex-col gap-2">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-6 w-full rounded-md" />
+          ))}
         </div>
       </div>
     </div>
@@ -320,6 +305,57 @@ export function CreativeBreakdownSkeleton() {
           boxShadow: "var(--shadow-glass)",
         }}
       >
+        <Skeleton className="h-3 w-full rounded-full" />
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+          <Skeleton key={i} className="h-5 w-full rounded-md" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Skeleton matching the Geo Breakdown view (header + Phase-2 callout
+ *  + donut/map split row + color scale + ~10-row 6-column table).
+ *  Map slot uses an 800x460 aspect ratio so the SVG swap-in doesn't
+ *  shift the layout. */
+export function GeoBreakdownSkeleton() {
+  const card = {
+    background: "var(--surface-glass)",
+    border: "1px solid var(--border-glass)",
+    WebkitBackdropFilter: "var(--blur-glass)",
+    backdropFilter: "var(--blur-glass)",
+    boxShadow: "var(--shadow-glass)",
+  } as const;
+  return (
+    <div className="flex flex-col gap-6 py-2" data-testid="geo-breakdown-skeleton">
+      <Skeleton className="h-12 w-full rounded-md" />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="flex flex-col gap-3 rounded-lg p-4 lg:col-span-1" style={card}>
+          <Skeleton className="h-4 w-32 rounded-md" />
+          <Skeleton className="h-3 w-48 rounded-full" />
+          <div className="grid place-items-center py-3">
+            <Skeleton className="h-44 w-44 rounded-full" />
+          </div>
+        </div>
+        <div
+          className="flex flex-col gap-3 rounded-lg p-4 lg:col-span-2"
+          style={card}
+        >
+          <Skeleton className="h-4 w-44 rounded-md" />
+          <Skeleton className="h-3 w-64 rounded-full" />
+          <Skeleton className="w-full rounded-md" />
+          <div
+            className="w-full rounded-md"
+            style={{ aspectRatio: "800 / 460" }}
+          >
+            <Skeleton className="h-full w-full rounded-md" />
+          </div>
+        </div>
+      </div>
+      <div className="mx-auto w-full max-w-[480px]">
+        <Skeleton className="h-2.5 w-full rounded-full" />
+      </div>
+      <div className="flex flex-col gap-2 rounded-lg p-4" style={card}>
         <Skeleton className="h-3 w-full rounded-full" />
         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
           <Skeleton key={i} className="h-5 w-full rounded-md" />
