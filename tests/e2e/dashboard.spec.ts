@@ -146,4 +146,44 @@ test.describe("dashboard (authenticated)", () => {
       "false",
     );
   });
+
+  // Lifecycle tab — section decomposition replaces the legacy stuffed
+  // SubscriberLifecycle card. Each of the four sections must mount on
+  // its own GlassCard so the page reads as a vertical narrative.
+  test("lifecycle tab renders the four decomposed sections", async ({
+    page,
+  }) => {
+    await page.goto("/dashboard?tab=lifecycle");
+    await expect(page.getByTestId("lifecycle-tab")).toBeVisible();
+    for (const id of [
+      "lifecycle-kpi-strip",
+      "lifecycle-net-sub-trend",
+      "lifecycle-os-mix",
+      "lifecycle-daily-table",
+    ]) {
+      await expect(page.getByTestId(id)).toBeVisible();
+    }
+  });
+
+  // Attribution tab — hero BCAC + PaidVsOrganic split + DataFreshness
+  // (compact card) + Coverage warnings row. All four sections must
+  // mount so the trust narrative reads top-to-bottom as designed.
+  test("attribution tab renders the four sections", async ({ page }) => {
+    await page.goto("/dashboard?tab=attribution");
+    await expect(page.getByTestId("attribution-tab")).toBeVisible();
+    for (const id of [
+      "attribution-bcac-hero",
+      "attribution-paid-vs-organic",
+      "attribution-data-freshness",
+      "attribution-coverage-warnings",
+    ]) {
+      await expect(page.getByTestId(id)).toBeVisible();
+    }
+    // The freshness card on this tab is the compact variant, not the
+    // page-shell badge (which keeps the older data-freshness-bar id).
+    await expect(page.getByTestId("attribution-data-freshness")).toHaveAttribute(
+      "data-variant",
+      "compact",
+    );
+  });
 });

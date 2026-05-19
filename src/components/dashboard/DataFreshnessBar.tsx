@@ -1,8 +1,19 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import { GlassCard } from "@/components/ui/GlassCard";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import type { FreshnessData } from "@/types/dashboard";
+
+type DataFreshnessBarProps = {
+  /**
+   * Compact card variant for the Attribution tab's Row 2 — renders as a
+   * narrow GlassCard with a small header and a single status row, sized
+   * to fit a 1/3-width slot next to PaidVsOrganicCard. Default (`false`)
+   * still renders the legacy full-width strip used elsewhere.
+   */
+  compact?: boolean;
+};
 
 /**
  * Thin bar that surfaces both:
@@ -17,17 +28,25 @@ import type { FreshnessData } from "@/types/dashboard";
  * signals data currency (when does the data series end?). Both are
  * useful, and they answer different questions.
  */
-export function DataFreshnessBar() {
+export function DataFreshnessBar({ compact = false }: DataFreshnessBarProps = {}) {
   // useGlobalFilters reads search params which can suspend on first
   // render — wrap so the bar mounts even before the filter URL is parsed.
   return (
-    <Suspense fallback={<FreshnessShell tone={GRAY_TONE} label="Checking data freshness" />}>
-      <DataFreshnessBarInner />
+    <Suspense
+      fallback={
+        <FreshnessShell
+          tone={GRAY_TONE}
+          label="Checking data freshness"
+          compact={compact}
+        />
+      }
+    >
+      <DataFreshnessBarInner compact={compact} />
     </Suspense>
   );
 }
 
-function DataFreshnessBarInner() {
+function DataFreshnessBarInner({ compact }: { compact: boolean }) {
   const { client } = useGlobalFilters();
   const [state, setState] = useState<FreshnessData | null>(null);
   const [errored, setErrored] = useState(false);
@@ -55,17 +74,60 @@ function DataFreshnessBarInner() {
   const tone = pickTone(state, errored);
   const label = pickLabel(state, errored);
 
-  return <FreshnessShell tone={tone} label={label} />;
+  return <FreshnessShell tone={tone} label={label} compact={compact} />;
 }
 
 const GRAY_TONE = { dot: "rgba(255,255,255,0.3)", glow: "none" } as const;
 
 type Tone = { dot: string; glow: string };
 
-function FreshnessShell({ tone, label }: { tone: Tone; label: string }) {
+function FreshnessShell({
+  tone,
+  label,
+  compact,
+}: {
+  tone: Tone;
+  label: string;
+  compact: boolean;
+}) {
+  if (compact) {
+    // Card form factor for the Attribution tab — same content as the
+    // strip, but as a GlassCard sized to a 1/3-width slot. Header reads
+    // as a section title so it sits naturally next to PaidVsOrganicCard.
+    // Uses an attribution-scoped testid so it doesn't collide with the
+    // page-shell freshness badge (also data-testid="data-freshness-bar"
+    // in DashboardView).
+    return (
+      <GlassCard
+        glow="ua"
+        className="flex flex-col justify-between gap-3 p-5"
+        data-testid="attribution-data-freshness"
+        data-variant="compact"
+      >
+        <header className="flex flex-col gap-0.5">
+          <h2 className="font-display text-md font-bold leading-none text-cloud-white">
+            Data freshness
+          </h2>
+          <p className="font-body text-[11px] text-[color:var(--text-muted)]">
+            When the warehouse last landed rows for this client.
+          </p>
+        </header>
+        <div className="flex items-center gap-2 font-body text-xs text-[color:var(--text-secondary)]">
+          <span
+            aria-hidden="true"
+            className="inline-block h-2 w-2 rounded-full"
+            style={{ background: tone.dot, boxShadow: tone.glow }}
+          />
+          <span data-testid="attribution-data-freshness-label">{label}</span>
+        </div>
+      </GlassCard>
+    );
+  }
+
   return (
     <div
       data-testid="data-freshness-bar"
+      data-variant="strip"
       className="flex items-center gap-2 px-4 py-1.5 font-body text-[11px] leading-none tracking-wide text-[color:var(--text-muted)] sm:px-6"
       style={{
         background: "rgba(255,255,255,0.03)",

@@ -125,95 +125,137 @@ export function WeekendsVsWeekdaysSkeleton() {
   );
 }
 
-/** Skeleton matching the SubscriberLifecycle shape (header + 3 KPI tiles
- *  + OS-mix bars + Net Sub chart). Reuses KpiCardSkeleton shape for the
- *  3 tile slots so the bounding boxes match the eventual KpiCard render. */
-export function SubscriberLifecycleSkeleton() {
+/** Skeleton matching the decomposed LifecycleTab shape: 3-tile KPI strip,
+ *  a tall Net Sub trend chart, then a side-by-side row with OS Mix donut
+ *  and the daily detail table. Section boxes keep their shape so the
+ *  layout stays visible while the per-section data resolves. */
+export function LifecycleSkeleton() {
   return (
-    <div
-      className="flex flex-col gap-4 rounded-lg p-4"
-      style={{
-        background: "var(--surface-glass)",
-        border: "1px solid var(--border-glass)",
-        WebkitBackdropFilter: "var(--blur-glass)",
-        backdropFilter: "var(--blur-glass)",
-        boxShadow: "var(--shadow-glass)",
-      }}
-      data-testid="lifecycle-skeleton"
-    >
-      <div className="flex items-baseline justify-between gap-2">
-        <Skeleton className="h-5 w-44 rounded-md" />
-        <Skeleton className="h-3 w-64 rounded-full" />
-      </div>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+    <div className="flex flex-col gap-6 md:gap-8" data-testid="lifecycle-skeleton">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
         {[0, 1, 2].map((i) => (
           <KpiCardSkeleton key={i} />
         ))}
       </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-3 w-16 rounded-full" />
-          <Skeleton className="h-3 w-full rounded-full" />
-          <Skeleton className="h-3 w-3/4 rounded-full" />
-          <Skeleton className="h-3 w-1/3 rounded-full" />
+
+      <div
+        className="flex flex-col gap-3 rounded-lg p-5"
+        style={{
+          background: "var(--surface-glass)",
+          border: "1px solid var(--border-glass)",
+          WebkitBackdropFilter: "var(--blur-glass)",
+          backdropFilter: "var(--blur-glass)",
+          boxShadow: "var(--shadow-glass)",
+        }}
+      >
+        <Skeleton className="h-4 w-40 rounded-md" />
+        <Skeleton className="h-3 w-72 rounded-full" />
+        <Skeleton className="h-48 w-full rounded-md" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div
+          className="flex flex-col gap-3 rounded-lg p-5 lg:col-span-1"
+          style={{
+            background: "var(--surface-glass)",
+            border: "1px solid var(--border-glass)",
+            WebkitBackdropFilter: "var(--blur-glass)",
+            backdropFilter: "var(--blur-glass)",
+            boxShadow: "var(--shadow-glass)",
+          }}
+        >
+          <Skeleton className="h-4 w-24 rounded-md" />
+          <Skeleton className="h-3 w-56 rounded-full" />
+          <div className="flex flex-col items-center gap-3 py-4">
+            <Skeleton className="h-32 w-32 rounded-full" />
+            <Skeleton className="h-3 w-40 rounded-full" />
+          </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-3 w-40 rounded-full" />
-          <Skeleton className="h-24 w-full rounded-md" />
+        <div
+          className="flex flex-col gap-3 rounded-lg p-5 lg:col-span-2"
+          style={{
+            background: "var(--surface-glass)",
+            border: "1px solid var(--border-glass)",
+            WebkitBackdropFilter: "var(--blur-glass)",
+            backdropFilter: "var(--blur-glass)",
+            boxShadow: "var(--shadow-glass)",
+          }}
+        >
+          <Skeleton className="h-4 w-32 rounded-md" />
+          <Skeleton className="h-3 w-72 rounded-full" />
+          <div className="flex flex-col gap-2">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-6 w-full rounded-md" />
+            ))}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-/** Skeleton matching the PaidVsOrganic shape (header + BCAC headline
- *  on the left + paid/organic split on the right + share bar below).
- *  Reshaped post-review to mirror the two-column integrated layout
- *  the component switched to. */
-export function PaidVsOrganicSkeleton() {
+/** Skeleton matching the decomposed AttributionTab shape: BCAC hero row,
+ *  PaidVsOrganic + DataFreshness row, then a 3-column coverage warnings
+ *  row. Section boxes hold their shape during fetch so the tab IA stays
+ *  visible while data streams in. */
+export function AttributionSkeleton() {
+  const card = {
+    background: "var(--surface-glass)",
+    border: "1px solid var(--border-glass)",
+    WebkitBackdropFilter: "var(--blur-glass)",
+    backdropFilter: "var(--blur-glass)",
+    boxShadow: "var(--shadow-glass)",
+  } as const;
   return (
-    <div
-      className="flex flex-col gap-4 rounded-lg p-5"
-      style={{
-        background: "var(--surface-glass)",
-        border: "1px solid var(--border-glass)",
-        WebkitBackdropFilter: "var(--blur-glass)",
-        backdropFilter: "var(--blur-glass)",
-        boxShadow: "var(--shadow-glass)",
-      }}
-      data-testid="paid-vs-organic-skeleton"
-    >
-      <div className="flex items-baseline justify-between gap-2">
-        <Skeleton className="h-5 w-36 rounded-md" />
-        <Skeleton className="h-3 w-56 rounded-full" />
+    <div className="flex flex-col gap-6 md:gap-8" data-testid="attribution-skeleton">
+      {/* Hero — single full-width BCAC tile */}
+      <div className="flex flex-col gap-4 rounded-lg p-6" style={card}>
+        <Skeleton className="h-4 w-32 rounded-md" />
+        <Skeleton className="h-12 w-48 rounded-md" />
+        <Skeleton className="h-3 w-3/4 rounded-full" />
       </div>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_1fr] md:gap-8">
-        {/* BCAC block: small label + big number + small caption */}
-        <div className="flex flex-col gap-1.5 md:min-w-[180px]">
-          <Skeleton className="h-3 w-24 rounded-full" />
-          <Skeleton className="h-10 w-32 rounded-md" />
-          <Skeleton className="h-3 w-28 rounded-full" />
+
+      {/* Row 2 — PaidVsOrganic (2/3) + DataFreshness (1/3) */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="flex flex-col gap-3 rounded-lg p-5 lg:col-span-2" style={card}>
+          <Skeleton className="h-4 w-32 rounded-md" />
+          <Skeleton className="h-3 w-60 rounded-full" />
+          <div className="grid grid-cols-3 gap-3 pt-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex flex-col gap-1.5">
+                <Skeleton className="h-3 w-16 rounded-full" />
+                <Skeleton className="h-7 w-20 rounded-md" />
+                <Skeleton className="h-3 w-10 rounded-full" />
+              </div>
+            ))}
+          </div>
+          <Skeleton className="h-2.5 w-full rounded-full" />
         </div>
-        {/* Split block: two labels + count + percent on each side, then bar */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-baseline justify-between gap-3">
-            <div className="flex flex-col gap-0.5 items-start">
-              <Skeleton className="h-3 w-12 rounded-full" />
-              <Skeleton className="h-6 w-16 rounded-md" />
-              <Skeleton className="h-3 w-8 rounded-full" />
-            </div>
-            <div className="flex flex-col gap-0.5 items-end">
-              <Skeleton className="h-3 w-16 rounded-full" />
-              <Skeleton className="h-6 w-20 rounded-md" />
-              <Skeleton className="h-3 w-8 rounded-full" />
+        <div className="flex flex-col gap-3 rounded-lg p-5 lg:col-span-1" style={card}>
+          <Skeleton className="h-4 w-32 rounded-md" />
+          <Skeleton className="h-3 w-48 rounded-full" />
+          <Skeleton className="h-3 w-2/3 rounded-full" />
+        </div>
+      </div>
+
+      {/* Row 3 — coverage warnings */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex flex-col gap-3 rounded-lg p-5" style={card}>
+            <Skeleton className="h-4 w-2/3 rounded-md" />
+            <Skeleton className="h-3 w-full rounded-full" />
+            <Skeleton className="h-3 w-3/4 rounded-full" />
+            <div className="flex items-center justify-between gap-2">
+              <Skeleton className="h-4 w-16 rounded-full" />
+              <Skeleton className="h-4 w-16 rounded-full" />
             </div>
           </div>
-          <Skeleton className="h-2 w-full rounded-full" />
-        </div>
+        ))}
       </div>
     </div>
   );
 }
+
 
 /** Skeleton matching the CampaignsTable shape (channel-chip strip + a
  *  9-column table). Row count picks 8 — typical mid-range for a UA pilot
