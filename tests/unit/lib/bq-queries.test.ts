@@ -281,13 +281,64 @@ describe("bq-queries: queryTrend / queryChannelMix / queryCampaigns", () => {
 });
 
 describe("bq-queries: queryFreshness", () => {
-  it("queries the rivery_activity_anlytics view (note: typo is upstream)", async () => {
-    queryFn.mockResolvedValue([[{ last_updated: { value: "2026-05-11" } }]]);
+  // Helper — when client is "globalcomix", queryFreshness runs the
+  // freshness SQL *and* the dataAsOf SQL in parallel. Both go through the
+  // mocked queryFn. Pick the freshness call by content.
+  function freshnessCall(): { query: string } {
+    const call = queryFn.mock.calls.find((c) => {
+      const opts = c[0] as { query: string };
+      return opts.query.includes("__TABLES__");
+    });
+    if (!call) throw new Error("no __TABLES__ query was dispatched");
+    return call[0] as { query: string };
+  }
+
+  it("queries __TABLES__.last_modified_time across the client's spend tables", async () => {
+    queryFn.mockResolvedValue([
+      [{ last_updated: { value: "2026-05-19T07:03:45.000Z" } }],
+    ]);
+    const { queryFreshness } = await import("@/lib/bq-queries");
+    await queryFreshness("globalcomix");
+    const opts = freshnessCall();
+    // Real BQ metadata table, not the lagging Rivery view.
+    expect(opts.query).toContain("__TABLES__");
+    expect(opts.query).toContain("last_modified_time");
+    // All five GlobalComix spend tables must be in the IN-list, otherwise
+    // a single laggy network would not be detected.
+    expect(opts.query).toContain("dwh_fb2_globalcomix_adjust");
+    expect(opts.query).toContain("dwh_google_ads_globalcomix_adjust");
+    expect(opts.query).toContain("dwh_tik_tok_globalcomix_adjust");
+    expect(opts.query).toContain("dwh_apple_globalcomix_adjust");
+    expect(opts.query).toContain("dwh_applovin_globalcomix_adjust");
+    // No anchor-at-midnight DATE math anywhere in the freshness query.
+    expect(opts.query).not.toContain("T00:00:00Z");
+    expect(opts.query).not.toContain("rivery_activity_anlytics");
+  });
+
+  it("computes hoursAgo from the real timestamp, not midnight-UTC of a DATE", async () => {
+    // Freeze time so the math is deterministic.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-19T11:03:45.000Z"));
+    // No client → only the freshness query fires (dataAsOf is skipped).
+    queryFn.mockResolvedValue([
+      // Table was written 4 hours before "now".
+      [{ last_updated: { value: "2026-05-19T07:03:45.000Z" } }],
+    ]);
+    const { queryFreshness } = await import("@/lib/bq-queries");
+    const out = await queryFreshness();
+    expect(out.hoursAgo).toBe(4);
+    expect(out.lastUpdated).toBe("2026-05-19T07:03:45.000Z");
+    vi.useRealTimers();
+  });
+
+  it("falls back to globalcomix spend tables when no client is passed", async () => {
+    queryFn.mockResolvedValue([
+      [{ last_updated: { value: "2026-05-19T07:03:45.000Z" } }],
+    ]);
     const { queryFreshness } = await import("@/lib/bq-queries");
     await queryFreshness();
-    const opts = queryFn.mock.calls[0][0] as { query: string };
-    expect(opts.query).toContain("rivery_activity_anlytics");
-    expect(opts.query).toContain("v_rivery_activity_check");
+    const opts = freshnessCall();
+    expect(opts.query).toContain("dwh_fb2_globalcomix_adjust");
   });
 
   it("returns hoursAgo: -1 when BQ throws (graceful degrade)", async () => {
@@ -296,6 +347,21 @@ describe("bq-queries: queryFreshness", () => {
     const out = await queryFreshness();
     expect(out.hoursAgo).toBe(-1);
     expect(typeof out.lastUpdated).toBe("string");
+  });
+
+  it("returns hoursAgo: -1 when BQ returns a malformed timestamp", async () => {
+    queryFn.mockResolvedValue([[{ last_updated: { value: "not-a-date" } }]]);
+    const { queryFreshness } = await import("@/lib/bq-queries");
+    const out = await queryFreshness();
+    expect(out.hoursAgo).toBe(-1);
+    expect(typeof out.lastUpdated).toBe("string");
+  });
+
+  it("returns hoursAgo: -1 when BQ returns a null timestamp", async () => {
+    queryFn.mockResolvedValue([[{ last_updated: null }]]);
+    const { queryFreshness } = await import("@/lib/bq-queries");
+    const out = await queryFreshness();
+    expect(out.hoursAgo).toBe(-1);
   });
 });
 

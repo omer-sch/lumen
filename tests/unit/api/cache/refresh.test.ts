@@ -14,10 +14,18 @@ const currentUserMock = vi.hoisted(() => vi.fn());
 const invalidateClientCache = vi.hoisted(() => vi.fn());
 const warmClientCache = vi.hoisted(() => vi.fn());
 const queryGlobalComixDataAsOf = vi.hoisted(() => vi.fn());
+const revalidateTagMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@clerk/nextjs/server", () => ({
   auth: authMock,
   currentUser: currentUserMock,
+}));
+
+vi.mock("next/cache", () => ({
+  revalidateTag: revalidateTagMock,
+  // unstable_cache is also imported elsewhere; passthrough is fine since
+  // no test in this file exercises a cached query.
+  unstable_cache: <T extends (...args: unknown[]) => unknown>(fn: T) => fn,
 }));
 
 vi.mock("@/lib/cache/invalidate", () => ({ invalidateClientCache }));
@@ -36,6 +44,7 @@ beforeEach(() => {
   invalidateClientCache.mockReset();
   warmClientCache.mockReset();
   queryGlobalComixDataAsOf.mockReset();
+  revalidateTagMock.mockReset();
   // Default: no admins in the allowlist.
   delete process.env.LUMEN_ADMIN_USER_IDS;
   delete process.env.LUMEN_ADMIN_EMAILS;
@@ -97,6 +106,9 @@ describe("POST /api/cache/refresh", () => {
     expect(body.dataAsOf).toBe("2026-05-15");
     expect(invalidateClientCache).toHaveBeenCalledWith("globalcomix");
     expect(warmClientCache).toHaveBeenCalledWith("globalcomix");
+    // Without this, the freshness bar holds the pre-sync value for up to
+    // 10 minutes after Sync Now while Redis is already fresh.
+    expect(revalidateTagMock).toHaveBeenCalledWith("bq:freshness");
   });
 
   it("defaults the client param to globalcomix when omitted", async () => {
