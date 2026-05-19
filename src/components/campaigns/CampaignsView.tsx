@@ -9,6 +9,7 @@ import { CampaignsTableSkeleton } from "@/components/ui/Skeleton";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import { useCampaignsData } from "@/lib/campaigns/use-campaigns-data";
 import { findClient } from "@/lib/mock/clients";
+import { CampaignsAreaTabs } from "./CampaignsAreaTabs";
 import { CampaignsTable } from "./CampaignsTable";
 
 export function CampaignsView() {
@@ -79,20 +80,29 @@ function CampaignsInner() {
         </div>
       </header>
 
-      {/* Loading / error / data — the table renders itself when it has
-          rows, even mid-refetch, so filter changes don't flash blank. */}
-      {rows === null && loading ? (
-        <CampaignsTableSkeleton />
-      ) : error && rows === null ? (
-        <SectionError
-          section="the campaigns table"
-          shape="min-h-[14rem]"
-          onRetry={refetch}
-          data-testid="campaigns-error"
-        />
-      ) : (
-        <CampaignsTable rows={rows ?? []} />
-      )}
+      <CampaignsAreaTabs activeTab="campaigns" />
+
+      <div
+        role="tabpanel"
+        id="campaigns-area-panel-campaigns"
+        aria-labelledby="campaigns-area-tab-campaigns"
+        className="flex flex-col gap-8 md:gap-10"
+      >
+        {/* Loading / error / data — the table renders itself when it has
+            rows, even mid-refetch, so filter changes don't flash blank. */}
+        {rows === null && loading ? (
+          <CampaignsTableSkeleton />
+        ) : error && rows === null ? (
+          <SectionError
+            section="the campaigns table"
+            shape="min-h-[14rem]"
+            onRetry={refetch}
+            data-testid="campaigns-error"
+          />
+        ) : (
+          <CampaignsTable rows={rows ?? []} />
+        )}
+      </div>
     </div>
   );
 }

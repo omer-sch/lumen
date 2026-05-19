@@ -13,6 +13,7 @@ import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import { useCreativeBreakdown } from "@/lib/campaigns/use-creative-breakdown";
 import { useTopAdTrend } from "@/lib/campaigns/use-top-ad-trend";
 import { findClient } from "@/lib/mock/clients";
+import { CampaignsAreaTabs } from "./CampaignsAreaTabs";
 import {
   CreativeFilterChips,
   type LocalFilters,
@@ -162,33 +163,42 @@ function Inner() {
         </div>
       </header>
 
-      {rows === null && loading ? (
-        <CreativeBreakdownSkeleton />
-      ) : error && rows === null ? (
-        <SectionError
-          section="the creative breakdown"
-          shape="min-h-[14rem]"
-          onRetry={refetch}
-          data-testid="creative-breakdown-error"
-        />
-      ) : (
-        <>
-          <CreativeFilterChips
-            rows={rows ?? []}
-            value={local}
-            onChange={setLocal}
+      <CampaignsAreaTabs activeTab="creatives" />
+
+      <div
+        role="tabpanel"
+        id="campaigns-area-panel-creatives"
+        aria-labelledby="campaigns-area-tab-creatives"
+        className="flex flex-col gap-6 md:gap-7"
+      >
+        {rows === null && loading ? (
+          <CreativeBreakdownSkeleton />
+        ) : error && rows === null ? (
+          <SectionError
+            section="the creative breakdown"
+            shape="min-h-[14rem]"
+            onRetry={refetch}
+            data-testid="creative-breakdown-error"
           />
-          <TopAdTrend data={trend} loading={trendLoading} />
-          <CreativeTable rows={visibleRows ?? []} />
-          {hasGoogleOrAppleRow && (
-            <InfoCallout
-              data-testid="creative-coverage-warning"
-              title="Some networks don't expose per-ad spend"
-              body="Google Ads and Apple Search Ads don't expose per-ad spend in BigQuery. Their rows show subscriber counts only; CPA and ROI columns render as “—”."
+        ) : (
+          <>
+            <CreativeFilterChips
+              rows={rows ?? []}
+              value={local}
+              onChange={setLocal}
             />
-          )}
-        </>
-      )}
+            <TopAdTrend data={trend} loading={trendLoading} />
+            <CreativeTable rows={visibleRows ?? []} />
+            {hasGoogleOrAppleRow && (
+              <InfoCallout
+                data-testid="creative-coverage-warning"
+                title="Some networks don't expose per-ad spend"
+                body="Google Ads and Apple Search Ads don't expose per-ad spend in BigQuery. Their rows show subscriber counts only; CPA and ROI columns render as “—”."
+              />
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

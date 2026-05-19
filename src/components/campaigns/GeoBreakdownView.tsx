@@ -12,6 +12,7 @@ import { GeoBreakdownSkeleton } from "@/components/ui/Skeleton";
 import { useGlobalFilters } from "@/lib/filters/use-global-filters";
 import { useGeoData } from "@/lib/campaigns/use-geo-data";
 import { findClient } from "@/lib/mock/clients";
+import { CampaignsAreaTabs } from "./CampaignsAreaTabs";
 import { ChoroplethMap, computeBuckets } from "./geo/ChoroplethMap";
 import { TopCountriesDonut } from "./geo/TopCountriesDonut";
 import { GeoCountryTable } from "./geo/GeoCountryTable";
@@ -105,37 +106,46 @@ function Inner() {
         </div>
       </header>
 
-      {rows === null && loading ? (
-        <GeoBreakdownSkeleton />
-      ) : error && rows === null ? (
-        <SectionError
-          section="the geo breakdown"
-          shape="min-h-[14rem]"
-          onRetry={refetch}
-          data-testid="geo-breakdown-error"
-        />
-      ) : (
-        <>
-          <InfoCallout
-            data-testid="geo-coverage-warning"
-            title="Cost-side metrics by country are a Phase-2 join"
-            body="The per-country spend join across the per-network spend tables hasn't shipped yet, so CPI, CPA D7, and ROI by country aren't shown. This view reports subscriber-side metrics (paid vs organic, Sub D7, Rev D7), which BigQuery already covers for GlobalComix."
+      <CampaignsAreaTabs activeTab="geo" />
+
+      <div
+        role="tabpanel"
+        id="campaigns-area-panel-geo"
+        aria-labelledby="campaigns-area-tab-geo"
+        className="flex flex-col gap-6 md:gap-7"
+      >
+        {rows === null && loading ? (
+          <GeoBreakdownSkeleton />
+        ) : error && rows === null ? (
+          <SectionError
+            section="the geo breakdown"
+            shape="min-h-[14rem]"
+            onRetry={refetch}
+            data-testid="geo-breakdown-error"
           />
+        ) : (
+          <>
+            <InfoCallout
+              data-testid="geo-coverage-warning"
+              title="Cost-side metrics by country are a Phase-2 join"
+              body="The per-country spend join across the per-network spend tables hasn't shipped yet, so CPI, CPA D7, and ROI by country aren't shown. This view reports subscriber-side metrics (paid vs organic, Sub D7, Rev D7), which BigQuery already covers for GlobalComix."
+            />
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-1">
-              <TopCountriesDonut rows={rows ?? []} enterIndex={1} />
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              <div className="lg:col-span-1">
+                <TopCountriesDonut rows={rows ?? []} enterIndex={1} />
+              </div>
+              <div className="lg:col-span-2">
+                <ChoroplethMap rows={rows ?? []} enterIndex={2} />
+              </div>
             </div>
-            <div className="lg:col-span-2">
-              <ChoroplethMap rows={rows ?? []} enterIndex={2} />
-            </div>
-          </div>
 
-          <GeoColorScale buckets={buckets} />
+            <GeoColorScale buckets={buckets} />
 
-          <GeoCountryTable rows={rows ?? []} />
-        </>
-      )}
+            <GeoCountryTable rows={rows ?? []} />
+          </>
+        )}
+      </div>
     </div>
   );
 }
