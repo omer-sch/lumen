@@ -7,12 +7,11 @@
  *   Google           → mint (UA token)
  *   Meta             → violet (Organic token)
  *   TikTok           → coral (Creative token)
- *   AppLovin         → yellow (brand accent)
- *   Apple Search Ads → neutral gray + dashed line
+ *   Apple Search Ads → yellow (brand accent)
+ *   AppLovin         → neutral gray + dashed line
  *
- * Apple Search Ads gets the neutral gray + dashed stroke convention
- * because (a) Apple's brand color clashes with the dark canvas and
- * (b) its volume on GlobalComix is structurally lower than the other
+ * AppLovin gets the neutral gray + dashed stroke convention because
+ * its volume on GlobalComix is structurally lower than the other
  * channels; the dashed treatment signals "support cast" without
  * making the line invisible.
  *
@@ -45,8 +44,8 @@ const NETWORK_TOKENS: Record<CanonicalNetwork, NetworkTokens> = {
   Google:             { color: "var(--color-ua)",       tint: "var(--tint-ua-soft)",       foreground: "var(--color-ua)" },
   Meta:               { color: "var(--color-organic)",  tint: "var(--tint-organic-soft)",  foreground: "var(--color-organic)" },
   TikTok:             { color: "var(--color-creative)", tint: "var(--tint-creative-soft)", foreground: "var(--color-creative)" },
-  AppLovin:           { color: "var(--color-yellow)",   tint: "var(--tint-yellow-soft)",   foreground: "var(--color-yellow)" },
-  "Apple Search Ads": { color: "var(--text-muted)",     tint: "var(--surface-hover)",     foreground: "var(--text-secondary)" },
+  "Apple Search Ads": { color: "var(--color-yellow)",   tint: "var(--tint-yellow-soft)",   foreground: "var(--color-yellow)" },
+  AppLovin:           { color: "var(--text-muted)",     tint: "var(--surface-hover)",     foreground: "var(--text-secondary)" },
 };
 
 /**
@@ -60,9 +59,9 @@ const NETWORK_ALIASES: Record<string, CanonicalNetwork> = {
   Apple: "Apple Search Ads",
 };
 
-/** Apple-equivalent fallback for unrecognized network names. Same
- *  treatment as Apple Search Ads on purpose: the unknown network
- *  reads as "support cast" rather than competing for attention. */
+/** Neutral fallback for unrecognized network names. Same treatment
+ *  as AppLovin on purpose: the unknown network reads as "support
+ *  cast" rather than competing for attention. */
 const FALLBACK: NetworkTokens = {
   color: "var(--text-muted)",
   tint: "var(--surface-hover)",
@@ -93,9 +92,10 @@ export function networkForeground(network: string): string {
   return lookup(network).foreground;
 }
 
-/** Whether this network's line should render dashed. Apple Search Ads
- *  alone today; centralized so a future treatment change is one edit. */
+/** Whether this network's line should render dashed. AppLovin alone
+ *  today (paired with its neutral gray); centralized so a future
+ *  treatment change is one edit. */
 export function networkLineDashed(network: string): boolean {
-  if (network === "Apple Search Ads") return true;
-  return NETWORK_ALIASES[network] === "Apple Search Ads";
+  if (network === "AppLovin") return true;
+  return NETWORK_ALIASES[network] === "AppLovin";
 }

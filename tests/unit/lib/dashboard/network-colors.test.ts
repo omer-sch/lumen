@@ -30,12 +30,12 @@ describe("networkColor — canonical mapping", () => {
     expect(networkColor("TikTok")).toBe("var(--color-creative)");
   });
 
-  it("AppLovin resolves to the yellow token", () => {
-    expect(networkColor("AppLovin")).toBe("var(--color-yellow)");
+  it("Apple Search Ads resolves to the yellow token", () => {
+    expect(networkColor("Apple Search Ads")).toBe("var(--color-yellow)");
   });
 
-  it("Apple Search Ads resolves to neutral gray", () => {
-    expect(networkColor("Apple Search Ads")).toBe("var(--text-muted)");
+  it("AppLovin resolves to neutral gray", () => {
+    expect(networkColor("AppLovin")).toBe("var(--text-muted)");
   });
 });
 
@@ -52,12 +52,12 @@ describe("networkTint — canonical mapping", () => {
     expect(networkTint("TikTok")).toBe("var(--tint-creative-soft)");
   });
 
-  it("AppLovin → soft yellow tint", () => {
-    expect(networkTint("AppLovin")).toBe("var(--tint-yellow-soft)");
+  it("Apple Search Ads → soft yellow tint", () => {
+    expect(networkTint("Apple Search Ads")).toBe("var(--tint-yellow-soft)");
   });
 
-  it("Apple Search Ads → surface hover (neutral)", () => {
-    expect(networkTint("Apple Search Ads")).toBe("var(--surface-hover)");
+  it("AppLovin → surface hover (neutral)", () => {
+    expect(networkTint("AppLovin")).toBe("var(--surface-hover)");
   });
 });
 
@@ -74,12 +74,12 @@ describe("networkForeground — canonical mapping", () => {
     expect(networkForeground("TikTok")).toBe("var(--color-creative)");
   });
 
-  it("AppLovin → yellow", () => {
-    expect(networkForeground("AppLovin")).toBe("var(--color-yellow)");
+  it("Apple Search Ads → yellow", () => {
+    expect(networkForeground("Apple Search Ads")).toBe("var(--color-yellow)");
   });
 
-  it("Apple Search Ads → text-secondary on the neutral tint", () => {
-    expect(networkForeground("Apple Search Ads")).toBe("var(--text-secondary)");
+  it("AppLovin → text-secondary on the neutral tint", () => {
+    expect(networkForeground("AppLovin")).toBe("var(--text-secondary)");
   });
 });
 
@@ -122,34 +122,34 @@ describe("aliases resolve to their canonical network", () => {
   });
 });
 
-describe("unknown networks fall through to the Apple-equivalent neutral", () => {
+describe("unknown networks fall through to the AppLovin-equivalent neutral", () => {
   it("networkColor falls back to text-muted", () => {
     expect(networkColor("MystereNet")).toBe("var(--text-muted)");
-    expect(networkColor("MystereNet")).toBe(networkColor("Apple Search Ads"));
+    expect(networkColor("MystereNet")).toBe(networkColor("AppLovin"));
   });
 
   it("networkTint falls back to surface-hover", () => {
     expect(networkTint("MystereNet")).toBe("var(--surface-hover)");
-    expect(networkTint("MystereNet")).toBe(networkTint("Apple Search Ads"));
+    expect(networkTint("MystereNet")).toBe(networkTint("AppLovin"));
   });
 
   it("networkForeground falls back to text-secondary", () => {
     expect(networkForeground("MystereNet")).toBe("var(--text-secondary)");
-    expect(networkForeground("MystereNet")).toBe(networkForeground("Apple Search Ads"));
+    expect(networkForeground("MystereNet")).toBe(networkForeground("AppLovin"));
   });
 });
 
 describe("networkLineDashed", () => {
-  it("returns true for Apple Search Ads (and its alias)", () => {
-    expect(networkLineDashed("Apple Search Ads")).toBe(true);
-    expect(networkLineDashed("Apple")).toBe(true);
+  it("returns true for AppLovin", () => {
+    expect(networkLineDashed("AppLovin")).toBe(true);
   });
 
   it("returns false for every other canonical network", () => {
     expect(networkLineDashed("Google")).toBe(false);
     expect(networkLineDashed("Meta")).toBe(false);
     expect(networkLineDashed("TikTok")).toBe(false);
-    expect(networkLineDashed("AppLovin")).toBe(false);
+    expect(networkLineDashed("Apple Search Ads")).toBe(false);
+    expect(networkLineDashed("Apple")).toBe(false);
   });
 
   it("returns false for unknown networks", () => {
