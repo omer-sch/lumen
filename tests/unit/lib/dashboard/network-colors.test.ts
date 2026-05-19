@@ -140,16 +140,16 @@ describe("unknown networks fall through to the AppLovin-equivalent neutral", () 
 });
 
 describe("networkLineDashed", () => {
-  it("returns true for AppLovin", () => {
-    expect(networkLineDashed("AppLovin")).toBe(true);
+  it("returns true for Apple Search Ads (and its alias)", () => {
+    expect(networkLineDashed("Apple Search Ads")).toBe(true);
+    expect(networkLineDashed("Apple")).toBe(true);
   });
 
   it("returns false for every other canonical network", () => {
     expect(networkLineDashed("Google")).toBe(false);
     expect(networkLineDashed("Meta")).toBe(false);
     expect(networkLineDashed("TikTok")).toBe(false);
-    expect(networkLineDashed("Apple Search Ads")).toBe(false);
-    expect(networkLineDashed("Apple")).toBe(false);
+    expect(networkLineDashed("AppLovin")).toBe(false);
   });
 
   it("returns false for unknown networks", () => {
